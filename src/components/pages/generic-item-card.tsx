@@ -229,7 +229,9 @@ export function GenericItemCard({
             <RaritySelect
               value={String(rarity)}
               onChange={(val) =>
-                onUpdate({ rarity: isNaN(Number(val)) ? val : Number(val) })
+                onUpdate({
+                  rarity: isNaN(Number(val)) ? undefined : Number(val),
+                })
               }
             />
           ) : (
