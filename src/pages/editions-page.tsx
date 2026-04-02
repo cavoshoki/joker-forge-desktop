@@ -5,6 +5,7 @@ import {
   GenericItemDialog,
   DialogTab,
 } from "@/components/pages/generic-item-dialog";
+import { GenericDialogColorPicker } from "@/components/ui/generic-dialog-color-picker";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useConfirmDelete } from "@/hooks/use-confirm-delete";
 import { useProjectData, useModName } from "@/lib/storage";
@@ -253,21 +254,13 @@ export default function EditionsPage() {
                 id: "badge_colour",
                 type: "custom",
                 render: (value, onChange) => (
-                  <div className="flex items-center gap-4">
-                    <input
-                      type="color"
-                      value={value || "#FFAA00"}
-                      onChange={(e) => onChange(e.target.value)}
-                      className="w-16 h-16 rounded-lg border-2 border-border cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={value || "#FFAA00"}
-                      onChange={(e) => onChange(e.target.value)}
-                      className="flex-1 h-10 px-3 rounded border bg-background"
-                      placeholder="#FFAA00"
-                    />
-                  </div>
+                  <GenericDialogColorPicker
+                    value={value}
+                    onChange={onChange}
+                    defaultColor="#FFAA00"
+                    valueMode="with-hash"
+                    placeholder="#FFAA00"
+                  />
                 ),
               },
             ],

@@ -264,6 +264,16 @@
       calc(75% + 2px) center;
     background-repeat: no-repeat;
   }
+
+  input.number-input-compact {
+    padding-left: 0.4rem !important;
+    padding-right: 0.4rem !important;
+  }
+
+  input.number-input-compact::-webkit-inner-spin-button,
+  input.number-input-compact::-webkit-outer-spin-button {
+    margin-left: 0.35rem;
+  }
 }
 
 @layer utilities {

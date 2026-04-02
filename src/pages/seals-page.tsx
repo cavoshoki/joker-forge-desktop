@@ -21,6 +21,7 @@ import {
   GenericItemDialog,
   DialogTab,
 } from "@/components/pages/generic-item-dialog";
+import { GenericDialogColorPicker } from "@/components/ui/generic-dialog-color-picker";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useConfirmDelete } from "@/hooks/use-confirm-delete";
 import { BalatroCard } from "@/components/balatro/balatro-card";
@@ -206,60 +207,13 @@ export default function SealsPage() {
                 id: "badge_colour",
                 type: "custom",
                 render: (value, onChange) => (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-4">
-                      <input
-                        type="color"
-                        value={value || "#000000"}
-                        onChange={(e) => onChange(e.target.value)}
-                        className="w-16 h-16 rounded-lg border-2 border-border cursor-pointer"
-                      />
-                      <input
-                        type="text"
-                        value={value || "#000000"}
-                        onChange={(e) => onChange(e.target.value)}
-                        className="flex-1 h-10 px-3 rounded border bg-background"
-                        placeholder="#000000"
-                      />
-                    </div>
-                    <div className="grid grid-cols-8 gap-2">
-                      {[
-                        "#FF6B6B",
-                        "#4ECDC4",
-                        "#45B7D1",
-                        "#96CEB4",
-                        "#FFEAA7",
-                        "#DDA0DD",
-                        "#FFB347",
-                        "#FF69B4",
-                        "#87CEEB",
-                        "#98FB98",
-                        "#F0E68C",
-                        "#DEB887",
-                        "#FF4500",
-                        "#32CD32",
-                        "#1E90FF",
-                        "#FF1493",
-                        "#FFD700",
-                        "#8A2BE2",
-                        "#DC143C",
-                        "#00CED1",
-                        "#FF6347",
-                        "#40E0D0",
-                        "#EE82EE",
-                        "#90EE90",
-                      ].map((color) => (
-                        <button
-                          key={color}
-                          type="button"
-                          onClick={() => onChange(color)}
-                          className="w-8 h-8 rounded border-2 border-border hover:scale-110 transition-transform"
-                          style={{ backgroundColor: color }}
-                          title={color}
-                        />
-                      ))}
-                    </div>
-                  </div>
+                  <GenericDialogColorPicker
+                    value={value}
+                    onChange={onChange}
+                    defaultColor="#000000"
+                    valueMode="with-hash"
+                    placeholder="#000000"
+                  />
                 ),
               },
             ],

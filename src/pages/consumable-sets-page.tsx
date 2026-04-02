@@ -1,8 +1,11 @@
 import { useCallback, useMemo, useState } from "react";
 import { GenericItemPage } from "@/components/pages/generic-item-page";
 import { GenericItemCardMini } from "@/components/pages/generic-item-card-mini";
-import { DialogTab } from "@/components/pages/generic-item-dialog";
+import {
+  DialogTab,
+} from "@/components/pages/generic-item-dialog";
 import { GenericItemDialogMini } from "@/components/pages/generic-item-dialog-mini";
+import { GenericDialogColorPicker } from "@/components/ui/generic-dialog-color-picker";
 import { BadgePreview } from "@/components/balatro/badge-preview";
 import { Input } from "@/components/ui/input";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -204,65 +207,29 @@ export default function ConsumableSetsPage() {
                 id: "primary_colour",
                 type: "custom",
                 label: "Primary Color",
-                render: (value, onChange) => {
-                  const hex = normalizeHex(value);
-                  const raw = hex.replace("#", "");
-                  return (
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="h-9 w-9 rounded-md border border-border/60"
-                        style={{ backgroundColor: hex }}
-                      />
-                      <Input
-                        type="color"
-                        value={hex}
-                        onChange={(event) =>
-                          onChange(event.target.value.replace("#", ""))
-                        }
-                        className="h-9 w-12 p-1 cursor-pointer"
-                      />
-                      <Input
-                        value={raw}
-                        onChange={(event) =>
-                          onChange(event.target.value.replace("#", ""))
-                        }
-                        className="font-mono"
-                      />
-                    </div>
-                  );
-                },
+                render: (value, onChange) => (
+                  <GenericDialogColorPicker
+                    value={value}
+                    onChange={onChange}
+                    defaultColor={`#${DEFAULT_SET_COLOR}`}
+                    valueMode="without-hash"
+                    placeholder={`#${DEFAULT_SET_COLOR}`}
+                  />
+                ),
               },
               {
                 id: "secondary_colour",
                 type: "custom",
                 label: "Secondary Color",
-                render: (value, onChange) => {
-                  const hex = normalizeHex(value);
-                  const raw = hex.replace("#", "");
-                  return (
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="h-9 w-9 rounded-md border border-border/60"
-                        style={{ backgroundColor: hex }}
-                      />
-                      <Input
-                        type="color"
-                        value={hex}
-                        onChange={(event) =>
-                          onChange(event.target.value.replace("#", ""))
-                        }
-                        className="h-9 w-12 p-1 cursor-pointer"
-                      />
-                      <Input
-                        value={raw}
-                        onChange={(event) =>
-                          onChange(event.target.value.replace("#", ""))
-                        }
-                        className="font-mono"
-                      />
-                    </div>
-                  );
-                },
+                render: (value, onChange) => (
+                  <GenericDialogColorPicker
+                    value={value}
+                    onChange={onChange}
+                    defaultColor={`#${DEFAULT_SET_COLOR}`}
+                    valueMode="without-hash"
+                    placeholder={`#${DEFAULT_SET_COLOR}`}
+                  />
+                ),
               },
               {
                 id: "set_badge",

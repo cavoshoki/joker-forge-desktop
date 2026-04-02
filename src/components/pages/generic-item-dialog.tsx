@@ -124,6 +124,8 @@ export interface GenericItemDialogProps<T> {
   placeholderCategory?: PlaceholderCategory;
 }
 
+const EMPTY_SELECT_SENTINEL = "__JF_EMPTY__";
+
 const getNestedValue = (obj: any, path: string) => {
   if (!obj) return undefined;
   return path.split(".").reduce((acc, part) => acc && acc[part], obj);
@@ -524,29 +526,38 @@ const MemoizedField = memo(
         case "slider": {
           const sliderValue =
             typeof safeValue === "number" ? safeValue : (field.min ?? 0);
+          const minValue = field.min ?? 0;
+          const maxValue = field.max ?? 100;
           return (
             <div>
-              <div className="flex items-center gap-3">
+              <div className="space-y-2.5">
                 <Slider
                   value={[sliderValue]}
-                  min={field.min}
-                  max={field.max}
+                  min={minValue}
+                  max={maxValue}
                   step={field.step}
                   onValueChange={(val) => onChange(field.id, val[0])}
-                  className="flex-1 cursor-pointer"
+                  className="w-full cursor-pointer"
                 />
-                <Input
-                  type="number"
-                  value={Number.isNaN(sliderValue) ? "" : sliderValue}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    onChange(field.id, val === "" ? undefined : Number(val));
-                  }}
-                  min={field.min}
-                  max={field.max}
-                  step={field.step}
-                  className="h-8 w-24 text-right font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                />
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground font-mono px-1">
+                  <span>{minValue}</span>
+                  <span>{maxValue}</span>
+                </div>
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <span className="text-[11px] text-muted-foreground whitespace-nowrap">Value</span>
+                  <Input
+                    type="number"
+                    value={Number.isNaN(sliderValue) ? "" : sliderValue}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      onChange(field.id, val === "" ? undefined : Number(val));
+                    }}
+                    min={minValue}
+                    max={maxValue}
+                    step={field.step}
+                    className="h-10 w-44 text-right font-mono number-input-compact"
+                  />
+                </div>
               </div>
               {error && (
                 <p className="text-xs text-destructive mt-1">{error}</p>
@@ -600,13 +611,28 @@ const MemoizedField = memo(
               />
             );
           }
+          const rawSelectValue = String(safeValue ?? "");
+          const hasEmptyOption =
+            field.options?.some((opt) => String(opt.value) === "") ?? false;
+          const resolvedSelectValue =
+            rawSelectValue === "" && hasEmptyOption
+              ? EMPTY_SELECT_SENTINEL
+              : rawSelectValue;
+
           return (
             <div>
               <Select
-                value={String(safeValue || "")}
-                onValueChange={(val) =>
-                  onChange(field.id, isNaN(Number(val)) ? val : Number(val))
-                }
+                value={resolvedSelectValue}
+                onValueChange={(val) => {
+                  const normalizedVal =
+                    val === EMPTY_SELECT_SENTINEL ? "" : val;
+                  onChange(
+                    field.id,
+                    isNaN(Number(normalizedVal))
+                      ? normalizedVal
+                      : Number(normalizedVal),
+                  );
+                }}
               >
                 <SelectTrigger
                   className={cn(
@@ -618,15 +644,21 @@ const MemoizedField = memo(
                   <SelectValue placeholder={field.placeholder} />
                 </SelectTrigger>
                 <SelectContent>
-                  {field.options?.map((opt) => (
-                    <SelectItem
-                      key={opt.value}
-                      value={String(opt.value)}
-                      className="cursor-pointer"
-                    >
-                      {opt.label}
-                    </SelectItem>
-                  ))}
+                  {field.options?.map((opt) => {
+                    const optionValue =
+                      String(opt.value) === ""
+                        ? EMPTY_SELECT_SENTINEL
+                        : String(opt.value);
+                    return (
+                      <SelectItem
+                        key={`${field.id}-${optionValue}-${opt.label}`}
+                        value={optionValue}
+                        className="cursor-pointer"
+                      >
+                        {opt.label}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
               {error && (
@@ -1159,8 +1191,14 @@ function GenericItemDialogInternal<T extends { id: string }>({
 
   const renderGroups = (groupList: FieldGroup<T>[]) => (
     <div className={contentContainerClass}>
-      {groupList.map((group) => (
-        <div key={group.id} className="space-y-4">
+      {groupList.map((group, index) => (
+        <div
+          key={group.id}
+          className={cn(
+            "space-y-4",
+            index > 0 && "mt-10 pt-4 border-t border-border/30",
+          )}
+        >
           {group.label && (
             <div className="space-y-2 pb-2">
               <h4 className="text-xs font-black text-muted-foreground uppercase tracking-widest flex items-center gap-2">

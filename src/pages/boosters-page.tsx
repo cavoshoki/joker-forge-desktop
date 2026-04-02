@@ -5,6 +5,7 @@ import {
   GenericItemDialog,
   DialogTab,
 } from "@/components/pages/generic-item-dialog";
+import { GenericDialogColorPicker } from "@/components/ui/generic-dialog-color-picker";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useConfirmDelete } from "@/hooks/use-confirm-delete";
 import { useProjectData, useModName } from "@/lib/storage";
@@ -22,7 +23,6 @@ import {
 } from "@phosphor-icons/react";
 import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import { BalatroCard } from "@/components/balatro/balatro-card";
-import { Input } from "@/components/ui/input";
 import { getRandomPlaceholder } from "@/lib/placeholder-assets.ts";
 import { PlaceholderPickerDialog } from "@/components/pages/placeholder-picker-dialog";
 
@@ -281,65 +281,29 @@ export default function BoostersPage() {
                 id: "background_colour",
                 type: "custom",
                 label: "Background Color",
-                render: (value, onChange) => {
-                  const normalized =
-                    typeof value === "string"
-                      ? value.startsWith("#")
-                        ? value
-                        : `#${value}`
-                      : "#666666";
-                  return (
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="color"
-                        value={normalized}
-                        onChange={(e) =>
-                          onChange(e.target.value.replace("#", ""))
-                        }
-                        className="w-12 h-10 rounded border border-border cursor-pointer"
-                      />
-                      <Input
-                        value={normalized}
-                        onChange={(e) =>
-                          onChange(e.target.value.replace("#", ""))
-                        }
-                        placeholder="#666666"
-                      />
-                    </div>
-                  );
-                },
+                render: (value, onChange) => (
+                  <GenericDialogColorPicker
+                    value={value}
+                    onChange={onChange}
+                    defaultColor="#666666"
+                    valueMode="without-hash"
+                    placeholder="#666666"
+                  />
+                ),
               },
               {
                 id: "special_colour",
                 type: "custom",
                 label: "Special Color",
-                render: (value, onChange) => {
-                  const normalized =
-                    typeof value === "string"
-                      ? value.startsWith("#")
-                        ? value
-                        : `#${value}`
-                      : "#666666";
-                  return (
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="color"
-                        value={normalized}
-                        onChange={(e) =>
-                          onChange(e.target.value.replace("#", ""))
-                        }
-                        className="w-12 h-10 rounded border border-border cursor-pointer"
-                      />
-                      <Input
-                        value={normalized}
-                        onChange={(e) =>
-                          onChange(e.target.value.replace("#", ""))
-                        }
-                        placeholder="#666666"
-                      />
-                    </div>
-                  );
-                },
+                render: (value, onChange) => (
+                  <GenericDialogColorPicker
+                    value={value}
+                    onChange={onChange}
+                    defaultColor="#666666"
+                    valueMode="without-hash"
+                    placeholder="#666666"
+                  />
+                ),
               },
             ],
           },
