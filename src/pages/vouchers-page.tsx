@@ -4,7 +4,6 @@ import { GenericItemCard } from "@/components/pages/generic-item-card";
 import { useProjectData, useModName } from "@/lib/storage";
 import { VoucherData } from "@/lib/types";
 import {
-  Ticket,
   PencilSimple,
   Sparkle,
   Trash,
@@ -36,11 +35,17 @@ import {
   unlockTriggerOptions,
   vouchersUnlockOptions,
 } from "@/lib/unlock-utils";
+import { getRandomPlaceholder } from "@/lib/placeholder-assets.ts";
+import { PlaceholderPickerDialog } from "@/components/pages/placeholder-picker-dialog";
 
 export default function VouchersPage() {
   const { data, updateVouchers } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<VoucherData | null>(null);
+  const [isPlaceholderPickerOpen, setIsPlaceholderPickerOpen] = useState(false);
+  const [placeholderTargetId, setPlaceholderTargetId] = useState<string | null>(
+    null,
+  );
 
   const processVoucherImage = useCallback((file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -91,13 +96,16 @@ export default function VouchersPage() {
     [data.vouchers, updateVouchers],
   );
 
-  const handleCreate = useCallback(() => {
+  const handleCreate = useCallback(async () => {
+    const placeholder = await getRandomPlaceholder("voucher");
     const newVoucher: VoucherData = {
       id: crypto.randomUUID(),
       objectType: "voucher",
       name: "New Voucher",
       description: "Effect",
-      image: "",
+      image: placeholder?.src || "",
+      placeholderCreditIndex: placeholder?.index,
+      placeholderCategory: placeholder?.category,
       objectKey: "new_voucher",
       unlocked: true,
       discovered: true,
@@ -465,9 +473,16 @@ export default function VouchersPage() {
               className="w-full h-full object-contain [image-rendering:pixelated]"
             />
           ) : (
-            <Ticket className="h-20 w-20 text-muted-foreground/20" />
+            <div className="text-muted-foreground/30 text-xs font-bold uppercase tracking-widest border-2 border-dashed border-border p-4 rounded-lg">
+              No Image
+            </div>
           )
         }
+        showPlaceholderPickerButton
+        onOpenPlaceholderPicker={() => {
+          setPlaceholderTargetId(item.id);
+          setIsPlaceholderPickerOpen(true);
+        }}
         properties={[
           {
             id: "unlocked",
@@ -562,6 +577,21 @@ export default function VouchersPage() {
         tabs={voucherDialogTabs}
         onSave={handleUpdate}
         renderPreview={renderPreview}
+        showPlaceholderPicker
+        placeholderCategory="voucher"
+      />
+      <PlaceholderPickerDialog
+        open={isPlaceholderPickerOpen}
+        onOpenChange={setIsPlaceholderPickerOpen}
+        initialCategory="voucher"
+        onSelect={(entry) => {
+          if (!placeholderTargetId) return;
+          handleUpdate(placeholderTargetId, {
+            image: entry.src,
+            placeholderCreditIndex: entry.index,
+            placeholderCategory: entry.category,
+          });
+        }}
       />
       <ConfirmDialog
         open={isDeleteDialogOpen}

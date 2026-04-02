@@ -47,11 +47,17 @@ import {
 import { Button } from "@/components/ui/button";
 import { BalatroCard } from "@/components/balatro/balatro-card";
 import { jokerUnlockOptions, unlockTriggerOptions } from "@/lib/unlock-utils";
+import { getRandomPlaceholder } from "@/lib/placeholder-assets.ts";
+import { PlaceholderPickerDialog } from "@/components/pages/placeholder-picker-dialog";
 
 export default function JokersPage() {
   const { data, updateJokers } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<JokerData | null>(null);
+  const [isPlaceholderPickerOpen, setIsPlaceholderPickerOpen] = useState(false);
+  const [placeholderTargetId, setPlaceholderTargetId] = useState<string | null>(
+    null,
+  );
 
   // 1. Stable Image Processor
   const processJokerImage = useCallback((file: File): Promise<string> => {
@@ -94,6 +100,7 @@ export default function JokersPage() {
   );
 
   const handleCreate = useCallback(async () => {
+    const placeholder = await getRandomPlaceholder("joker");
     const newJoker: JokerData = {
       id: crypto.randomUUID(),
       objectType: "joker",
@@ -107,7 +114,9 @@ export default function JokersPage() {
       unlocked: true,
       discovered: true,
       appears_in_shop: true,
-      image: "",
+      image: placeholder?.src || "",
+      placeholderCreditIndex: placeholder?.index,
+      placeholderCategory: placeholder?.category,
       objectKey: "new_joker",
       cardAppearance: {},
       rules: [],
@@ -719,6 +728,11 @@ export default function JokersPage() {
             )}
           </div>
         }
+        showPlaceholderPickerButton
+        onOpenPlaceholderPicker={() => {
+          setPlaceholderTargetId(joker.id);
+          setIsPlaceholderPickerOpen(true);
+        }}
         properties={[
           {
             id: "eternal",
@@ -918,6 +932,21 @@ export default function JokersPage() {
         tabs={jokerDialogTabs}
         onSave={handleUpdate}
         renderPreview={renderPreview}
+        showPlaceholderPicker
+        placeholderCategory="joker"
+      />
+      <PlaceholderPickerDialog
+        open={isPlaceholderPickerOpen}
+        onOpenChange={setIsPlaceholderPickerOpen}
+        initialCategory="joker"
+        onSelect={(entry) => {
+          if (!placeholderTargetId) return;
+          handleUpdate(placeholderTargetId, {
+            image: entry.src,
+            placeholderCreditIndex: entry.index,
+            placeholderCategory: entry.category,
+          });
+        }}
       />
       <ConfirmDialog
         open={isDeleteDialogOpen}

@@ -4,7 +4,6 @@ import { GenericItemCard } from "@/components/pages/generic-item-card";
 import { useProjectData, useModName } from "@/lib/storage";
 import { DeckData } from "@/lib/types";
 import {
-  Cards,
   PencilSimple,
   Sparkle,
   DownloadSimple,
@@ -31,11 +30,17 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useConfirmDelete } from "@/hooks/use-confirm-delete";
 import { BalatroCard } from "@/components/balatro/balatro-card";
 import { Input } from "@/components/ui/input";
+import { getRandomPlaceholder } from "@/lib/placeholder-assets.ts";
+import { PlaceholderPickerDialog } from "@/components/pages/placeholder-picker-dialog";
 
 export default function DecksPage() {
   const { data, updateDecks } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<DeckData | null>(null);
+  const [isPlaceholderPickerOpen, setIsPlaceholderPickerOpen] = useState(false);
+  const [placeholderTargetId, setPlaceholderTargetId] = useState<string | null>(
+    null,
+  );
 
   const processDeckImage = useCallback((file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -75,13 +80,16 @@ export default function DecksPage() {
     [data.decks, updateDecks],
   );
 
-  const handleCreate = useCallback(() => {
+  const handleCreate = useCallback(async () => {
+    const placeholder = await getRandomPlaceholder("deck");
     const newDeck: DeckData = {
       id: crypto.randomUUID(),
       objectType: "deck",
       name: "New Deck",
       description: "Deck description",
-      image: "",
+      image: placeholder?.src || "",
+      placeholderCreditIndex: placeholder?.index,
+      placeholderCategory: placeholder?.category,
       objectKey: "new_deck",
       unlocked: true,
       discovered: true,
@@ -309,9 +317,16 @@ export default function DecksPage() {
               className="w-full h-full object-contain [image-rendering:pixelated]"
             />
           ) : (
-            <Cards className="h-20 w-20 text-muted-foreground/20" />
+            <div className="text-muted-foreground/30 text-xs font-bold uppercase tracking-widest border-2 border-dashed border-border p-4 rounded-lg">
+              No Image
+            </div>
           )
         }
+        showPlaceholderPickerButton
+        onOpenPlaceholderPicker={() => {
+          setPlaceholderTargetId(deck.id);
+          setIsPlaceholderPickerOpen(true);
+        }}
         properties={[
           {
             id: "unlocked",
@@ -431,6 +446,21 @@ export default function DecksPage() {
         tabs={deckDialogTabs}
         onSave={handleUpdate}
         renderPreview={renderPreview}
+        showPlaceholderPicker
+        placeholderCategory="deck"
+      />
+      <PlaceholderPickerDialog
+        open={isPlaceholderPickerOpen}
+        onOpenChange={setIsPlaceholderPickerOpen}
+        initialCategory="deck"
+        onSelect={(entry) => {
+          if (!placeholderTargetId) return;
+          handleUpdate(placeholderTargetId, {
+            image: entry.src,
+            placeholderCreditIndex: entry.index,
+            placeholderCategory: entry.category,
+          });
+        }}
       />
       <ConfirmDialog
         open={isDeleteDialogOpen}

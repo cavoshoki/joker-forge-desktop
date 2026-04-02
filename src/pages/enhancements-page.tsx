@@ -28,11 +28,17 @@ import {
 } from "@phosphor-icons/react";
 import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import { BalatroCard } from "@/components/balatro/balatro-card";
+import { getRandomPlaceholder } from "@/lib/placeholder-assets.ts";
+import { PlaceholderPickerDialog } from "@/components/pages/placeholder-picker-dialog";
 
 export default function EnhancementsPage() {
   const { data, updateEnhancements } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<EnhancementData | null>(null);
+  const [isPlaceholderPickerOpen, setIsPlaceholderPickerOpen] = useState(false);
+  const [placeholderTargetId, setPlaceholderTargetId] = useState<string | null>(
+    null,
+  );
 
   const processEnhancementImage = useCallback((file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -72,13 +78,16 @@ export default function EnhancementsPage() {
     [data.enhancements, updateEnhancements],
   );
 
-  const handleCreate = useCallback(() => {
+  const handleCreate = useCallback(async () => {
+    const placeholder = await getRandomPlaceholder("enhancement");
     const newEnhancement: EnhancementData = {
       id: crypto.randomUUID(),
       objectType: "enhancement",
       name: "New Enhancement",
       description: "Effect",
-      image: "",
+      image: placeholder?.src || "",
+      placeholderCreditIndex: placeholder?.index,
+      placeholderCategory: placeholder?.category,
       objectKey: "new_enhancement",
       unlocked: true,
       discovered: true,
@@ -291,9 +300,16 @@ export default function EnhancementsPage() {
               className="w-full h-full object-contain [image-rendering:pixelated]"
             />
           ) : (
-            <Star className="h-20 w-20 text-muted-foreground/20" />
+            <div className="text-muted-foreground/30 text-xs font-bold uppercase tracking-widest border-2 border-dashed border-border p-4 rounded-lg">
+              No Image
+            </div>
           )
         }
+        showPlaceholderPickerButton
+        onOpenPlaceholderPicker={() => {
+          setPlaceholderTargetId(item.id);
+          setIsPlaceholderPickerOpen(true);
+        }}
         properties={[
           {
             id: "unlocked",
@@ -420,6 +436,8 @@ export default function EnhancementsPage() {
         description="Modify enhancement properties."
         tabs={enhancementDialogTabs}
         onSave={handleUpdate}
+        showPlaceholderPicker
+        placeholderCategory="enhancement"
         renderPreview={(item) => (
           <BalatroCard
             type="card"
@@ -428,6 +446,19 @@ export default function EnhancementsPage() {
             size="lg"
           />
         )}
+      />
+      <PlaceholderPickerDialog
+        open={isPlaceholderPickerOpen}
+        onOpenChange={setIsPlaceholderPickerOpen}
+        initialCategory="enhancement"
+        onSelect={(entry) => {
+          if (!placeholderTargetId) return;
+          handleUpdate(placeholderTargetId, {
+            image: entry.src,
+            placeholderCreditIndex: entry.index,
+            placeholderCategory: entry.category,
+          });
+        }}
       />
       <ConfirmDialog
         open={isDeleteDialogOpen}

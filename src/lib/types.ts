@@ -57,6 +57,7 @@ export interface BaseGameObject {
   overlayImage?: string;
   hasUserUploadedImage?: boolean;
   placeholderCreditIndex?: number;
+  placeholderCategory?: string;
   orderValue: number;
   unlocked: boolean;
   discovered: boolean;

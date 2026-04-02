@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, ReactNode } from "react";
-import { CurrencyDollar, Trash } from "@phosphor-icons/react";
+import { CurrencyDollar, Image, Trash } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -52,6 +52,8 @@ interface GenericItemCardProps {
     rarity?: number;
   }) => void;
   onDuplicate?: () => void;
+  showPlaceholderPickerButton?: boolean;
+  onOpenPlaceholderPicker?: () => void;
 }
 
 export function GenericItemCard({
@@ -66,6 +68,8 @@ export function GenericItemCard({
   rarity,
   onUpdate,
   onDuplicate,
+  showPlaceholderPickerButton = false,
+  onOpenPlaceholderPicker,
 }: GenericItemCardProps) {
   const [editingField, setEditingField] = useState<
     "none" | "name" | "desc" | "cost" | "id"
@@ -388,6 +392,28 @@ export function GenericItemCard({
             )}
 
             <div className="flex gap-2">
+              {showPlaceholderPickerButton && onOpenPlaceholderPicker && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenPlaceholderPicker();
+                      }}
+                      onPointerDown={(e) => e.preventDefault()}
+                      className="h-9 w-9 transition-all hover:scale-110 rounded-lg cursor-pointer"
+                    >
+                      <Image className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent className="font-bold">
+                    Choose Placeholder
+                  </TooltipContent>
+                </Tooltip>
+              )}
+
               {otherActions.map((action) => (
                 <Tooltip key={action.id}>
                   <TooltipTrigger asChild>

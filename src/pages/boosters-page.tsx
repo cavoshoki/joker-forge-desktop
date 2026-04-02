@@ -10,7 +10,6 @@ import { useConfirmDelete } from "@/hooks/use-confirm-delete";
 import { useProjectData, useModName } from "@/lib/storage";
 import { BoosterData } from "@/lib/types";
 import {
-  Package,
   PencilSimple,
   Trash,
   Eye,
@@ -24,11 +23,17 @@ import {
 import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import { BalatroCard } from "@/components/balatro/balatro-card";
 import { Input } from "@/components/ui/input";
+import { getRandomPlaceholder } from "@/lib/placeholder-assets.ts";
+import { PlaceholderPickerDialog } from "@/components/pages/placeholder-picker-dialog";
 
 export default function BoostersPage() {
   const { data, updateBoosters } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<BoosterData | null>(null);
+  const [isPlaceholderPickerOpen, setIsPlaceholderPickerOpen] = useState(false);
+  const [placeholderTargetId, setPlaceholderTargetId] = useState<string | null>(
+    null,
+  );
 
   const processBoosterImage = useCallback((file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -68,14 +73,17 @@ export default function BoostersPage() {
     [data.boosters, updateBoosters],
   );
 
-  const handleCreate = useCallback(() => {
+  const handleCreate = useCallback(async () => {
+    const placeholder = await getRandomPlaceholder("booster");
     const newBooster: BoosterData = {
       id: crypto.randomUUID(),
       objectType: "booster",
       name: "Standard Pack",
       description: "Choose 1 of 3",
       orderValue: data.boosters.length + 1,
-      image: "",
+      image: placeholder?.src || "",
+      placeholderCreditIndex: placeholder?.index,
+      placeholderCategory: placeholder?.category,
       cost: 4,
       weight: 1,
       draw_hand: true,
@@ -382,9 +390,16 @@ export default function BoostersPage() {
               className="w-full h-full object-contain [image-rendering:pixelated]"
             />
           ) : (
-            <Package className="h-20 w-20 text-muted-foreground/20" />
+            <div className="text-muted-foreground/30 text-xs font-bold uppercase tracking-widest border-2 border-dashed border-border p-4 rounded-lg">
+              No Image
+            </div>
           )
         }
+        showPlaceholderPickerButton
+        onOpenPlaceholderPicker={() => {
+          setPlaceholderTargetId(item.id);
+          setIsPlaceholderPickerOpen(true);
+        }}
         properties={[
           {
             id: "discovered",
@@ -458,9 +473,24 @@ export default function BoostersPage() {
         description="Modify booster properties."
         tabs={boosterDialogTabs}
         onSave={handleUpdate}
+        showPlaceholderPicker
+        placeholderCategory="booster"
         renderPreview={(item) => (
           <BalatroCard type="booster" data={item || {}} size="lg" />
         )}
+      />
+      <PlaceholderPickerDialog
+        open={isPlaceholderPickerOpen}
+        onOpenChange={setIsPlaceholderPickerOpen}
+        initialCategory="booster"
+        onSelect={(entry) => {
+          if (!placeholderTargetId) return;
+          handleUpdate(placeholderTargetId, {
+            image: entry.src,
+            placeholderCreditIndex: entry.index,
+            placeholderCategory: entry.category,
+          });
+        }}
       />
       <ConfirmDialog
         open={isDeleteDialogOpen}

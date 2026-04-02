@@ -49,6 +49,12 @@ import { applyAutoFormatting } from "@/lib/balatro-text-formatter";
 import { slugify, type UserVariable } from "@/lib/balatro-utils";
 import { RaritySelect } from "@/components/balatro/rarity-select";
 import { ListInput } from "@/components/ui/list-input";
+import {
+  PlaceholderEntry,
+  PlaceholderCategory,
+  getPlaceholderEntriesForCategory,
+} from "@/lib/placeholder-assets.ts";
+import { PlaceholderPickerDialog } from "@/components/pages/placeholder-picker-dialog";
 
 export type FieldType =
   | "text"
@@ -114,6 +120,8 @@ export interface GenericItemDialogProps<T> {
   variant?: "default" | "mini";
   onSave: (id: string, updates: Partial<T>) => void;
   renderPreview?: (item: T) => ReactNode;
+  showPlaceholderPicker?: boolean;
+  placeholderCategory?: PlaceholderCategory;
 }
 
 const getNestedValue = (obj: any, path: string) => {
@@ -448,6 +456,10 @@ const MemoizedField = memo(
     fullItem,
     inGrid,
     error,
+    showPlaceholderPicker,
+    placeholderCategory,
+    placeholderCredits,
+    onOpenPlaceholderPicker,
   }: {
     field: DialogField<any>;
     value: any;
@@ -455,6 +467,10 @@ const MemoizedField = memo(
     fullItem: any;
     inGrid?: boolean;
     error?: string;
+    showPlaceholderPicker?: boolean;
+    placeholderCategory?: PlaceholderCategory;
+    placeholderCredits?: Record<number, string>;
+    onOpenPlaceholderPicker?: () => void;
   }) => {
     const safeValue =
       field.type === "number" &&
@@ -627,6 +643,19 @@ const MemoizedField = memo(
             />
           );
         case "image":
+          const itemPlaceholderCategory =
+            (fullItem?.placeholderCategory as
+              | PlaceholderCategory
+              | undefined) || placeholderCategory;
+          const placeholderCreditIndex =
+            typeof fullItem?.placeholderCreditIndex === "number"
+              ? fullItem.placeholderCreditIndex
+              : undefined;
+          const placeholderCredit =
+            placeholderCreditIndex !== undefined
+              ? placeholderCredits?.[placeholderCreditIndex]
+              : undefined;
+
           return (
             <div className="flex items-start gap-4 p-3 hover:bg-muted/5 transition-colors">
               <div className="relative w-20 h-28 shrink-0 rounded-md overflow-hidden flex items-center justify-center group">
@@ -662,29 +691,65 @@ const MemoizedField = memo(
                         try {
                           const result = await field.processFile(file);
                           onChange(field.id, result);
+                          if ("placeholderCreditIndex" in (fullItem as any)) {
+                            onChange("placeholderCreditIndex", undefined);
+                          }
                         } catch (err) {
                           console.error("Image processing failed", err);
                         }
                       } else {
                         const reader = new FileReader();
-                        reader.onload = (event) =>
+                        reader.onload = (event) => {
                           onChange(field.id, event.target?.result);
+                          if ("placeholderCreditIndex" in (fullItem as any)) {
+                            onChange("placeholderCreditIndex", undefined);
+                          }
+                        };
                         reader.readAsDataURL(file);
                       }
                     }
                   }}
                 />
 
+                {showPlaceholderPicker && field.id === "image" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full cursor-pointer"
+                    onClick={onOpenPlaceholderPicker}
+                  >
+                    <ImageIcon className="mr-2 h-4 w-4" />
+                    Choose Placeholder
+                  </Button>
+                )}
+
                 {safeValue && (
                   <Button
                     variant="outline"
                     size="sm"
                     className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 cursor-pointer"
-                    onClick={() => onChange(field.id, "")}
+                    onClick={() => {
+                      onChange(field.id, "");
+                      if ("placeholderCreditIndex" in (fullItem as any)) {
+                        onChange("placeholderCreditIndex", undefined);
+                      }
+                      if ("placeholderCategory" in (fullItem as any)) {
+                        onChange("placeholderCategory", undefined);
+                      }
+                    }}
                   >
                     <Trash className="mr-2 h-4 w-4" />
                     Remove
                   </Button>
+                )}
+
+                {placeholderCredit && (
+                  <p className="text-[11px] text-muted-foreground text-center">
+                    Placeholder credit: {placeholderCredit}
+                    {itemPlaceholderCategory
+                      ? ` (${itemPlaceholderCategory})`
+                      : ""}
+                  </p>
                 )}
 
                 {field.description && (
@@ -897,11 +962,17 @@ function GenericItemDialogInternal<T extends { id: string }>({
   variant = "default",
   onSave,
   renderPreview,
+  showPlaceholderPicker = false,
+  placeholderCategory,
 }: GenericItemDialogProps<T>) {
   const [formData, setFormData] = useState<T | null>(null);
   const [activeTab, setActiveTab] = useState<string>("");
   const [panelSize, setPanelSize] = useState<number>(70);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isPlaceholderDialogOpen, setIsPlaceholderDialogOpen] = useState(false);
+  const [placeholderCredits, setPlaceholderCredits] = useState<
+    Record<number, string>
+  >({});
   const modalRef = useRef<HTMLDivElement>(null);
   const handleSaveRef = useRef<() => void>(() => {});
   const isMini = variant === "mini";
@@ -933,10 +1004,41 @@ function GenericItemDialogInternal<T extends { id: string }>({
 
       setFormData({ ...item });
       setErrors({});
+      setIsPlaceholderDialogOpen(false);
     } else {
       setFormData(null);
     }
   }, [open, item, hasTabs, resolvedTabs]);
+
+  useEffect(() => {
+    if (!open || !showPlaceholderPicker || !placeholderCategory) {
+      setPlaceholderCredits({});
+      return;
+    }
+
+    let isMounted = true;
+    const load = async () => {
+      const entries =
+        await getPlaceholderEntriesForCategory(placeholderCategory);
+      if (!isMounted) return;
+
+      const creditMap = entries.reduce(
+        (acc: Record<number, string>, entry: PlaceholderEntry) => {
+          acc[entry.index] = entry.credit;
+          return acc;
+        },
+        {} as Record<number, string>,
+      );
+
+      setPlaceholderCredits(creditMap);
+    };
+
+    void load();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [open, placeholderCategory, showPlaceholderPicker]);
 
   const handleChange = useCallback((path: string, value: any) => {
     setFormData((prev: any) => {
@@ -1021,7 +1123,12 @@ function GenericItemDialogInternal<T extends { id: string }>({
     if (!open) return;
 
     const handleClickOutside = (event: MouseEvent) => {
+      if (isPlaceholderDialogOpen) return;
+
       const target = event.target as Element | null;
+      if (target?.closest(".placeholder-picker-content")) {
+        return;
+      }
       if (
         target?.closest(
           "[data-radix-popper-content-wrapper], [data-radix-portal], [data-radix-select-content], [data-radix-select-viewport]",
@@ -1041,7 +1148,7 @@ function GenericItemDialogInternal<T extends { id: string }>({
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [open]);
+  }, [open, isPlaceholderDialogOpen]);
 
   if (!open || !item || !formData) return null;
 
@@ -1074,6 +1181,12 @@ function GenericItemDialogInternal<T extends { id: string }>({
                   fullItem={formData}
                   inGrid={!!group.className?.includes("grid")}
                   error={errors[field.id]}
+                  showPlaceholderPicker={showPlaceholderPicker}
+                  placeholderCategory={placeholderCategory}
+                  placeholderCredits={placeholderCredits}
+                  onOpenPlaceholderPicker={() =>
+                    setIsPlaceholderDialogOpen(true)
+                  }
                 />
               );
             })}
@@ -1222,6 +1335,19 @@ function GenericItemDialogInternal<T extends { id: string }>({
 
         <DialogFooter className="hidden" />
       </DialogContent>
+
+      {showPlaceholderPicker && (
+        <PlaceholderPickerDialog
+          open={isPlaceholderDialogOpen}
+          onOpenChange={setIsPlaceholderDialogOpen}
+          initialCategory={placeholderCategory}
+          onSelect={(entry) => {
+            handleChange("image", entry.src);
+            handleChange("placeholderCreditIndex", entry.index);
+            handleChange("placeholderCategory", entry.category);
+          }}
+        />
+      )}
     </Dialog>
   );
 }

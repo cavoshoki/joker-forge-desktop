@@ -4,7 +4,6 @@ import { GenericItemCard } from "@/components/pages/generic-item-card";
 import { useProjectData, useModName } from "@/lib/storage";
 import { SealData } from "@/lib/types";
 import {
-  Stamp,
   PencilSimple,
   Sparkle,
   Trash,
@@ -26,11 +25,17 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useConfirmDelete } from "@/hooks/use-confirm-delete";
 import { BalatroCard } from "@/components/balatro/balatro-card";
 import { SOUNDS } from "@/lib/balatro-utils";
+import { getRandomPlaceholder } from "@/lib/placeholder-assets.ts";
+import { PlaceholderPickerDialog } from "@/components/pages/placeholder-picker-dialog";
 
 export default function SealsPage() {
   const { data, updateSeals } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<SealData | null>(null);
+  const [isPlaceholderPickerOpen, setIsPlaceholderPickerOpen] = useState(false);
+  const [placeholderTargetId, setPlaceholderTargetId] = useState<string | null>(
+    null,
+  );
 
   const processSealImage = useCallback((file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -70,13 +75,16 @@ export default function SealsPage() {
     [data.seals, updateSeals],
   );
 
-  const handleCreate = useCallback(() => {
+  const handleCreate = useCallback(async () => {
+    const placeholder = await getRandomPlaceholder("seal");
     const newSeal: SealData = {
       id: crypto.randomUUID(),
       objectType: "seal",
       name: "New Seal",
       description: "Effect",
-      image: "",
+      image: placeholder?.src || "",
+      placeholderCreditIndex: placeholder?.index,
+      placeholderCategory: placeholder?.category,
       objectKey: "new_seal",
       badge_colour: "HEX",
       unlocked: true,
@@ -339,9 +347,16 @@ export default function SealsPage() {
               className="w-full h-full object-contain [image-rendering:pixelated]"
             />
           ) : (
-            <Stamp className="h-20 w-20 text-muted-foreground/20" />
+            <div className="text-muted-foreground/30 text-xs font-bold uppercase tracking-widest border-2 border-dashed border-border p-4 rounded-lg">
+              No Image
+            </div>
           )
         }
+        showPlaceholderPickerButton
+        onOpenPlaceholderPicker={() => {
+          setPlaceholderTargetId(item.id);
+          setIsPlaceholderPickerOpen(true);
+        }}
         properties={[
           {
             id: "unlocked",
@@ -425,6 +440,21 @@ export default function SealsPage() {
         tabs={sealDialogTabs}
         onSave={handleUpdate}
         renderPreview={renderPreview}
+        showPlaceholderPicker
+        placeholderCategory="seal"
+      />
+      <PlaceholderPickerDialog
+        open={isPlaceholderPickerOpen}
+        onOpenChange={setIsPlaceholderPickerOpen}
+        initialCategory="seal"
+        onSelect={(entry) => {
+          if (!placeholderTargetId) return;
+          handleUpdate(placeholderTargetId, {
+            image: entry.src,
+            placeholderCreditIndex: entry.index,
+            placeholderCategory: entry.category,
+          });
+        }}
       />
       <ConfirmDialog
         open={isDeleteDialogOpen}

@@ -4,7 +4,6 @@ import { GenericItemCard } from "@/components/pages/generic-item-card";
 import { useProjectData, useModName } from "@/lib/storage";
 import { ConsumableData } from "@/lib/types";
 import {
-  Flask,
   PencilSimple,
   Sparkle,
   Trash,
@@ -29,11 +28,17 @@ import {
   getConsumableSetDropdownOptions,
   getCustomConsumableSetData,
 } from "@/lib/balatro-utils";
+import { getRandomPlaceholder } from "@/lib/placeholder-assets.ts";
+import { PlaceholderPickerDialog } from "@/components/pages/placeholder-picker-dialog";
 
 export default function ConsumablesPage() {
   const { data, updateConsumables } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<ConsumableData | null>(null);
+  const [isPlaceholderPickerOpen, setIsPlaceholderPickerOpen] = useState(false);
+  const [placeholderTargetId, setPlaceholderTargetId] = useState<string | null>(
+    null,
+  );
 
   const processConsumableImage = useCallback((file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -73,13 +78,16 @@ export default function ConsumablesPage() {
     [data.consumables, updateConsumables],
   );
 
-  const handleCreate = useCallback(() => {
+  const handleCreate = useCallback(async () => {
+    const placeholder = await getRandomPlaceholder("consumable");
     const newConsumable: ConsumableData = {
       id: crypto.randomUUID(),
       objectType: "consumable",
       name: "New Tarot",
       description: "Effect",
-      image: "",
+      image: placeholder?.src || "",
+      placeholderCreditIndex: placeholder?.index,
+      placeholderCategory: placeholder?.category,
       orderValue: data.consumables.length + 1,
       set: "Tarot",
       cost: 3,
@@ -315,9 +323,16 @@ export default function ConsumablesPage() {
               className="w-full h-full object-contain [image-rendering:pixelated]"
             />
           ) : (
-            <Flask className="h-20 w-20 text-muted-foreground/20" />
+            <div className="text-muted-foreground/30 text-xs font-bold uppercase tracking-widest border-2 border-dashed border-border p-4 rounded-lg">
+              No Image
+            </div>
           )
         }
+        showPlaceholderPickerButton
+        onOpenPlaceholderPicker={() => {
+          setPlaceholderTargetId(item.id);
+          setIsPlaceholderPickerOpen(true);
+        }}
         badges={
           <Badge
             variant="secondary"
@@ -401,6 +416,21 @@ export default function ConsumablesPage() {
         tabs={consumableDialogTabs}
         onSave={handleUpdate}
         renderPreview={renderPreview}
+        showPlaceholderPicker
+        placeholderCategory="consumable"
+      />
+      <PlaceholderPickerDialog
+        open={isPlaceholderPickerOpen}
+        onOpenChange={setIsPlaceholderPickerOpen}
+        initialCategory="consumable"
+        onSelect={(entry) => {
+          if (!placeholderTargetId) return;
+          handleUpdate(placeholderTargetId, {
+            image: entry.src,
+            placeholderCreditIndex: entry.index,
+            placeholderCategory: entry.category,
+          });
+        }}
       />
       <ConfirmDialog
         open={isDeleteDialogOpen}
