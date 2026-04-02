@@ -496,7 +496,7 @@ export const getBalatroInstallPath = (): string => {
 
 export const setBalatroInstallPath = (value: string) => {
   if (typeof window === "undefined") return;
-  const normalizedValue = /^[a-zA-Z]:\\/.test(value)
+  const normalizedValue = /^[a-zA-Z]:\\+/.test(value)
     ? value.replace(/\\{2,}/g, "\\")
     : value;
   window.localStorage.setItem(BALATRO_PATH_KEY, normalizedValue);

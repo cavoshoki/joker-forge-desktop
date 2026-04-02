@@ -155,7 +155,7 @@ export function SettingsPopover() {
                 Paths
               </p>
               <p className="text-xs text-muted-foreground">
-                This is the Balatro AppData folder (Roaming).
+                This is the Balatro mods folder.
               </p>
               <div className="flex items-center gap-2">
                 <Input
@@ -164,7 +164,7 @@ export function SettingsPopover() {
                   onChange={(event) =>
                     handleBalatroPathChange(event.target.value)
                   }
-                  placeholder="C:\\Users\\Jayd\\AppData\\Roaming\\Balatro"
+                  placeholder="C:\\Users\\Jayd\\AppData\\Roaming\\Balatro\\mods"
                   className="h-9 text-xs font-mono"
                 />
                 <Button
