@@ -103,17 +103,25 @@ const extractGameVariableIds = (rules: Rule[] | undefined): string[] => {
   if (!Array.isArray(rules)) return [];
 
   const ids = new Set<string>();
-  const ingest = (params?: Record<string, { value: unknown; valueType?: string }>) => {
+  const ingest = (
+    params?: Record<string, { value: unknown; valueType?: string }>,
+  ) => {
     if (!params) return;
     for (const payload of Object.values(params)) {
       if (!payload) continue;
 
-      if (payload.valueType === "gameVariable" && typeof payload.value === "string") {
+      if (
+        payload.valueType === "gameVariable" &&
+        typeof payload.value === "string"
+      ) {
         const direct = payload.value.replace(/^GAMEVAR:/, "").split("|")[0];
         if (direct) ids.add(direct);
       }
 
-      if (typeof payload.value === "string" && payload.value.startsWith("GAMEVAR:")) {
+      if (
+        typeof payload.value === "string" &&
+        payload.value.startsWith("GAMEVAR:")
+      ) {
         const parsed = payload.value.replace("GAMEVAR:", "").split("|")[0];
         if (parsed) ids.add(parsed);
       }
@@ -150,11 +158,13 @@ const extractGameVariableIds = (rules: Rule[] | undefined): string[] => {
 };
 
 export const buildDescriptionVariableTokens = (
-  item: {
-    rules?: Rule[];
-    userVariables?: UserVariable[];
-    locVars?: { vars?: Array<string | number> };
-  } | undefined,
+  item:
+    | {
+        rules?: Rule[];
+        userVariables?: UserVariable[];
+        locVars?: { vars?: Array<string | number> };
+      }
+    | undefined,
 ): DescriptionVariableToken[] => {
   if (!item) return [];
 
@@ -182,7 +192,9 @@ export const buildDescriptionVariableTokens = (
     push({ label: configName, source, category: "config" });
   }
 
-  for (const userVar of Array.isArray(item.userVariables) ? item.userVariables : []) {
+  for (const userVar of Array.isArray(item.userVariables)
+    ? item.userVariables
+    : []) {
     const source = `card.ability.extra.${userVar.name}`;
     push({ label: userVar.name, source, category: "user" });
   }

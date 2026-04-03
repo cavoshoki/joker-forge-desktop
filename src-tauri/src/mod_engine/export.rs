@@ -8,8 +8,7 @@
 
 use balatro_codegen::types::{
     AtlasPos, ConditionDef, ConditionGroupDef, DisplaySize, EffectDef, JokerDef, LogicOp,
-    LoopGroupDef, ParamValue, RandomGroupDef, RuleDef, TypedValue, UserVarType,
-    UserVariableDef,
+    LoopGroupDef, ParamValue, RandomGroupDef, RuleDef, TypedValue, UserVarType, UserVariableDef,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -206,7 +205,11 @@ fn map_rule(rule: &RuleInput) -> RuleDef {
     RuleDef {
         id: rule.id.clone(),
         trigger: rule.trigger.clone(),
-        condition_groups: rule.condition_groups.iter().map(map_condition_group).collect(),
+        condition_groups: rule
+            .condition_groups
+            .iter()
+            .map(map_condition_group)
+            .collect(),
         effects: rule.effects.iter().map(map_effect).collect(),
         random_groups: rule.random_groups.iter().map(map_random_group).collect(),
         loop_groups: rule.loops.iter().map(map_loop_group).collect(),
@@ -215,7 +218,11 @@ fn map_rule(rule: &RuleInput) -> RuleDef {
 
 fn map_condition_group(cg: &ConditionGroupInput) -> ConditionGroupDef {
     ConditionGroupDef {
-        logic_operator: if cg.operator == "or" { LogicOp::Or } else { LogicOp::And },
+        logic_operator: if cg.operator == "or" {
+            LogicOp::Or
+        } else {
+            LogicOp::And
+        },
         conditions: cg.conditions.iter().map(map_condition).collect(),
     }
 }
@@ -276,9 +283,11 @@ fn map_user_variable(v: &UserVariableInput) -> UserVariableDef {
     let initial_value = match v.var_type.as_str() {
         "suit" => ParamValue::Str(v.initial_suit.clone().unwrap_or_else(|| "Spades".into())),
         "rank" => ParamValue::Str(v.initial_rank.clone().unwrap_or_else(|| "Ace".into())),
-        "pokerhand" => {
-            ParamValue::Str(v.initial_poker_hand.clone().unwrap_or_else(|| "High Card".into()))
-        }
+        "pokerhand" => ParamValue::Str(
+            v.initial_poker_hand
+                .clone()
+                .unwrap_or_else(|| "High Card".into()),
+        ),
         "key" => ParamValue::Str(v.initial_key.clone().unwrap_or_else(|| "none".into())),
         "text" => ParamValue::Str(v.initial_text.clone().unwrap_or_default()),
         _ => ParamValue::Float(v.initial_value.unwrap_or(0.0)),

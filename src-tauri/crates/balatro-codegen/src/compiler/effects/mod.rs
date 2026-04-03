@@ -1,11 +1,11 @@
-pub mod scoring;
+pub mod card_transform;
 pub mod creation;
 pub mod destruction;
-pub mod passive;
-pub mod misc;
-pub mod card_transform;
-pub mod slot_management;
 pub mod economy;
+pub mod misc;
+pub mod passive;
+pub mod scoring;
+pub mod slot_management;
 
 use crate::compiler::context::CompileContext;
 use crate::lua_ast::*;
@@ -92,8 +92,12 @@ pub fn compile_effect(
         "discount_items" => economy::discount_items(effect, ctx),
         "edit_item_weight" | "edit_rarity_weight" => economy::edit_item_weight(effect, ctx),
         "edit_win_ante" | "edit_winner_ante" => economy::edit_winner_ante(effect, ctx, trigger),
-        "edit_hands_money" | "edit_end_round_hand_money" => economy::edit_end_round_hand_money(effect, ctx),
-        "edit_discards_money" | "edit_end_round_discard_money" => economy::edit_end_round_discard_money(effect, ctx),
+        "edit_hands_money" | "edit_end_round_hand_money" => {
+            economy::edit_end_round_hand_money(effect, ctx)
+        }
+        "edit_discards_money" | "edit_end_round_discard_money" => {
+            economy::edit_end_round_discard_money(effect, ctx)
+        }
 
         // --------------- Economy (dollars) ---------------
         "set_dollars" => misc::set_dollars(effect, ctx),
@@ -151,7 +155,9 @@ pub fn build_return_block(effects: &[EffectOutput]) -> Vec<Stmt> {
     // Keep only effects that contribute return-table content.
     let content_effects: Vec<&EffectOutput> = effects
         .iter()
-        .filter(|eff| !eff.return_fields.is_empty() || eff.message.is_some() || eff.colour.is_some())
+        .filter(|eff| {
+            !eff.return_fields.is_empty() || eff.message.is_some() || eff.colour.is_some()
+        })
         .collect();
 
     if let Some((first, rest)) = content_effects.split_first() {

@@ -88,7 +88,17 @@ const buildJokerAtlas = async (
     const y = row * 95 * scale;
     const baseImage = await loadImage(joker.image || "");
     if (baseImage) {
-      ctx.drawImage(baseImage, 0, 0, baseImage.width, baseImage.height, x, y, 71 * scale, 95 * scale);
+      ctx.drawImage(
+        baseImage,
+        0,
+        0,
+        baseImage.width,
+        baseImage.height,
+        x,
+        y,
+        71 * scale,
+        95 * scale,
+      );
     }
     currentPosition += 1;
 
@@ -101,13 +111,27 @@ const buildJokerAtlas = async (
       const soulY = soulRow * 95 * scale;
       const overlayImage = await loadImage(joker.overlayImage);
       if (overlayImage) {
-        ctx.drawImage(overlayImage, 0, 0, overlayImage.width, overlayImage.height, soulX, soulY, 71 * scale, 95 * scale);
+        ctx.drawImage(
+          overlayImage,
+          0,
+          0,
+          overlayImage.width,
+          overlayImage.height,
+          soulX,
+          soulY,
+          71 * scale,
+          95 * scale,
+        );
       }
       currentPosition += 1;
     }
   }
 
-  return { atlasDataUrl: canvas.toDataURL("image/png"), positionsById, soulPositionsById };
+  return {
+    atlasDataUrl: canvas.toDataURL("image/png"),
+    positionsById,
+    soulPositionsById,
+  };
 };
 
 const dataURLToUint8Array = (dataUrl: string): Uint8Array => {
@@ -151,7 +175,10 @@ const buildLuaStringArray = (lines: string[]): string => {
   return `{\n${items}\n      }`;
 };
 
-const buildLocalizationLua = (modPrefix: string, jokers: JokerData[]): string => {
+const buildLocalizationLua = (
+  modPrefix: string,
+  jokers: JokerData[],
+): string => {
   const sorted = [...jokers].sort((a, b) => a.orderValue - b.orderValue);
   const entries = sorted
     .map((joker) => {
@@ -232,12 +259,16 @@ const ensureUniqueModFolderPath = async (
   return join(exportRootPath, `${modId}_${timestamp}`);
 };
 
-const resolveExportRootPath = async (options: ExportModRustOptions): Promise<string> => {
+const resolveExportRootPath = async (
+  options: ExportModRustOptions,
+): Promise<string> => {
   const destinationMode = options.destinationMode ?? "downloads";
   if (destinationMode === "balatro-mods") {
     const balatroModsPath = (options.balatroModsPath || "").trim();
     if (!balatroModsPath) {
-      throw new Error("Balatro mods folder is not configured. Set it in Settings -> Paths.");
+      throw new Error(
+        "Balatro mods folder is not configured. Set it in Settings -> Paths.",
+      );
     }
     if (!(await exists(balatroModsPath))) {
       throw new Error(`Balatro mods folder does not exist: ${balatroModsPath}`);
@@ -283,7 +314,10 @@ export const exportSingleJokerRust = async (
   modPrefix: string,
 ): Promise<void> => {
   const code = await compileSingleJokerLua(joker, modPrefix);
-  downloadBlob(`${joker.objectKey}.lua`, new Blob([code], { type: "text/plain" }));
+  downloadBlob(
+    `${joker.objectKey}.lua`,
+    new Blob([code], { type: "text/plain" }),
+  );
 };
 
 /**
@@ -300,7 +334,10 @@ export const exportModRust = async (
   options: ExportModRustOptions = {},
 ): Promise<ExportModRustResult> => {
   const exportRootPath = await resolveExportRootPath(options);
-  const modFolderPath = await ensureUniqueModFolderPath(exportRootPath, metadata.id);
+  const modFolderPath = await ensureUniqueModFolderPath(
+    exportRootPath,
+    metadata.id,
+  );
   const useLocalizationFile = options.useLocalizationFile ?? false;
   const locale = options.localizationLocale ?? "en-us";
   let fileCount = 0;
@@ -311,9 +348,15 @@ export const exportModRust = async (
   await mkdir(jokersFolderPath, { recursive: true });
 
   // Write text metadata files (pure string building — no Rust roundtrip needed)
-  await writeTextFile(await join(modFolderPath, metadata.main_file), buildMainLua(jokers));
+  await writeTextFile(
+    await join(modFolderPath, metadata.main_file),
+    buildMainLua(jokers),
+  );
   fileCount += 1;
-  await writeTextFile(await join(modFolderPath, `${metadata.id}.json`), buildModJson(metadata));
+  await writeTextFile(
+    await join(modFolderPath, `${metadata.id}.json`),
+    buildModJson(metadata),
+  );
   fileCount += 1;
 
   const sorted = [...jokers].sort((a, b) => a.orderValue - b.orderValue);

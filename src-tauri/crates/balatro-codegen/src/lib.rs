@@ -138,7 +138,10 @@ mod integration_tests {
         let chunk = compile_joker(&joker, "modprefix");
         let output = Emitter::new().emit_chunk(&chunk);
 
-        assert!(output.contains("chips0 = 10"), "Config extra should include chips0");
+        assert!(
+            output.contains("chips0 = 10"),
+            "Config extra should include chips0"
+        );
         assert!(
             output.contains("chips = card.ability.extra.chips0"),
             "Return field should reference ability.extra var"

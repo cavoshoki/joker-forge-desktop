@@ -1,8 +1,8 @@
 use crate::compiler::context::CompileContext;
 use crate::compiler::effects::EffectOutput;
-use crate::compiler::values::{resolve_value, ability_path_expr};
+use crate::compiler::values::{ability_path_expr, resolve_value};
 use crate::lua_ast::*;
-use crate::types::{EffectDef, ConfigVar, ConfigValue, ParamValue};
+use crate::types::{ConfigValue, ConfigVar, EffectDef, ParamValue};
 
 /// Add Chips effect → `chips = N`
 pub fn add_chips(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
@@ -114,7 +114,10 @@ fn scoring_literal_config_value(value: &ParamValue) -> Option<ConfigValue> {
         ParamValue::Float(n) => Some(ConfigValue::Number(*n)),
         ParamValue::Str(s) => parse_numeric_config_value(s),
         ParamValue::Typed(t) => {
-            if matches!(t.value_type.as_str(), "gameVariable" | "range" | "userVariable") {
+            if matches!(
+                t.value_type.as_str(),
+                "gameVariable" | "range" | "userVariable"
+            ) {
                 return None;
             }
 

@@ -404,7 +404,9 @@ const RichTextarea = memo(
                     ? variableTokens.map((token, index) => {
                         const label = token.label;
                         const compactLabel =
-                          label.length > 32 ? `${label.slice(0, 29)}...` : label;
+                          label.length > 32
+                            ? `${label.slice(0, 29)}...`
+                            : label;
 
                         return (
                           <button
@@ -419,16 +421,16 @@ const RichTextarea = memo(
                         );
                       })
                     : placeholderIndexes.map((index) => (
-                          <button
-                            key={`placeholder-var-${index}`}
-                            type="button"
-                            onClick={() => insertTag(`#${index}#`, false)}
-                            className="px-2 py-1 text-[11px] rounded-md border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 transition-colors"
-                            title={`Insert #${index}#`}
-                          >
-                            Variable #{index}#
-                          </button>
-                        ))}
+                        <button
+                          key={`placeholder-var-${index}`}
+                          type="button"
+                          onClick={() => insertTag(`#${index}#`, false)}
+                          className="px-2 py-1 text-[11px] rounded-md border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 transition-colors"
+                          title={`Insert #${index}#`}
+                        >
+                          Variable #{index}#
+                        </button>
+                      ))}
                 </div>
               </div>
             )}
