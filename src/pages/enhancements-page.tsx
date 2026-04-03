@@ -8,7 +8,7 @@ import {
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useConfirmDelete } from "@/hooks/use-confirm-delete";
 import { useProjectData, useModName } from "@/lib/storage";
-import { EnhancementData } from "@/lib/types";
+import { EnhancementData, Rule } from "@/lib/types";
 import {
   Star,
   Image as ImageIcon,
@@ -30,11 +30,14 @@ import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import { BalatroCard } from "@/components/balatro/balatro-card";
 import { getRandomPlaceholder } from "@/lib/placeholder-assets.ts";
 import { PlaceholderPickerDialog } from "@/components/pages/placeholder-picker-dialog";
+import { RuleBuilder } from "@/components/rule-builder";
 
 export default function EnhancementsPage() {
   const { data, updateEnhancements } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<EnhancementData | null>(null);
+  const [ruleEditingItem, setRuleEditingItem] =
+    useState<EnhancementData | null>(null);
   const [isPlaceholderPickerOpen, setIsPlaceholderPickerOpen] = useState(false);
   const [placeholderTargetId, setPlaceholderTargetId] = useState<string | null>(
     null,
@@ -401,7 +404,10 @@ export default function EnhancementsPage() {
             id: "rules",
             label: "Rules",
             icon: <Sparkle className="h-4 w-4" />,
-            onClick: () => {},
+            onClick: () => {
+              setEditingItem(null);
+              setRuleEditingItem(item);
+            },
           },
           {
             id: "delete",
@@ -447,6 +453,31 @@ export default function EnhancementsPage() {
           />
         )}
       />
+      {ruleEditingItem && (
+        <RuleBuilder
+          isOpen={true}
+          onClose={() => setRuleEditingItem(null)}
+          existingRules={ruleEditingItem.rules ?? []}
+          onSave={(rules: Rule[]) =>
+            handleUpdate(ruleEditingItem.id, {
+              rules,
+            })
+          }
+          item={ruleEditingItem}
+          onUpdateItem={(updates: Partial<EnhancementData>) => {
+            handleUpdate(
+              ruleEditingItem.id,
+              updates as Partial<EnhancementData>,
+            );
+            setRuleEditingItem((prev) =>
+              prev
+                ? { ...prev, ...(updates as Partial<EnhancementData>) }
+                : prev,
+            );
+          }}
+          itemType="card"
+        />
+      )}
       <PlaceholderPickerDialog
         open={isPlaceholderPickerOpen}
         onOpenChange={setIsPlaceholderPickerOpen}

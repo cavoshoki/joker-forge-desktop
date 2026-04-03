@@ -8,7 +8,7 @@ import {
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useConfirmDelete } from "@/hooks/use-confirm-delete";
 import { useProjectData, useModName } from "@/lib/storage";
-import { JokerData } from "@/lib/types";
+import { JokerData, Rule } from "@/lib/types";
 import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import {
   COMPARISON_OPERATORS,
@@ -49,11 +49,15 @@ import { BalatroCard } from "@/components/balatro/balatro-card";
 import { jokerUnlockOptions, unlockTriggerOptions } from "@/lib/unlock-utils";
 import { getRandomPlaceholder } from "@/lib/placeholder-assets.ts";
 import { PlaceholderPickerDialog } from "@/components/pages/placeholder-picker-dialog";
+import { RuleBuilder } from "@/components/rule-builder";
 
 export default function JokersPage() {
   const { data, updateJokers } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<JokerData | null>(null);
+  const [ruleEditingItem, setRuleEditingItem] = useState<JokerData | null>(
+    null,
+  );
   const [isPlaceholderPickerOpen, setIsPlaceholderPickerOpen] = useState(false);
   const [placeholderTargetId, setPlaceholderTargetId] = useState<string | null>(
     null,
@@ -872,7 +876,10 @@ export default function JokersPage() {
             id: "rules",
             label: "Edit Rules",
             icon: <Sparkle className="h-5 w-5" weight="bold" />,
-            onClick: () => {},
+            onClick: () => {
+              setEditingItem(null);
+              setRuleEditingItem(joker);
+            },
             variant: "outline",
           },
           {
@@ -935,6 +942,26 @@ export default function JokersPage() {
         showPlaceholderPicker
         placeholderCategory="joker"
       />
+      {ruleEditingItem && (
+        <RuleBuilder
+          isOpen={true}
+          onClose={() => setRuleEditingItem(null)}
+          existingRules={ruleEditingItem.rules ?? []}
+          onSave={(rules: Rule[]) =>
+            handleUpdate(ruleEditingItem.id, {
+              rules,
+            })
+          }
+          item={ruleEditingItem}
+          onUpdateItem={(updates: Partial<JokerData>) => {
+            handleUpdate(ruleEditingItem.id, updates as Partial<JokerData>);
+            setRuleEditingItem((prev) =>
+              prev ? { ...prev, ...(updates as Partial<JokerData>) } : prev,
+            );
+          }}
+          itemType="joker"
+        />
+      )}
       <PlaceholderPickerDialog
         open={isPlaceholderPickerOpen}
         onOpenChange={setIsPlaceholderPickerOpen}

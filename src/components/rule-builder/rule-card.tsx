@@ -1,0 +1,1149 @@
+import React, { useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useDroppable } from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import type {
+  Rule,
+  ConditionGroup,
+  Condition as RuleCondition,
+  Effect as RuleEffect,
+  RandomGroup,
+  SelectedItem,
+  LoopGroup,
+} from "./types";
+
+import BlockComponent from "./block-component";
+import {
+  CaretDown,
+  List,
+  ArrowCounterClockwise,
+  Trash,
+  Plus,
+  Copy,
+  X,
+} from "@phosphor-icons/react";
+import {
+  JokerData,
+  ConsumableData,
+  EnhancementData,
+  SealData,
+  EditionData,
+  VoucherData,
+  DeckData,
+} from "../data/BalatroUtils";
+import { Wrench } from "@phosphor-icons/react";
+import { getTriggerById } from "../data/Triggers";
+import { getEffectTypeById } from "../data/Effects";
+import { getConditionTypeById } from "../data/Conditions";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+interface RuleCardProps {
+  rule: Rule;
+  ruleIndex: number;
+  selectedItem: SelectedItem;
+  onSelectItem: (item: {
+    type: "trigger" | "condition" | "effect" | "randomgroup" | "loopgroup";
+    ruleId: string;
+    itemId?: string;
+    groupId?: string;
+    randomGroupId?: string;
+    loopGroupId?: string;
+  }) => void;
+  onDeleteRule: (ruleId: string) => void;
+  onDuplicateRule: (ruleId: string) => void;
+  onDeleteCondition: (ruleId: string, conditionId: string) => void;
+  onDeleteConditionGroup: (ruleId: string, groupId: string) => void;
+  onDeleteEffect: (ruleId: string, effectId: string) => void;
+  onAddConditionGroup: (ruleId: string) => void;
+  onAddRandomGroup: (ruleId: string) => void;
+  onAddLoop: (ruleId: string) => void;
+  onToggleBlueprintCompatibility: (ruleId: string) => void;
+  onDeleteRandomGroup: (ruleId: string, randomGroupId: string) => void;
+  onDeleteLoopGroup: (ruleId: string, randomGroupId: string) => void;
+  onToggleGroupOperator?: (ruleId: string, groupId: string) => void;
+  onUpdatePosition: (
+    ruleId: string,
+    position: { x: number; y: number },
+  ) => void;
+  isRuleSelected: boolean;
+  item:
+    | JokerData
+    | ConsumableData
+    | EnhancementData
+    | SealData
+    | EditionData
+    | VoucherData
+    | DeckData;
+  itemType: "joker" | "consumable" | "card" | "voucher" | "deck";
+  generateConditionTitle: (condition: RuleCondition) => string;
+  generateEffectTitle: (effect: RuleEffect) => string;
+  getParameterCount: (
+    params: Record<string, { value: unknown; valueType?: string }>,
+  ) => number;
+  onUpdateConditionOperator: (
+    ruleId: string,
+    conditionId: string,
+    operator: "and" | "or",
+  ) => void;
+  onRuleDoubleClick: () => void;
+  scale: number;
+  isPaletteDragging: boolean;
+}
+
+const RuleTooltipButton: React.FC<{
+  tooltip: string;
+  className: string;
+  onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  children: React.ReactNode;
+}> = ({ tooltip, className, onClick, children }) => {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button onClick={onClick} className={className}>
+          {children}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6} className="text-xs">
+        {tooltip}
+      </TooltipContent>
+    </Tooltip>
+  );
+};
+
+const Condition: React.FC<{
+  condition: RuleCondition;
+  ruleId: string;
+  groupId: string;
+  isSelected: boolean;
+  isNegated: boolean;
+  onSelect: () => void;
+  onDelete: () => void;
+  parameterCount: number;
+  dynamicTitle: string;
+  itemType: "joker" | "consumable" | "card" | "voucher" | "deck";
+  scale: number;
+}> = ({
+  condition,
+  isSelected,
+  isNegated,
+  onSelect,
+  onDelete,
+  parameterCount,
+  dynamicTitle,
+  scale,
+}) => {
+  const conditionType = getConditionTypeById(condition.type);
+
+  const { attributes, listeners, setNodeRef, transform, transition } =
+    useSortable({ id: condition.id });
+
+  const adjustedTransform = transform
+    ? {
+        ...transform,
+        x: transform.x / Math.max(scale, 0.1),
+        y: transform.y / Math.max(scale, 0.1),
+      }
+    : null;
+
+  const style = {
+    transform: CSS.Transform.toString(adjustedTransform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      className="flex justify-center -mt-3"
+    >
+      <BlockComponent
+        type="condition"
+        label={conditionType?.label || "Unknown Condition"}
+        dynamicTitle={dynamicTitle}
+        isSelected={isSelected}
+        onClick={(e) => {
+          e?.stopPropagation();
+          onSelect();
+        }}
+        showTrash={true}
+        onDelete={() => {
+          onDelete();
+        }}
+        parameterCount={parameterCount}
+        isNegated={isNegated}
+        isDraggable={true}
+        dragHandleProps={listeners}
+        variant="condition"
+      />
+    </div>
+  );
+};
+
+const Effect: React.FC<{
+  effect: RuleEffect;
+  ruleId: string;
+  isSelected: boolean;
+  onSelect: () => void;
+  onDelete: () => void;
+  parameterCount: number;
+  dynamicTitle: string;
+  randomGroupId?: string;
+  itemType: "joker" | "consumable" | "card" | "voucher" | "deck";
+  scale: number;
+}> = ({
+  effect,
+  isSelected,
+  onSelect,
+  onDelete,
+  parameterCount,
+  dynamicTitle,
+  scale,
+}) => {
+  const effectType = getEffectTypeById(effect.type);
+
+  const { attributes, listeners, setNodeRef, transform, transition } =
+    useSortable({ id: effect.id });
+
+  const adjustedTransform = transform
+    ? {
+        ...transform,
+        x: transform.x / Math.max(scale, 0.1),
+        y: transform.y / Math.max(scale, 0.1),
+      }
+    : null;
+
+  const style = {
+    transform: CSS.Transform.toString(adjustedTransform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      className="flex justify-center"
+    >
+      <BlockComponent
+        type="effect"
+        label={effectType?.label || "Unknown Effect"}
+        dynamicTitle={dynamicTitle}
+        isSelected={isSelected}
+        onClick={(e) => {
+          e?.stopPropagation();
+          onSelect();
+        }}
+        showTrash={true}
+        onDelete={() => {
+          onDelete();
+        }}
+        parameterCount={parameterCount}
+        isDraggable={true}
+        dragHandleProps={listeners}
+        variant="palette"
+      />
+    </div>
+  );
+};
+
+const RandomGroupContainer: React.FC<{
+  group: RandomGroup;
+  children: React.ReactNode;
+  isSelected: boolean;
+  onSelect: () => void;
+  onDelete: () => void;
+}> = ({ group, children, isSelected, onSelect, onDelete }) => {
+  return (
+    <div
+      className={`border-2 border-dashed rounded-xl p-4 bg-jungle-green-500/8 relative transition-all min-h-30 w-full max-w-full ${
+        isSelected ? "border-jungle-green-400" : "border-jungle-green-400/30"
+      }`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect();
+      }}
+    >
+      <div className="flex items-center justify-between mb-4">
+        <div className="text-jungle-green-400 text-xs tracking-wider font-medium">
+          {group.chance_numerator.value} in {group.chance_denominator.value}{" "}
+          chance {isSelected && "(SELECTED)"}
+        </div>
+        <div onClick={(e) => e.stopPropagation()}>
+          <RuleTooltipButton
+            tooltip="Delete Random Group"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="w-full h-full flex items-center rounded justify-center"
+          >
+            <X className="h-4 w-4 text-jungle-green-400/60 hover:text-jungle-green-400 cursor-pointer transition-colors" />
+          </RuleTooltipButton>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+};
+
+const LoopGroupContainer: React.FC<{
+  group: LoopGroup;
+  children: React.ReactNode;
+  isSelected: boolean;
+  onSelect: () => void;
+  onDelete: () => void;
+}> = ({ group, children, isSelected, onSelect, onDelete }) => {
+  return (
+    <div
+      className={`border-2 border-dashed rounded-xl p-4 bg-balatro-blue/10 relative transition-all min-h-30 w-full max-w-full ${
+        isSelected ? "border-balatro-blue" : "border-balatro-blue/30"
+      }`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect();
+      }}
+    >
+      <div className="flex items-center justify-between mb-4">
+        <div className="text-balatro-blue text-xs tracking-wider font-medium">
+          Loop {group.repetitions.value} times {isSelected && "(SELECTED)"}
+        </div>
+        <div onClick={(e) => e.stopPropagation()}>
+          <RuleTooltipButton
+            tooltip="Delete Loop"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="w-full h-full flex items-center rounded justify-center"
+          >
+            <X className="h-4 w-4 text-balatro-blue/60 hover:text-balatro-blue cursor-pointer transition-colors" />
+          </RuleTooltipButton>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+};
+
+const RuleCard: React.FC<RuleCardProps> = ({
+  rule,
+  ruleIndex,
+  selectedItem,
+  onSelectItem,
+  onDuplicateRule,
+  onDeleteRule,
+  onDeleteCondition,
+  onDeleteConditionGroup,
+  onDeleteEffect,
+  onAddConditionGroup,
+  onToggleBlueprintCompatibility,
+  onAddRandomGroup,
+  onAddLoop,
+  onDeleteRandomGroup,
+  onDeleteLoopGroup,
+  onToggleGroupOperator,
+  onUpdatePosition,
+  isRuleSelected,
+  generateConditionTitle,
+  generateEffectTitle,
+  getParameterCount,
+  onUpdateConditionOperator,
+  itemType,
+  onRuleDoubleClick,
+  scale,
+  isPaletteDragging,
+}) => {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [groupOperators, setGroupOperators] = useState<Record<string, string>>(
+    {},
+  );
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({
+    x: 0,
+    y: 0,
+  });
+
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
+    id: `drop:rule:${rule.id}`,
+  });
+
+  const transformOffset = isDragging ? dragOffset : { x: 0, y: 0 };
+
+  const handleCardMouseDown = (e: React.MouseEvent) => {
+    e.stopPropagation();
+  };
+
+  const handleHeaderMouseDown = (e: React.MouseEvent) => {
+    if (e.button === 0) {
+      e.stopPropagation();
+      setIsDragging(true);
+      setDragStart({
+        x: e.clientX,
+        y: e.clientY,
+      });
+    }
+  };
+
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (isDragging) {
+        const deltaX = (e.clientX - dragStart.x) / Math.max(scale, 0.1);
+        const deltaY = (e.clientY - dragStart.y) / Math.max(scale, 0.1);
+        setDragOffset({ x: deltaX, y: deltaY });
+      }
+    },
+    [isDragging, dragStart, scale],
+  );
+
+  const handleMouseUp = useCallback(() => {
+    if (isDragging) {
+      setIsDragging(false);
+      const finalPosition = {
+        x: (rule.position?.x || 0) + dragOffset.x,
+        y: (rule.position?.y || 0) + dragOffset.y,
+      };
+      onUpdatePosition(rule.id, finalPosition);
+      setDragOffset({ x: 0, y: 0 });
+    }
+  }, [isDragging, rule.id, rule.position, dragOffset, onUpdatePosition]);
+
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      return () => {
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+      };
+    }
+  }, [isDragging, handleMouseMove, handleMouseUp]);
+
+  const trigger = getTriggerById(rule.trigger);
+  const allConditions = rule.conditionGroups.flatMap(
+    (group) => group.conditions,
+  );
+  const totalConditions = allConditions.length;
+  const totalEffects =
+    rule.effects.length +
+    rule.randomGroups.reduce((sum, group) => sum + group.effects.length, 0) +
+    rule.loops.reduce((sum, group) => sum + group.effects.length, 0);
+
+  const snapFadeUp = {
+    initial: { opacity: 0, y: 15 },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: -15 },
+  };
+  const quickFade = {
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    exit: { opacity: 0 },
+  };
+  const slideFromRight = {
+    initial: { opacity: 0, x: 20, scale: 0.9 },
+    animate: { opacity: 1, x: 0, scale: 1 },
+    exit: { opacity: 0, x: 20, scale: 0.9 },
+  };
+  const cardEntrance = {
+    initial: { opacity: 0, scale: 0.95 },
+    animate: { opacity: 1, scale: 1 },
+  };
+  const popIn = {
+    initial: { opacity: 0, scale: 0.8, y: 10 },
+    animate: { opacity: 1, scale: 1, y: 0 },
+    exit: { opacity: 0, scale: 0.8, y: -10 },
+  };
+
+  const isItemSelected = (
+    type: "trigger" | "condition" | "effect" | "randomgroup" | "loopgroup",
+    itemId?: string,
+    groupId?: string,
+    randomGroupId?: string,
+    loopGroupId?: string,
+  ) => {
+    if (!selectedItem || selectedItem.ruleId !== rule.id) return false;
+    if (selectedItem.type !== type) return false;
+    if (type === "trigger") return true;
+    if (type === "condition" && groupId && selectedItem.groupId !== groupId)
+      return false;
+    if (
+      type === "randomgroup" &&
+      randomGroupId &&
+      selectedItem.randomGroupId !== randomGroupId
+    )
+      return false;
+    if (
+      type === "loopgroup" &&
+      loopGroupId &&
+      selectedItem.loopGroupId !== loopGroupId
+    )
+      return false;
+    if (type === "effect") {
+      if (selectedItem.itemId !== itemId) return false;
+      if (randomGroupId && selectedItem.randomGroupId !== randomGroupId)
+        return false;
+      if (!randomGroupId && selectedItem.randomGroupId) return false;
+      if (loopGroupId && selectedItem.loopGroupId !== loopGroupId) return false;
+      if (!loopGroupId && selectedItem.loopGroupId) return false;
+      return true;
+    }
+    return selectedItem.itemId === itemId;
+  };
+
+  const isGroupSelected = (groupId: string) => {
+    return (
+      selectedItem?.ruleId === rule.id && selectedItem?.groupId === groupId
+    );
+  };
+  const isRandomGroupSelected = (randomGroupId: string) => {
+    return (
+      selectedItem?.ruleId === rule.id &&
+      selectedItem?.randomGroupId === randomGroupId
+    );
+  };
+  const isLoopGroupSelected = (loopGroupId: string) => {
+    return (
+      selectedItem?.ruleId === rule.id &&
+      selectedItem?.loopGroupId === loopGroupId
+    );
+  };
+
+  const handleDuplicateRule = () => onDuplicateRule(rule.id);
+
+  const handleConditionOperatorToggle = (
+    groupId: string,
+    conditionIndex: number,
+  ) => {
+    const group = rule.conditionGroups.find((g) => g.id === groupId);
+    if (group && group.conditions[conditionIndex]) {
+      const condition = group.conditions[conditionIndex];
+      const newOperator =
+        (condition.operator || "and") === "and" ? "or" : "and";
+      onUpdateConditionOperator(rule.id, condition.id, newOperator);
+    }
+  };
+
+  const handleGroupOperatorToggle = (groupIndex: number, groupId: string) => {
+    const key = `group-${groupIndex}`;
+    const newOperator = (groupOperators[key] || "AND") === "AND" ? "OR" : "AND";
+    setGroupOperators((prev) => ({ ...prev, [key]: newOperator }));
+    onToggleGroupOperator?.(rule.id, groupId);
+  };
+
+  const renderConditionGroup = (group: ConditionGroup, groupIndex: number) => {
+    const isSelected = isGroupSelected(group.id);
+    return (
+      <motion.div
+        key={group.id}
+        className="relative"
+        variants={popIn}
+        initial="initial"
+        animate="animate"
+        transition={{ duration: 0.15, delay: 0.03 }}
+      >
+        <div
+          className={`border-2 border-dashed rounded-xl p-4 bg-card/80 relative ${
+            isSelected ? "border-jungle-green-400" : "border-border"
+          }`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectItem({
+              type: "condition",
+              ruleId: rule.id,
+              groupId: group.id,
+            });
+          }}
+        >
+          <div className="flex items-center justify-between mb-10">
+            <div className="text-muted-foreground text-xs tracking-wider">
+              CONDITION GROUP {groupIndex + 1} {isSelected && "(SELECTED)"}
+            </div>
+            <div onClick={(e) => e.stopPropagation()}>
+              <RuleTooltipButton
+                tooltip="Delete Condition Group"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteConditionGroup(rule.id, group.id);
+                }}
+                className="w-full h-full flex items-center rounded justify-center"
+              >
+                <X className="h-4 w-4 text-muted-foreground hover:text-foreground cursor-pointer transition-colors" />
+              </RuleTooltipButton>
+            </div>
+          </div>
+          <SortableContext
+            items={group.conditions.map((c) => c.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="space-y-3">
+              {group.conditions.map((condition, conditionIndex) => {
+                const currentOperator = condition.operator || "and";
+                return (
+                  <motion.div key={condition.id}>
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <Condition
+                        condition={condition}
+                        ruleId={rule.id}
+                        groupId={group.id}
+                        isSelected={isItemSelected(
+                          "condition",
+                          condition.id,
+                          group.id,
+                        )}
+                        isNegated={condition.negate}
+                        onSelect={() =>
+                          onSelectItem({
+                            type: "condition",
+                            ruleId: rule.id,
+                            itemId: condition.id,
+                            groupId: group.id,
+                          })
+                        }
+                        onDelete={() =>
+                          onDeleteCondition(rule.id, condition.id)
+                        }
+                        parameterCount={getParameterCount(condition.params)}
+                        dynamicTitle={generateConditionTitle(condition)}
+                        itemType={itemType}
+                        scale={scale}
+                      />
+                    </div>
+                    {conditionIndex < group.conditions.length - 1 && (
+                      <div
+                        className="text-center py-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          onClick={() =>
+                            handleConditionOperatorToggle(
+                              group.id,
+                              conditionIndex,
+                            )
+                          }
+                          className="px-3 text-muted-foreground text-sm font-medium tracking-wider cursor-pointer rounded-lg transition-colors hover:bg-accent"
+                        >
+                          {currentOperator.toUpperCase()}
+                        </button>
+                      </div>
+                    )}
+                  </motion.div>
+                );
+              })}
+            </div>
+          </SortableContext>
+        </div>
+        {groupIndex < rule.conditionGroups.length - 1 && (
+          <div className="text-center py-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleGroupOperatorToggle(groupIndex, group.id);
+              }}
+              className="px-3 text-muted-foreground text-sm font-medium tracking-wider cursor-pointer rounded-lg transition-colors hover:bg-accent"
+            >
+              {groupOperators[`group-${groupIndex}`] ||
+                group.operator?.toUpperCase() ||
+                "AND"}
+            </button>
+          </div>
+        )}
+      </motion.div>
+    );
+  };
+
+  const renderRandomGroup = (group: RandomGroup) => {
+    return (
+      <motion.div
+        key={`rg-motion-${group.id}`}
+        className="relative"
+        variants={popIn}
+        initial="initial"
+        animate="animate"
+        transition={{ duration: 0.15, delay: 0.03 }}
+      >
+        <RandomGroupContainer
+          group={group}
+          isSelected={isRandomGroupSelected(group.id)}
+          onSelect={() =>
+            onSelectItem({
+              type: "randomgroup",
+              ruleId: rule.id,
+              randomGroupId: group.id,
+            })
+          }
+          onDelete={() => onDeleteRandomGroup(rule.id, group.id)}
+        >
+          <SortableContext
+            id={group.id}
+            items={group.effects.map((e) => e.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="space-y-3">
+              {group.effects.map((effect) => (
+                <div key={effect.id} onClick={(e) => e.stopPropagation()}>
+                  <Effect
+                    effect={effect}
+                    ruleId={rule.id}
+                    isSelected={isItemSelected("effect", effect.id)}
+                    onSelect={() =>
+                      onSelectItem({
+                        type: "effect",
+                        ruleId: rule.id,
+                        itemId: effect.id,
+                      })
+                    }
+                    onDelete={() => onDeleteEffect(rule.id, effect.id)}
+                    parameterCount={getParameterCount(effect.params)}
+                    dynamicTitle={generateEffectTitle(effect)}
+                    itemType={itemType}
+                    scale={scale}
+                  />
+                </div>
+              ))}
+            </div>
+          </SortableContext>
+        </RandomGroupContainer>
+      </motion.div>
+    );
+  };
+
+  const renderLoopGroup = (group: LoopGroup) => {
+    return (
+      <motion.div
+        key={`rg-motion-${group.id}`}
+        className="relative"
+        variants={popIn}
+        initial="initial"
+        animate="animate"
+        transition={{ duration: 0.15, delay: 0.03 }}
+      >
+        <LoopGroupContainer
+          group={group}
+          isSelected={isLoopGroupSelected(group.id)}
+          onSelect={() =>
+            onSelectItem({
+              type: "loopgroup",
+              ruleId: rule.id,
+              loopGroupId: group.id, ///////
+            })
+          }
+          onDelete={() => onDeleteLoopGroup(rule.id, group.id)}
+        >
+          <SortableContext
+            id={group.id}
+            items={group.effects.map((e) => e.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="space-y-3">
+              {group.effects.map((effect) => (
+                <div key={effect.id} onClick={(e) => e.stopPropagation()}>
+                  <Effect
+                    effect={effect}
+                    ruleId={rule.id}
+                    isSelected={isItemSelected("effect", effect.id)}
+                    onSelect={() =>
+                      onSelectItem({
+                        type: "effect",
+                        ruleId: rule.id,
+                        itemId: effect.id,
+                      })
+                    }
+                    onDelete={() => onDeleteEffect(rule.id, effect.id)}
+                    parameterCount={getParameterCount(effect.params)}
+                    dynamicTitle={generateEffectTitle(effect)}
+                    itemType={itemType}
+                    scale={scale}
+                  />
+                </div>
+              ))}
+            </div>
+          </SortableContext>
+        </LoopGroupContainer>
+      </motion.div>
+    );
+  };
+
+  return (
+    <div
+      ref={setDropRef}
+      className="w-80 relative pl-8 select-none"
+      style={{
+        zIndex: isRuleSelected ? 30 : 20,
+        pointerEvents: "auto",
+        transform: `translate(${transformOffset.x}px, ${transformOffset.y}px)`,
+        cursor: isDragging ? "grabbing" : "default",
+      }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelectItem({ type: "trigger", ruleId: rule.id });
+      }}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        onRuleDoubleClick();
+      }}
+      onMouseDown={handleCardMouseDown}
+    >
+      <AnimatePresence>
+        {sidebarOpen && (
+          <motion.div
+            className="absolute left-0 top-9 -ml-6 bg-card/95 border border-border rounded-xl z-20 flex flex-col gap-2 py-2 p-1.5 shadow-lg"
+            variants={slideFromRight}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={{ duration: 0.15 }}
+          >
+            <motion.div
+              className="w-8 h-8 bg-card rounded-xl flex items-center justify-center border border-destructive/40"
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              transition={{ duration: 0.05 }}
+            >
+              <RuleTooltipButton
+                tooltip="Delete Rule"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteRule(rule.id);
+                }}
+                className="w-full h-full flex items-center rounded-lg justify-center transition-colors hover:bg-destructive/15 active:bg-destructive/20 cursor-pointer focus:outline-none"
+              >
+                <Trash className="h-4 w-4 text-destructive transition-colors" />
+              </RuleTooltipButton>
+            </motion.div>
+            <motion.div
+              className="w-8 h-8 bg-card rounded-xl flex items-center justify-center border border-balatro-blue/40"
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              transition={{ duration: 0.05 }}
+            >
+              <RuleTooltipButton
+                tooltip="Duplicate Rule"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDuplicateRule();
+                }}
+                className="w-full h-full flex items-center rounded-lg justify-center transition-colors hover:bg-balatro-blue/15 cursor-pointer focus:outline-none"
+              >
+                <Copy className="h-4 w-4 text-balatro-blue" />
+              </RuleTooltipButton>
+            </motion.div>
+            <motion.div
+              className="w-8 h-8 bg-card rounded-xl flex items-center justify-center border border-border"
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              transition={{ duration: 0.05 }}
+            >
+              <RuleTooltipButton
+                tooltip="Close Menu"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSidebarOpen(false);
+                }}
+                className="w-full h-full flex items-center rounded-lg justify-center transition-colors hover:bg-accent cursor-pointer focus:outline-none"
+              >
+                <X className="h-4 w-4 text-muted-foreground" />
+              </RuleTooltipButton>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <motion.div
+        className={`w-80 relative`}
+        variants={cardEntrance}
+        initial="initial"
+        animate="animate"
+        transition={{ duration: 0.3 }}
+      >
+        <motion.div
+          className="flex justify-center relative"
+          variants={snapFadeUp}
+          initial="initial"
+          animate="animate"
+          transition={{ duration: 0.15 }}
+          onMouseDown={handleHeaderMouseDown}
+          style={{ cursor: isDragging ? "grabbing" : "grab" }}
+        >
+          <div
+            className={`bg-card/95 border rounded-t-xl px-8 py-2 pt-1 relative ${
+              isRuleSelected ? "border-jungle-green-400" : "border-border"
+            } `}
+          >
+            <span className="text-foreground text-sm tracking-widest">
+              Rule {ruleIndex}
+            </span>
+          </div>
+        </motion.div>
+
+        <motion.div
+          className={`
+            bg-card/95 border-2 rounded-xl overflow-hidden -mt-2 relative
+            ${isRuleSelected ? "border-jungle-green-400" : "border-border"}
+            ${isPaletteDragging && isOver ? "ring-2 ring-jungle-green-400/70" : ""}
+          `}
+          style={{ pointerEvents: "auto" }}
+          variants={snapFadeUp}
+          initial="initial"
+          animate="animate"
+          transition={{ duration: 0.18, delay: 0.05 }}
+        >
+          <div
+            className="bg-background/60 px-3 py-2 border-b border-border"
+            onMouseDown={handleHeaderMouseDown}
+            style={{ cursor: isDragging ? "grabbing" : "grab" }}
+          >
+            <div className="flex justify-between items-center">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <motion.button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSidebarOpen(!sidebarOpen);
+                    }}
+                    className="p-1 text-muted-foreground hover:bg-accent rounded-md transition-colors cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/40"
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    transition={{ duration: 0.05 }}
+                  >
+                    <List className="h-4 w-4" />
+                  </motion.button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="bottom"
+                  sideOffset={6}
+                  className="text-xs"
+                >
+                  {sidebarOpen ? "Close Rule Menu" : "Open Rule Menu"}
+                </TooltipContent>
+              </Tooltip>
+              <motion.div
+                className="flex items-center gap-3"
+                variants={quickFade}
+                initial="initial"
+                animate="animate"
+                transition={{ duration: 0.12, delay: 0.08 }}
+              >
+                {totalConditions > 0 && (
+                  <span className="text-muted-foreground text-xs">
+                    {totalConditions} Condition{totalConditions !== 1 && "s"}
+                  </span>
+                )}
+                {totalEffects > 0 && (
+                  <span className="text-muted-foreground text-xs">
+                    {totalEffects} Effect{totalEffects !== 1 && "s"}
+                  </span>
+                )}
+                <div className="flex items-center gap-2">
+                  {rule.conditionGroups.length > 0 && (
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <RuleTooltipButton
+                        tooltip="Add Condition Group"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAddConditionGroup(rule.id);
+                        }}
+                        className="w-6 h-6 bg-card rounded-md flex items-center justify-center border-2 border-jungle-green-400/40 hover:bg-jungle-green-500/15 transition-colors cursor-pointer"
+                      >
+                        <Plus className="h-3 w-3 text-jungle-green-400" />
+                      </RuleTooltipButton>
+                    </div>
+                  )}
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <RuleTooltipButton
+                      tooltip="Add Loop Group"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAddLoop(rule.id);
+                      }}
+                      className="w-6 h-6 bg-card rounded-md flex items-center justify-center border-2 border-balatro-blue/40 hover:bg-balatro-blue/15 transition-colors cursor-pointer"
+                    >
+                      <ArrowCounterClockwise className="h-3 w-3 text-balatro-blue" />
+                    </RuleTooltipButton>
+                  </div>
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <RuleTooltipButton
+                      tooltip="Add Random Group"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAddRandomGroup(rule.id);
+                      }}
+                      className="w-6 h-6 bg-card rounded-md flex items-center justify-center border-2 border-balatro-green/40 hover:bg-balatro-green/15 transition-colors cursor-pointer"
+                    >
+                      <Plus className="h-3 w-3 text-balatro-green" />
+                    </RuleTooltipButton>
+                  </div>
+                  {itemType === "joker" && (
+                    <div onClick={(e) => e.stopPropagation()}>
+                      {(rule.blueprintCompatible ?? true) ? (
+                        <RuleTooltipButton
+                          tooltip="Copied by Blueprint"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleBlueprintCompatibility(rule.id);
+                          }}
+                          className="w-6 h-6 bg-card rounded-md flex items-center justify-center border-2 border-balatro-blue/40 hover:bg-balatro-blue/15 transition-colors cursor-pointer"
+                        >
+                          <Wrench className="h-3 w-3 text-balatro-blue" />
+                        </RuleTooltipButton>
+                      ) : (
+                        <RuleTooltipButton
+                          tooltip="Not Copied by Blueprint"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleBlueprintCompatibility(rule.id);
+                          }}
+                          className="w-6 h-6 bg-card rounded-md flex items-center justify-center border-2 border-destructive/40 hover:bg-destructive/15 transition-colors cursor-pointer"
+                        >
+                          <Wrench className="h-3 w-3 text-balatro-red" />
+                        </RuleTooltipButton>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            </div>
+          </div>
+
+          <motion.div
+            className="p-4 space-y-3"
+            variants={quickFade}
+            initial="initial"
+            animate="animate"
+            transition={{ duration: 0.15, delay: 0.1 }}
+          >
+            <motion.div
+              variants={snapFadeUp}
+              initial="initial"
+              animate="animate"
+              transition={{ duration: 0.12, delay: 0.12 }}
+              className="flex justify-center"
+            >
+              <BlockComponent
+                type="trigger"
+                label={trigger?.label[itemType] || "Unknown Trigger"}
+                isSelected={isItemSelected("trigger")}
+                onClick={(e) => {
+                  e?.stopPropagation();
+                  onSelectItem({ type: "trigger", ruleId: rule.id });
+                }}
+                variant="default"
+              />
+            </motion.div>
+
+            {(rule.conditionGroups.length > 0 ||
+              rule.effects.length > 0 ||
+              rule.randomGroups.length > 0 ||
+              rule.loops.length > 0) && (
+              <motion.div
+                className="flex justify-center"
+                variants={quickFade}
+                initial="initial"
+                animate="animate"
+                transition={{ duration: 0.1, delay: 0.15 }}
+              >
+                <CaretDown className="h-5 w-5 text-muted-foreground" />
+              </motion.div>
+            )}
+
+            {rule.conditionGroups.length > 0 && (
+              <motion.div
+                variants={quickFade}
+                initial="initial"
+                animate="animate"
+                transition={{ duration: 0.1, delay: 0.17 }}
+                className="space-y-3"
+              >
+                {rule.conditionGroups.map((group, index) =>
+                  renderConditionGroup(group, index),
+                )}
+              </motion.div>
+            )}
+
+            {(rule.effects.length > 0 ||
+              rule.randomGroups.length > 0 ||
+              rule.loops.length > 0) &&
+              rule.conditionGroups.length > 0 && (
+                <motion.div
+                  className="flex justify-center"
+                  variants={quickFade}
+                  initial="initial"
+                  animate="animate"
+                  transition={{ duration: 0.1, delay: 0.2 }}
+                >
+                  <CaretDown className="h-5 w-5 text-zinc-400" />
+                </motion.div>
+              )}
+
+            <motion.div
+              className="space-y-3"
+              variants={quickFade}
+              initial="initial"
+              animate="animate"
+              transition={{ duration: 0.1, delay: 0.22 }}
+            >
+              <SortableContext
+                items={rule.effects.map((e) => e.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="space-y-3">
+                  {rule.effects.map((effect) => (
+                    <div key={effect.id}>
+                      <Effect
+                        effect={effect}
+                        ruleId={rule.id}
+                        isSelected={isItemSelected("effect", effect.id)}
+                        onSelect={() =>
+                          onSelectItem({
+                            type: "effect",
+                            ruleId: rule.id,
+                            itemId: effect.id,
+                          })
+                        }
+                        onDelete={() => onDeleteEffect(rule.id, effect.id)}
+                        parameterCount={getParameterCount(effect.params)}
+                        dynamicTitle={generateEffectTitle(effect)}
+                        itemType={itemType}
+                        scale={scale}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </SortableContext>
+            </motion.div>
+
+            <motion.div
+              className="space-y-3"
+              variants={quickFade}
+              initial="initial"
+              animate="animate"
+              transition={{ duration: 0.1, delay: 0.24 }}
+            >
+              {rule.randomGroups.map((group) => renderRandomGroup(group))}
+            </motion.div>
+            <motion.div
+              className="space-y-3"
+              variants={quickFade}
+              initial="initial"
+              animate="animate"
+              transition={{ duration: 0.1, delay: 0.24 }}
+            >
+              {rule.loops.map((group) => renderLoopGroup(group))}
+            </motion.div>
+          </motion.div>
+        </motion.div>
+      </motion.div>
+    </div>
+  );
+};
+
+export default RuleCard;

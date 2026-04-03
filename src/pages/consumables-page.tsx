@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from "react";
 import { GenericItemPage } from "@/components/pages/generic-item-page";
 import { GenericItemCard } from "@/components/pages/generic-item-card";
 import { useProjectData, useModName } from "@/lib/storage";
-import { ConsumableData } from "@/lib/types";
+import { ConsumableData, Rule } from "@/lib/types";
 import {
   PencilSimple,
   Sparkle,
@@ -30,11 +30,15 @@ import {
 } from "@/lib/balatro-utils";
 import { getRandomPlaceholder } from "@/lib/placeholder-assets.ts";
 import { PlaceholderPickerDialog } from "@/components/pages/placeholder-picker-dialog";
+import { RuleBuilder } from "@/components/rule-builder";
 
 export default function ConsumablesPage() {
   const { data, updateConsumables } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<ConsumableData | null>(null);
+  const [ruleEditingItem, setRuleEditingItem] = useState<ConsumableData | null>(
+    null,
+  );
   const [isPlaceholderPickerOpen, setIsPlaceholderPickerOpen] = useState(false);
   const [placeholderTargetId, setPlaceholderTargetId] = useState<string | null>(
     null,
@@ -379,7 +383,10 @@ export default function ConsumablesPage() {
             id: "rules",
             label: "Rules",
             icon: <Sparkle className="h-4 w-4" />,
-            onClick: () => {},
+            onClick: () => {
+              setEditingItem(null);
+              setRuleEditingItem(item);
+            },
           },
           {
             id: "delete",
@@ -419,6 +426,31 @@ export default function ConsumablesPage() {
         showPlaceholderPicker
         placeholderCategory="consumable"
       />
+      {ruleEditingItem && (
+        <RuleBuilder
+          isOpen={true}
+          onClose={() => setRuleEditingItem(null)}
+          existingRules={ruleEditingItem.rules ?? []}
+          onSave={(rules: Rule[]) =>
+            handleUpdate(ruleEditingItem.id, {
+              rules,
+            })
+          }
+          item={ruleEditingItem}
+          onUpdateItem={(updates: Partial<ConsumableData>) => {
+            handleUpdate(
+              ruleEditingItem.id,
+              updates as Partial<ConsumableData>,
+            );
+            setRuleEditingItem((prev) =>
+              prev
+                ? { ...prev, ...(updates as Partial<ConsumableData>) }
+                : prev,
+            );
+          }}
+          itemType="consumable"
+        />
+      )}
       <PlaceholderPickerDialog
         open={isPlaceholderPickerOpen}
         onOpenChange={setIsPlaceholderPickerOpen}

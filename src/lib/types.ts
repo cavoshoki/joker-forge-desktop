@@ -1,25 +1,6 @@
-export type ParameterValue = string | number | boolean | string[];
+export type { Rule } from "@/lib/rule-builder-types";
 
-export interface NodeParams {
-  [key: string]: ParameterValue;
-}
-
-export interface LogicNode {
-  id: string;
-  params: NodeParams;
-}
-
-export interface RuleTrigger {
-  id: string;
-  params?: NodeParams;
-}
-
-export interface Rule {
-  id: string;
-  trigger: RuleTrigger;
-  conditions: LogicNode[];
-  effects: LogicNode[];
-}
+import type { Rule } from "@/lib/rule-builder-types";
 
 export interface UserVariable {
   id: string;

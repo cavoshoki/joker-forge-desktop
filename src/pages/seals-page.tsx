@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from "react";
 import { GenericItemPage } from "@/components/pages/generic-item-page";
 import { GenericItemCard } from "@/components/pages/generic-item-card";
 import { useProjectData, useModName } from "@/lib/storage";
-import { SealData } from "@/lib/types";
+import { Rule, SealData } from "@/lib/types";
 import {
   PencilSimple,
   Sparkle,
@@ -28,11 +28,13 @@ import { BalatroCard } from "@/components/balatro/balatro-card";
 import { SOUNDS } from "@/lib/balatro-utils";
 import { getRandomPlaceholder } from "@/lib/placeholder-assets.ts";
 import { PlaceholderPickerDialog } from "@/components/pages/placeholder-picker-dialog";
+import { RuleBuilder } from "@/components/rule-builder";
 
 export default function SealsPage() {
   const { data, updateSeals } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<SealData | null>(null);
+  const [ruleEditingItem, setRuleEditingItem] = useState<SealData | null>(null);
   const [isPlaceholderPickerOpen, setIsPlaceholderPickerOpen] = useState(false);
   const [placeholderTargetId, setPlaceholderTargetId] = useState<string | null>(
     null,
@@ -358,7 +360,10 @@ export default function SealsPage() {
             id: "rules",
             label: "Rules",
             icon: <Sparkle className="h-4 w-4" />,
-            onClick: () => {},
+            onClick: () => {
+              setEditingItem(null);
+              setRuleEditingItem(item);
+            },
           },
           {
             id: "delete",
@@ -397,6 +402,26 @@ export default function SealsPage() {
         showPlaceholderPicker
         placeholderCategory="seal"
       />
+      {ruleEditingItem && (
+        <RuleBuilder
+          isOpen={true}
+          onClose={() => setRuleEditingItem(null)}
+          existingRules={ruleEditingItem.rules ?? []}
+          onSave={(rules: Rule[]) =>
+            handleUpdate(ruleEditingItem.id, {
+              rules,
+            })
+          }
+          item={ruleEditingItem}
+          onUpdateItem={(updates: Partial<SealData>) => {
+            handleUpdate(ruleEditingItem.id, updates as Partial<SealData>);
+            setRuleEditingItem((prev) =>
+              prev ? { ...prev, ...(updates as Partial<SealData>) } : prev,
+            );
+          }}
+          itemType="card"
+        />
+      )}
       <PlaceholderPickerDialog
         open={isPlaceholderPickerOpen}
         onOpenChange={setIsPlaceholderPickerOpen}

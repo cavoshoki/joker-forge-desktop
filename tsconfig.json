@@ -26,5 +26,10 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src"],
+  "exclude": [
+    "src/components/data/Old Files",
+    "src/components/rule-builder/inspector.tsx",
+    "src/components/rule-builder/variables.tsx"
+  ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

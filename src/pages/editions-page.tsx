@@ -9,7 +9,7 @@ import { GenericDialogColorPicker } from "@/components/ui/generic-dialog-color-p
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useConfirmDelete } from "@/hooks/use-confirm-delete";
 import { useProjectData, useModName } from "@/lib/storage";
-import { EditionData } from "@/lib/types";
+import { EditionData, Rule } from "@/lib/types";
 import {
   Palette,
   Image as ImageIcon,
@@ -28,11 +28,15 @@ import {
 import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import { BalatroCard } from "@/components/balatro/balatro-card";
 import { CUSTOM_SHADERS, SOUNDS, VANILLA_SHADERS } from "@/lib/balatro-utils";
+import { RuleBuilder } from "@/components/rule-builder";
 
 export default function EditionsPage() {
   const { data, updateEditions } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<EditionData | null>(null);
+  const [ruleEditingItem, setRuleEditingItem] = useState<EditionData | null>(
+    null,
+  );
 
   const handleUpdate = useCallback(
     (id: string, updates: Partial<EditionData>) => {
@@ -391,7 +395,10 @@ export default function EditionsPage() {
             id: "rules",
             label: "Rules",
             icon: <Sparkle className="h-4 w-4" />,
-            onClick: () => {},
+            onClick: () => {
+              setEditingItem(null);
+              setRuleEditingItem(item);
+            },
           },
           {
             id: "delete",
@@ -438,6 +445,26 @@ export default function EditionsPage() {
           />
         )}
       />
+      {ruleEditingItem && (
+        <RuleBuilder
+          isOpen={true}
+          onClose={() => setRuleEditingItem(null)}
+          existingRules={ruleEditingItem.rules ?? []}
+          onSave={(rules: Rule[]) =>
+            handleUpdate(ruleEditingItem.id, {
+              rules,
+            })
+          }
+          item={ruleEditingItem}
+          onUpdateItem={(updates: Partial<EditionData>) => {
+            handleUpdate(ruleEditingItem.id, updates as Partial<EditionData>);
+            setRuleEditingItem((prev) =>
+              prev ? { ...prev, ...updates } : prev,
+            );
+          }}
+          itemType="card"
+        />
+      )}
       <ConfirmDialog
         open={isDeleteDialogOpen}
         onOpenChange={handleDeleteDialogChange}
