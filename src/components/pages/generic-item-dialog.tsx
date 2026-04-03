@@ -47,6 +47,7 @@ import {
 } from "@phosphor-icons/react";
 import { applyAutoFormatting } from "@/lib/balatro-text-formatter";
 import { slugify, type UserVariable } from "@/lib/balatro-utils";
+import type { Rule } from "@/components/rule-builder/types";
 import { RaritySelect } from "@/components/balatro/rarity-select";
 import { ConsumableSetSelect } from "@/components/balatro/consumable-set-select";
 import { ListInput } from "@/components/ui/list-input";
@@ -56,6 +57,7 @@ import {
   getPlaceholderEntriesForCategory,
 } from "@/lib/placeholder-assets.ts";
 import { PlaceholderPickerDialog } from "@/components/pages/placeholder-picker-dialog";
+import { buildDescriptionVariableTokens } from "@/lib/description-variable-registry";
 
 export type FieldType =
   | "text"
@@ -235,14 +237,25 @@ const RichTextarea = memo(
     onChange: (val: string) => void;
     placeholder?: string;
     error?: string;
-    item?: { userVariables?: UserVariable[] };
+    item?: {
+      rules?: Rule[];
+      userVariables?: UserVariable[];
+      locVars?: { vars?: Array<string | number> };
+    };
   }) => {
     const [autoFormat, setAutoFormat] = useState(true);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const variables = useMemo(
-      () => (Array.isArray(item?.userVariables) ? item?.userVariables : []),
+    const variableTokens = useMemo(
+      () => buildDescriptionVariableTokens(item),
       [item],
     );
+    const placeholderIndexes = useMemo(() => {
+      const matches = Array.from((value || "").matchAll(/#(\d+)#/g));
+      const unique = Array.from(
+        new Set(matches.map((match) => Number(match[1])).filter((n) => n > 0)),
+      );
+      return unique.sort((a, b) => a - b);
+    }, [value]);
 
     const insertTag = useCallback(
       (tag: string, autoClose = true) => {
@@ -301,6 +314,17 @@ const RichTextarea = memo(
         }
       },
       [autoFormat, onChange, value],
+    );
+
+    const handleTextKeyDown = useCallback(
+      (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        // Balatro line breaks are encoded as [s], not raw newlines.
+        if (e.key === "Enter") {
+          e.preventDefault();
+          insertTag("[s]", false);
+        }
+      },
+      [insertTag],
     );
 
     return (
@@ -370,26 +394,41 @@ const RichTextarea = memo(
               </div>
             </div>
 
-            {variables.length > 0 && (
+            {(variableTokens.length > 0 || placeholderIndexes.length > 0) && (
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-2">
                   Variables
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {variables.map((variable, index) => (
-                    <button
-                      key={variable.id ?? `${variable.name}-${index}`}
-                      type="button"
-                      onClick={() => insertTag(`#${index + 1}#`, false)}
-                      className="px-2 py-1 text-[11px] rounded-md border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 transition-colors"
-                      title={
-                        variable.description ||
-                        `Insert ${variable.name} variable`
-                      }
-                    >
-                      {variable.name} (#{index + 1}#)
-                    </button>
-                  ))}
+                  {variableTokens.length > 0
+                    ? variableTokens.map((token, index) => {
+                        const label = token.label;
+                        const compactLabel =
+                          label.length > 32 ? `${label.slice(0, 29)}...` : label;
+
+                        return (
+                          <button
+                            key={`desc-var-${token.category}-${token.source}-${index}`}
+                            type="button"
+                            onClick={() => insertTag(`#${index + 1}#`, false)}
+                            className="px-2 py-1 text-[11px] rounded-md border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 transition-colors"
+                            title={`Insert #${index + 1}# (${token.source})`}
+                          >
+                            {compactLabel} (#{index + 1}#)
+                          </button>
+                        );
+                      })
+                    : placeholderIndexes.map((index) => (
+                          <button
+                            key={`placeholder-var-${index}`}
+                            type="button"
+                            onClick={() => insertTag(`#${index}#`, false)}
+                            className="px-2 py-1 text-[11px] rounded-md border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 transition-colors"
+                            title={`Insert #${index}#`}
+                          >
+                            Variable #{index}#
+                          </button>
+                        ))}
                 </div>
               </div>
             )}
@@ -439,6 +478,7 @@ const RichTextarea = memo(
           ref={textareaRef}
           value={value || ""}
           onChange={handleTextChange}
+          onKeyDown={handleTextKeyDown}
           placeholder={placeholder}
           className={cn(
             "font-mono text-sm min-h-30 resize-y bg-background border-muted-foreground/20 cursor-text",

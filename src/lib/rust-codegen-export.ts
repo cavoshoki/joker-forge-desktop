@@ -1,83 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { downloadDir, join } from "@tauri-apps/api/path";
 import { exists, mkdir, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
-import type { JokerData, ModMetadata, UserVariable } from "@/lib/types";
-import type { Rule } from "@/components/rule-builder/types";
+import type { JokerData, ModMetadata } from "@/lib/types";
 
-interface RustAtlasPos {
-  x: number;
-  y: number;
-}
-
-interface RustTypedValue {
-  value: unknown;
-  valueType: string;
-}
-
-type RustParamValue = string | number | boolean | RustTypedValue;
-
-interface RustConditionDef {
-  condition_type: string;
-  negate: boolean;
-  params: Record<string, RustParamValue>;
-}
-
-interface RustConditionGroupDef {
-  logic_operator: "and" | "or";
-  conditions: RustConditionDef[];
-}
-
-interface RustEffectDef {
-  effect_type: string;
-  params: Record<string, RustParamValue>;
-}
-
-interface RustRandomGroupDef {
-  id: string;
-  chance_numerator: RustParamValue;
-  chance_denominator: RustParamValue;
-  effects: RustEffectDef[];
-}
-
-interface RustLoopGroupDef {
-  id: string;
-  count: RustParamValue;
-  effects: RustEffectDef[];
-}
-
-interface RustRuleDef {
-  id: string;
-  trigger: string;
-  condition_groups: RustConditionGroupDef[];
-  effects: RustEffectDef[];
-  random_groups: RustRandomGroupDef[];
-  loop_groups: RustLoopGroupDef[];
-}
-
-interface RustUserVariableDef {
-  name: string;
-  var_type: "number" | "suit" | "rank" | "poker_hand" | "key" | "text";
-  initial_value: RustParamValue;
-}
-
-interface RustJokerDef {
-  key: string;
-  name: string;
-  description: string[];
-  cost: number;
-  rarity: string;
-  blueprint_compat: boolean;
-  eternal_compat: boolean;
-  perishable_compat: boolean;
-  unlocked: boolean;
-  discovered: boolean;
-  atlas: string;
-  pos: RustAtlasPos;
-  soul_pos?: RustAtlasPos;
-  display_size?: { w: number; h: number };
-  user_variables: RustUserVariableDef[];
-  rules: RustRuleDef[];
-}
+// ---------------------------------------------------------------------------
+// Public option / result types
+// ---------------------------------------------------------------------------
 
 interface CompileSingleJokerOptions {
   includeLocTxt?: boolean;
@@ -96,150 +24,20 @@ export interface ExportModRustResult {
   fileCount: number;
 }
 
-interface JokerCompileOverrides {
-  pos?: RustAtlasPos;
-  soulPos?: RustAtlasPos;
+// ---------------------------------------------------------------------------
+// Atlas building (browser Canvas — stays in TypeScript)
+// ---------------------------------------------------------------------------
+
+interface AtlasPos {
+  x: number;
+  y: number;
 }
 
 interface AtlasBuildResult {
   atlasDataUrl: string;
-  positionsById: Record<string, RustAtlasPos>;
-  soulPositionsById: Record<string, RustAtlasPos>;
+  positionsById: Record<string, AtlasPos>;
+  soulPositionsById: Record<string, AtlasPos>;
 }
-
-const splitDescription = (description: string): string[] => {
-  const normalized = description.replace(/<br\s*\/?>/gi, "\n");
-  const lines = normalized
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-  return lines.length > 0 ? lines : ["No description"];
-};
-
-const escapeLuaString = (value: string): string =>
-  value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-
-const normalizeJokerLocKey = (prefix: string, objectKey: string): string => {
-  const rawKey = objectKey.startsWith("j_") ? objectKey.slice(2) : objectKey;
-  return `j_${prefix}_${rawKey}`;
-};
-
-const buildLuaStringArray = (lines: string[]): string => {
-  if (lines.length === 0) {
-    return "{}";
-  }
-  const items = lines
-    .map((line, index) => `        [${index + 1}] = '${escapeLuaString(line)}'`)
-    .join(",\n");
-  return `{
-${items}
-      }`;
-};
-
-const buildLocalizationLua = (
-  modPrefix: string,
-  jokers: JokerData[],
-): string => {
-  const sorted = [...jokers].sort((a, b) => a.orderValue - b.orderValue);
-  const entries = sorted
-    .map((joker) => {
-      const key = normalizeJokerLocKey(modPrefix, joker.objectKey);
-      const text = splitDescription(joker.description || "");
-      const unlockText = splitDescription(joker.unlockDescription || "");
-      const unlockBlock =
-        unlockText.length > 0
-          ? `,\n      unlock = ${buildLuaStringArray(unlockText)}`
-          : "";
-
-      return `    ${key} = {
-      name = '${escapeLuaString(joker.name || "")}',
-      text = ${buildLuaStringArray(text)}${unlockBlock}
-    }`;
-    })
-    .join(",\n");
-
-  return `return {
-  descriptions = {
-    Joker = {
-${entries}
-    }
-  }
-}
-`;
-};
-
-const normalizeRarity = (rarity: JokerData["rarity"]): string => {
-  if (typeof rarity === "string") return rarity.toLowerCase();
-  if (rarity === 1) return "common";
-  if (rarity === 2) return "uncommon";
-  if (rarity === 3) return "rare";
-  if (rarity === 4) return "legendary";
-  return "common";
-};
-
-const getDisplaySizeOverride = (
-  joker: JokerData,
-): { w: number; h: number } | undefined => {
-  const w = typeof joker.scale_w === "number" ? joker.scale_w / 100 : 1;
-  const h = typeof joker.scale_h === "number" ? joker.scale_h / 100 : 1;
-  const epsilon = 0.0001;
-  if (Math.abs(w - 1) < epsilon && Math.abs(h - 1) < epsilon) {
-    return undefined;
-  }
-  return { w, h };
-};
-
-const dataURLToUint8Array = (dataUrl: string): Uint8Array => {
-  const [, data] = dataUrl.split(",");
-  const decoded = atob(data || "");
-  const bytes = new Uint8Array(decoded.length);
-  for (let i = 0; i < decoded.length; i += 1) {
-    bytes[i] = decoded.charCodeAt(i);
-  }
-  return bytes;
-};
-
-const ensureUniqueModFolderPath = async (
-  exportRootPath: string,
-  modId: string,
-): Promise<string> => {
-  const basePath = await join(exportRootPath, modId);
-  if (!(await exists(basePath))) {
-    return basePath;
-  }
-
-  const timestamp = new Date()
-    .toISOString()
-    .replace(/[:.]/g, "-")
-    .replace("T", "_")
-    .replace("Z", "");
-  return join(exportRootPath, `${modId}_${timestamp}`);
-};
-
-const resolveExportRootPath = async (
-  options: ExportModRustOptions,
-): Promise<string> => {
-  const destinationMode = options.destinationMode ?? "downloads";
-
-  if (destinationMode === "balatro-mods") {
-    const balatroModsPath = (options.balatroModsPath || "").trim();
-    if (!balatroModsPath) {
-      throw new Error(
-        "Balatro mods folder is not configured. Set it in Settings -> Paths.",
-      );
-    }
-    if (!(await exists(balatroModsPath))) {
-      throw new Error(`Balatro mods folder does not exist: ${balatroModsPath}`);
-    }
-    return balatroModsPath;
-  }
-
-  const downloadsPath = await downloadDir();
-  if (!downloadsPath || !(await exists(downloadsPath))) {
-    throw new Error("Unable to resolve Downloads folder for export.");
-  }
-  return downloadsPath;
-};
 
 const loadImage = (src: string): Promise<HTMLImageElement | null> => {
   return new Promise((resolve) => {
@@ -247,7 +45,6 @@ const loadImage = (src: string): Promise<HTMLImageElement | null> => {
       resolve(null);
       return;
     }
-
     const img = new Image();
     img.onload = () => resolve(img);
     img.onerror = () => resolve(null);
@@ -278,8 +75,8 @@ const buildJokerAtlas = async (
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const positionsById: Record<string, RustAtlasPos> = {};
-  const soulPositionsById: Record<string, RustAtlasPos> = {};
+  const positionsById: Record<string, AtlasPos> = {};
+  const soulPositionsById: Record<string, AtlasPos> = {};
 
   let currentPosition = 0;
   for (const joker of sorted) {
@@ -291,17 +88,7 @@ const buildJokerAtlas = async (
     const y = row * 95 * scale;
     const baseImage = await loadImage(joker.image || "");
     if (baseImage) {
-      ctx.drawImage(
-        baseImage,
-        0,
-        0,
-        baseImage.width,
-        baseImage.height,
-        x,
-        y,
-        71 * scale,
-        95 * scale,
-      );
+      ctx.drawImage(baseImage, 0, 0, baseImage.width, baseImage.height, x, y, 71 * scale, 95 * scale);
     }
     currentPosition += 1;
 
@@ -314,140 +101,72 @@ const buildJokerAtlas = async (
       const soulY = soulRow * 95 * scale;
       const overlayImage = await loadImage(joker.overlayImage);
       if (overlayImage) {
-        ctx.drawImage(
-          overlayImage,
-          0,
-          0,
-          overlayImage.width,
-          overlayImage.height,
-          soulX,
-          soulY,
-          71 * scale,
-          95 * scale,
-        );
+        ctx.drawImage(overlayImage, 0, 0, overlayImage.width, overlayImage.height, soulX, soulY, 71 * scale, 95 * scale);
       }
       currentPosition += 1;
     }
   }
 
-  return {
-    atlasDataUrl: canvas.toDataURL("image/png"),
-    positionsById,
-    soulPositionsById,
-  };
+  return { atlasDataUrl: canvas.toDataURL("image/png"), positionsById, soulPositionsById };
 };
 
-const toRustParamValue = (
-  raw: { value: unknown; valueType?: string } | undefined,
-): RustParamValue => {
-  if (!raw) return 0;
-  if (raw.valueType && raw.valueType.length > 0) {
-    return { value: raw.value, valueType: raw.valueType };
+const dataURLToUint8Array = (dataUrl: string): Uint8Array => {
+  const [, data] = dataUrl.split(",");
+  const decoded = atob(data || "");
+  const bytes = new Uint8Array(decoded.length);
+  for (let i = 0; i < decoded.length; i += 1) {
+    bytes[i] = decoded.charCodeAt(i);
   }
-  if (
-    typeof raw.value === "string" ||
-    typeof raw.value === "number" ||
-    typeof raw.value === "boolean"
-  ) {
-    return raw.value;
-  }
-  return String(raw.value ?? "");
+  return bytes;
 };
 
-const mapParams = (
-  params: Record<string, { value: unknown; valueType?: string }> | undefined,
-): Record<string, RustParamValue> => {
-  if (!params) return {};
-  const out: Record<string, RustParamValue> = {};
-  for (const [key, value] of Object.entries(params)) {
-    out[key] = toRustParamValue(value);
-  }
-  return out;
+// ---------------------------------------------------------------------------
+// Lua / JSON text builders (pure TypeScript strings — no Rust needed)
+// ---------------------------------------------------------------------------
+
+const escapeLuaString = (value: string): string =>
+  value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+
+const normalizeJokerLocKey = (prefix: string, objectKey: string): string => {
+  const rawKey = objectKey.startsWith("j_") ? objectKey.slice(2) : objectKey;
+  return `j_${prefix}_${rawKey}`;
 };
 
-const mapRules = (rules: Rule[] | undefined): RustRuleDef[] => {
-  if (!rules) return [];
-  return rules.map((rule) => ({
-    id: rule.id,
-    trigger: rule.trigger,
-    condition_groups: (rule.conditionGroups || []).map((group) => ({
-      logic_operator: group.operator === "or" ? "or" : "and",
-      conditions: (group.conditions || []).map((condition) => ({
-        condition_type: condition.type,
-        negate: !!condition.negate,
-        params: mapParams(condition.params),
-      })),
-    })),
-    effects: (rule.effects || []).map((effect) => ({
-      effect_type: effect.type,
-      params: mapParams(effect.params),
-    })),
-    random_groups: (rule.randomGroups || []).map((group) => ({
-      id: group.id,
-      chance_numerator: toRustParamValue(group.chance_numerator),
-      chance_denominator: toRustParamValue(group.chance_denominator),
-      effects: (group.effects || []).map((effect) => ({
-        effect_type: effect.type,
-        params: mapParams(effect.params),
-      })),
-    })),
-    loop_groups: (rule.loops || []).map((group) => ({
-      id: group.id,
-      count: toRustParamValue(group.repetitions),
-      effects: (group.effects || []).map((effect) => ({
-        effect_type: effect.type,
-        params: mapParams(effect.params),
-      })),
-    })),
-  }));
+const splitDescription = (description: string): string[] => {
+  const normalized = description
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/\[s\]/g, "\n");
+  const lines = normalized
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  return lines.length > 0 ? lines : ["No description"];
 };
 
-const mapUserVariableType = (
-  type: string | undefined,
-): RustUserVariableDef["var_type"] => {
-  if (type === "pokerhand") return "poker_hand";
-  if (type === "suit" || type === "rank" || type === "key" || type === "text")
-    return type;
-  return "number";
+const buildLuaStringArray = (lines: string[]): string => {
+  if (lines.length === 0) return "{}";
+  const items = lines
+    .map((line, index) => `        [${index + 1}] = '${escapeLuaString(line)}'`)
+    .join(",\n");
+  return `{\n${items}\n      }`;
 };
 
-const getUserVariableInitialValue = (v: UserVariable): RustParamValue => {
-  if (v.type === "suit") return v.initialSuit ?? "Spades";
-  if (v.type === "rank") return v.initialRank ?? "Ace";
-  if (v.type === "pokerhand") return v.initialPokerHand ?? "High Card";
-  if (v.type === "key") return v.initialKey ?? "none";
-  if (v.type === "text") return v.initialText ?? "";
-  return typeof v.initialValue === "number"
-    ? v.initialValue
-    : Number(v.initialValue ?? 0) || 0;
-};
+const buildLocalizationLua = (modPrefix: string, jokers: JokerData[]): string => {
+  const sorted = [...jokers].sort((a, b) => a.orderValue - b.orderValue);
+  const entries = sorted
+    .map((joker) => {
+      const key = normalizeJokerLocKey(modPrefix, joker.objectKey);
+      const text = splitDescription(joker.description || "");
+      const unlockText = splitDescription(joker.unlockDescription || "");
+      const unlockBlock =
+        unlockText.length > 0
+          ? `,\n      unlock = ${buildLuaStringArray(unlockText)}`
+          : "";
+      return `    ${key} = {\n      name = '${escapeLuaString(joker.name || "")}',\n      text = ${buildLuaStringArray(text)}${unlockBlock}\n    }`;
+    })
+    .join(",\n");
 
-const mapJokerToRustDef = (
-  joker: JokerData,
-  overrides: JokerCompileOverrides = {},
-): RustJokerDef => {
-  return {
-    key: joker.objectKey,
-    name: joker.name,
-    description: splitDescription(joker.description),
-    cost: joker.cost,
-    rarity: normalizeRarity(joker.rarity),
-    blueprint_compat: !!joker.blueprint_compat,
-    eternal_compat: !!joker.eternal_compat,
-    perishable_compat: joker.perishable_compat ?? true,
-    unlocked: joker.unlocked ?? true,
-    discovered: joker.discovered ?? true,
-    atlas: "CustomJokers",
-    pos: overrides.pos ?? { x: 0, y: 0 },
-    soul_pos: overrides.soulPos,
-    display_size: getDisplaySizeOverride(joker),
-    user_variables: (joker.userVariables || []).map((v) => ({
-      name: v.name,
-      var_type: mapUserVariableType(v.type),
-      initial_value: getUserVariableInitialValue(v),
-    })),
-    rules: mapRules(joker.rules),
-  };
+  return `return {\n  descriptions = {\n    Joker = {\n${entries}\n    }\n  }\n}\n`;
 };
 
 const buildMainLua = (jokers: JokerData[]): string => {
@@ -458,23 +177,10 @@ const buildMainLua = (jokers: JokerData[]): string => {
 
   const atlasDecl =
     sorted.length > 0
-      ? `SMODS.Atlas({
-    key = "CustomJokers",
-    path = "CustomJokers.png",
-    px = 71,
-    py = 95,
-    atlas_table = "ASSET_ATLAS"
-})
-
-`
+      ? `SMODS.Atlas({\n    key = "CustomJokers",\n    path = "CustomJokers.png",\n    px = 71,\n    py = 95,\n    atlas_table = "ASSET_ATLAS"\n})\n\n`
       : "";
 
-  return `${atlasDecl}local NFS = require("nativefs")
-to_big = to_big or function(a) return a end
-lenient_bignum = lenient_bignum or function(a) return a end
-
-${requires}
-`;
+  return `${atlasDecl}local NFS = require("nativefs")\nto_big = to_big or function(a) return a end\nlenient_bignum = lenient_bignum or function(a) return a end\n\n${requires}\n`;
 };
 
 const buildModJson = (metadata: ModMetadata): string => {
@@ -494,7 +200,6 @@ const buildModJson = (metadata: ModMetadata): string => {
     conflicts: metadata.conflicts,
     provides: metadata.provides,
   };
-
   return JSON.stringify(payload, null, 2);
 };
 
@@ -509,41 +214,93 @@ const downloadBlob = (filename: string, content: Blob) => {
   URL.revokeObjectURL(url);
 };
 
+// ---------------------------------------------------------------------------
+// Path helpers
+// ---------------------------------------------------------------------------
+
+const ensureUniqueModFolderPath = async (
+  exportRootPath: string,
+  modId: string,
+): Promise<string> => {
+  const basePath = await join(exportRootPath, modId);
+  if (!(await exists(basePath))) return basePath;
+  const timestamp = new Date()
+    .toISOString()
+    .replace(/[:.]/g, "-")
+    .replace("T", "_")
+    .replace("Z", "");
+  return join(exportRootPath, `${modId}_${timestamp}`);
+};
+
+const resolveExportRootPath = async (options: ExportModRustOptions): Promise<string> => {
+  const destinationMode = options.destinationMode ?? "downloads";
+  if (destinationMode === "balatro-mods") {
+    const balatroModsPath = (options.balatroModsPath || "").trim();
+    if (!balatroModsPath) {
+      throw new Error("Balatro mods folder is not configured. Set it in Settings -> Paths.");
+    }
+    if (!(await exists(balatroModsPath))) {
+      throw new Error(`Balatro mods folder does not exist: ${balatroModsPath}`);
+    }
+    return balatroModsPath;
+  }
+  const downloadsPath = await downloadDir();
+  if (!downloadsPath || !(await exists(downloadsPath))) {
+    throw new Error("Unable to resolve Downloads folder for export.");
+  }
+  return downloadsPath;
+};
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Compile a single joker to Lua.
+ *
+ * Sends the raw `JokerData` to Rust via `compile_joker_from_data`.
+ * No TypeScript-side mapping required.
+ */
 export const compileSingleJokerLua = async (
   joker: JokerData,
   modPrefix: string,
   options: CompileSingleJokerOptions = {},
 ): Promise<string> => {
-  const jokerDef = mapJokerToRustDef(joker);
-  const includeLocTxt = options.includeLocTxt ?? true;
-  return invoke<string>("compile_joker_lua_with_options", {
-    jokerDef,
+  return invoke<string>("compile_joker_from_data", {
+    jokerData: joker,
+    pos: { x: 0, y: 0 },
+    soulPos: null,
     modPrefix,
-    includeLocTxt,
+    includeLocTxt: options.includeLocTxt ?? true,
   });
 };
 
+/**
+ * Compile a single joker and trigger a browser download.
+ */
 export const exportSingleJokerRust = async (
   joker: JokerData,
   modPrefix: string,
 ): Promise<void> => {
   const code = await compileSingleJokerLua(joker, modPrefix);
-  downloadBlob(
-    `${joker.objectKey}.lua`,
-    new Blob([code], { type: "text/plain" }),
-  );
+  downloadBlob(`${joker.objectKey}.lua`, new Blob([code], { type: "text/plain" }));
 };
 
+/**
+ * Export a complete mod to disk.
+ *
+ * Atlas image building stays in TypeScript (Canvas API).
+ * All Lua compilation + file writing is delegated to a single Rust call
+ * (`batch_export_jokers`), eliminating the N-joker IPC loop that existed
+ * previously.
+ */
 export const exportModRust = async (
   metadata: ModMetadata,
   jokers: JokerData[],
   options: ExportModRustOptions = {},
 ): Promise<ExportModRustResult> => {
   const exportRootPath = await resolveExportRootPath(options);
-  const modFolderPath = await ensureUniqueModFolderPath(
-    exportRootPath,
-    metadata.id,
-  );
+  const modFolderPath = await ensureUniqueModFolderPath(exportRootPath, metadata.id);
   const useLocalizationFile = options.useLocalizationFile ?? false;
   const locale = options.localizationLocale ?? "en-us";
   let fileCount = 0;
@@ -553,20 +310,16 @@ export const exportModRust = async (
   const jokersFolderPath = await join(modFolderPath, "jokers");
   await mkdir(jokersFolderPath, { recursive: true });
 
-  await writeTextFile(
-    await join(modFolderPath, metadata.main_file),
-    buildMainLua(jokers),
-  );
+  // Write text metadata files (pure string building — no Rust roundtrip needed)
+  await writeTextFile(await join(modFolderPath, metadata.main_file), buildMainLua(jokers));
   fileCount += 1;
-  await writeTextFile(
-    await join(modFolderPath, `${metadata.id}.json`),
-    buildModJson(metadata),
-  );
+  await writeTextFile(await join(modFolderPath, `${metadata.id}.json`), buildModJson(metadata));
   fileCount += 1;
 
   const sorted = [...jokers].sort((a, b) => a.orderValue - b.orderValue);
 
   if (sorted.length > 0) {
+    // Atlas images: Canvas rendering must stay in TypeScript
     const assetsFolderPath = await join(modFolderPath, "assets");
     const assets1xPath = await join(assetsFolderPath, "1x");
     const assets2xPath = await join(assetsFolderPath, "2x");
@@ -587,22 +340,20 @@ export const exportModRust = async (
     );
     fileCount += 1;
 
-    for (const joker of sorted) {
-      const jokerDef = mapJokerToRustDef(joker, {
+    // Compile all jokers + write their Lua files in a single Rust call.
+    // Rust maps JokerData → JokerDef internally; no TypeScript mapping needed.
+    const written = await invoke<number>("batch_export_jokers", {
+      jokerFolderPath: jokersFolderPath,
+      modPrefix: metadata.prefix,
+      jokers: sorted.map((joker) => ({
+        jokerData: joker,
         pos: atlas1x.positionsById[joker.id] ?? { x: 0, y: 0 },
-        soulPos: atlas1x.soulPositionsById[joker.id],
-      });
-      const code = await invoke<string>("compile_joker_lua_with_options", {
-        jokerDef,
-        modPrefix: metadata.prefix,
-        includeLocTxt: !useLocalizationFile,
-      });
-      await writeTextFile(
-        await join(jokersFolderPath, `${joker.objectKey}.lua`),
-        code,
-      );
-      fileCount += 1;
-    }
+        soulPos: atlas1x.soulPositionsById[joker.id] ?? null,
+        fileName: `${joker.objectKey}.lua`,
+      })),
+      includeLocTxt: !useLocalizationFile,
+    });
+    fileCount += written;
   }
 
   if (useLocalizationFile) {
@@ -615,9 +366,5 @@ export const exportModRust = async (
     fileCount += 1;
   }
 
-  return {
-    exportRootPath,
-    modFolderPath,
-    fileCount,
-  };
+  return { exportRootPath, modFolderPath, fileCount };
 };

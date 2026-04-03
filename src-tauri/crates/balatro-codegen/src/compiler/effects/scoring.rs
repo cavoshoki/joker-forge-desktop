@@ -88,25 +88,61 @@ fn resolve_scoring_value(
         return (lua_int(0), None);
     };
 
-    match val {
-        ParamValue::Int(n) => (
+    if let Some(config_value) = scoring_literal_config_value(val) {
+        return (
             ability_path_expr(ctx.object_type, var_name),
             Some(ConfigVar {
                 name: var_name.to_string(),
-                value: ConfigValue::Int(*n),
+                value: config_value,
             }),
-        ),
-        ParamValue::Float(n) => (
-            ability_path_expr(ctx.object_type, var_name),
-            Some(ConfigVar {
-                name: var_name.to_string(),
-                value: ConfigValue::Number(*n),
-            }),
-        ),
-        _ => {
-            // Game variable, range, or user variable — resolve directly
-            let expr = resolve_value(val, ctx.object_type, None);
-            (expr, None)
-        }
+        );
     }
+
+    // Game variable, range, or user variable — resolve directly
+    let expr = resolve_value(val, ctx.object_type, None);
+    (expr, None)
+}
+
+/// Convert "basic" literal scoring values into config vars.
+///
+/// This keeps generated code consistent by using `card.ability.extra.*`
+/// for plain numerics, even when numeric values arrive as strings or typed
+/// wrappers from the node editor pipeline.
+fn scoring_literal_config_value(value: &ParamValue) -> Option<ConfigValue> {
+    match value {
+        ParamValue::Int(n) => Some(ConfigValue::Int(*n)),
+        ParamValue::Float(n) => Some(ConfigValue::Number(*n)),
+        ParamValue::Str(s) => parse_numeric_config_value(s),
+        ParamValue::Typed(t) => {
+            if matches!(t.value_type.as_str(), "gameVariable" | "range" | "userVariable") {
+                return None;
+            }
+
+            if let Some(i) = t.value.as_i64() {
+                return Some(ConfigValue::Int(i));
+            }
+            if let Some(n) = t.value.as_f64() {
+                return Some(ConfigValue::Number(n));
+            }
+            if let Some(s) = t.value.as_str() {
+                return parse_numeric_config_value(s);
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+fn parse_numeric_config_value(s: &str) -> Option<ConfigValue> {
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if let Ok(i) = trimmed.parse::<i64>() {
+        return Some(ConfigValue::Int(i));
+    }
+    if let Ok(n) = trimmed.parse::<f64>() {
+        return Some(ConfigValue::Number(n));
+    }
+    None
 }

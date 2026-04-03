@@ -266,9 +266,320 @@ pub fn create_tag(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput
     }
 }
 
+/// Create Copy Triggered Card — copies the card that triggered this joker (context.other_card).
+///
+/// `add_to` controls whether the copy goes to "deck" (default) or "hand".
+/// Trigger-aware: scoring triggers use pre_return; others use func return field.
+pub fn create_copy_triggered_card(
+    effect: &EffectDef,
+    _ctx: &mut CompileContext,
+    trigger: &str,
+) -> EffectOutput {
+    let add_to = get_str_param(effect, "add_to").unwrap_or("deck");
+    let custom_message = get_str_param(effect, "customMessage");
+    let scoring = matches!(trigger, "hand_played" | "card_scored");
+
+    let visibility_or_effects = if add_to == "hand" {
+        "copied_card.states.visible = nil"
+    } else {
+        "playing_card_joker_effects({true})"
+    };
+
+    let core = format!(
+        "G.playing_card = (G.playing_card and G.playing_card + 1) or 1\n\
+        local copied_card = copy_card(context.other_card, nil, nil, G.playing_card)\n\
+        copied_card:add_to_deck()\n\
+        G.deck.config.card_limit = G.deck.config.card_limit + 1\n\
+        table.insert(G.playing_cards, copied_card)\n\
+        G.hand:emplace(copied_card)\n\
+        {vis}\n\
+        G.E_MANAGER:add_event(Event({{\n\
+            func = function()\n\
+                copied_card:start_materialize()\n\
+                return true\n\
+            end\n\
+        }}))",
+        vis = visibility_or_effects
+    );
+
+    let message = custom_message
+        .map(|m| lua_str(m))
+        .unwrap_or_else(|| lua_str("Copied Card to Hand!"));
+
+    if scoring {
+        EffectOutput {
+            return_fields: vec![],
+            pre_return: vec![lua_raw_stmt(core)],
+            config_vars: vec![],
+            message: Some(message),
+            colour: Some(lua_raw_expr("G.C.GREEN")),
+        }
+    } else {
+        let non_scoring_body = format!(
+            "{core}\n\
+            G.E_MANAGER:add_event(Event({{\n\
+                func = function()\n\
+                    SMODS.calculate_context({{ playing_card_added = true, cards = {{ copied_card }} }})\n\
+                    return true\n\
+                end\n\
+            }}))\n\
+            return true",
+            core = core
+        );
+        EffectOutput {
+            return_fields: vec![(
+                "func".to_string(),
+                Expr::Function {
+                    params: vec![],
+                    body: vec![lua_raw_stmt(non_scoring_body)],
+                },
+            )],
+            pre_return: vec![],
+            config_vars: vec![],
+            message: Some(message),
+            colour: Some(lua_raw_expr("G.C.GREEN")),
+        }
+    }
+}
+
+/// Create Copy Played Card — copies cards from context.full_hand based on filters.
+///
+/// Supports filtering by `card_index` (position), `card_rank`, and `card_suit`.
+/// `add_to` controls "deck" (default) or "hand" destination.
+/// Trigger-aware: scoring triggers use pre_return; others use func return field.
+pub fn create_copy_played_card(
+    effect: &EffectDef,
+    _ctx: &mut CompileContext,
+    trigger: &str,
+) -> EffectOutput {
+    let add_to = get_str_param(effect, "add_to").unwrap_or("deck");
+    let card_index = get_typed_str_param(effect, "card_index").unwrap_or_else(|| "any".into());
+    let card_rank = get_typed_str_param(effect, "card_rank").unwrap_or_else(|| "any".into());
+    let card_suit = get_typed_str_param(effect, "card_suit").unwrap_or_else(|| "any".into());
+    let custom_message = get_str_param(effect, "customMessage");
+    let scoring = matches!(trigger, "hand_played" | "card_scored");
+
+    let selection = build_card_selection(&card_index, &card_rank, &card_suit);
+
+    let visibility_or_effects = if add_to == "hand" {
+        "copied_card.states.visible = nil"
+    } else {
+        "playing_card_joker_effects({true})"
+    };
+
+    let copy_loop = format!(
+        "{selection}\n\
+        for i, source_card in ipairs(cards_to_copy) do\n\
+            G.playing_card = (G.playing_card and G.playing_card + 1) or 1\n\
+            local copied_card = copy_card(source_card, nil, nil, G.playing_card)\n\
+            copied_card:add_to_deck()\n\
+            G.deck.config.card_limit = G.deck.config.card_limit + 1\n\
+            table.insert(G.playing_cards, copied_card)\n\
+            G.hand:emplace(copied_card)\n\
+            {vis}\n\
+            G.E_MANAGER:add_event(Event({{\n\
+                func = function()\n\
+                    copied_card:start_materialize()\n\
+                    return true\n\
+                end\n\
+            }}))\n\
+        end",
+        selection = selection,
+        vis = visibility_or_effects
+    );
+
+    let message = custom_message
+        .map(|m| lua_str(m))
+        .unwrap_or_else(|| lua_str("Copied Cards to Hand!"));
+
+    if scoring {
+        EffectOutput {
+            return_fields: vec![],
+            pre_return: vec![lua_raw_stmt(copy_loop)],
+            config_vars: vec![],
+            message: Some(message),
+            colour: Some(lua_raw_expr("G.C.GREEN")),
+        }
+    } else {
+        let non_scoring_body = format!(
+            "{loop}\n\
+            G.E_MANAGER:add_event(Event({{\n\
+                func = function()\n\
+                    SMODS.calculate_context({{ playing_card_added = true, cards = cards_to_copy }})\n\
+                    return true\n\
+                end\n\
+            }}))\n\
+            return true",
+            loop = copy_loop
+        );
+        EffectOutput {
+            return_fields: vec![(
+                "func".to_string(),
+                Expr::Function {
+                    params: vec![],
+                    body: vec![lua_raw_stmt(non_scoring_body)],
+                },
+            )],
+            pre_return: vec![],
+            config_vars: vec![],
+            message: Some(message),
+            colour: Some(lua_raw_expr("G.C.GREEN")),
+        }
+    }
+}
+
+/// Create Last Played Planet — spawns the planet card for the last hand played.
+///
+/// Searches `G.P_CENTER_POOLS.Planet` for a planet whose `config.hand_type`
+/// matches `G.GAME.last_hand_played`, then calls `SMODS.add_card`.
+/// Optional `is_negative` param makes the resulting card negative edition.
+pub fn create_last_played_planet(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
+    let is_negative = get_str_param(effect, "is_negative")
+        .map(|s| s == "negative")
+        .unwrap_or(false);
+    let custom_message = get_str_param(effect, "customMessage");
+
+    let buffer_code = if is_negative { "" } else { "G.GAME.consumeable_buffer = G.GAME.consumeable_buffer + 1\n            " };
+    let buffer_reset = if is_negative { "" } else { "\n                        G.GAME.consumeable_buffer = 0" };
+    let negative_code = if is_negative {
+        "\n                        planet_card:set_edition(\"e_negative\", true)"
+    } else {
+        ""
+    };
+
+    let lua = format!(
+        "{buf}G.E_MANAGER:add_event(Event({{\n\
+            trigger = 'before',\n\
+            delay = 0.0,\n\
+            func = function()\n\
+                if G.GAME.last_hand_played then\n\
+                    local _planet = nil\n\
+                    for k, v in pairs(G.P_CENTER_POOLS.Planet) do\n\
+                        if v.config.hand_type == G.GAME.last_hand_played then\n\
+                            _planet = v.key\n\
+                        end\n\
+                    end\n\
+                    if _planet then\n\
+                        local planet_card = SMODS.add_card({{ key = _planet }}){neg}\n\
+                    end{reset}\n\
+                end\n\
+                return true\n\
+            end\n\
+        }}))",
+        buf = buffer_code,
+        neg = negative_code,
+        reset = buffer_reset,
+    );
+
+    let message = custom_message
+        .map(|m| lua_str(m))
+        .unwrap_or_else(|| lua_raw_expr("localize('k_plus_planet')"));
+
+    EffectOutput {
+        return_fields: vec![],
+        pre_return: vec![lua_raw_stmt(lua)],
+        config_vars: vec![],
+        message: Some(message),
+        colour: Some(lua_raw_expr("G.C.SECONDARY_SET.Planet")),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/// Returns the string value of a param, supporting both plain strings and
+/// TypedValue (e.g. userVariable) whose value is a string.
+fn get_typed_str_param(effect: &EffectDef, key: &str) -> Option<String> {
+    use crate::types::ParamValue;
+    match effect.params.get(key)? {
+        ParamValue::Str(s) => Some(s.clone()),
+        ParamValue::Typed(t) => t.value.as_str().map(str::to_owned),
+        _ => None,
+    }
+}
+
+/// Build Lua card selection code for `create_copy_played_card`.
+///
+/// Returns a Lua snippet that declares `local cards_to_copy = {}` and populates
+/// it from `context.full_hand` according to position, rank, and suit filters.
+fn build_card_selection(card_index: &str, card_rank: &str, card_suit: &str) -> String {
+    // Build filter conditions
+    let mut conditions: Vec<String> = Vec::new();
+
+    if card_rank != "any" {
+        let rank_id = rank_to_id(card_rank);
+        conditions.push(format!("c:get_id() == {}", rank_id));
+    }
+
+    if card_suit != "any" {
+        conditions.push(format!("c:is_suit(\"{}\")", card_suit));
+    }
+
+    if card_index == "any" {
+        if conditions.is_empty() {
+            "local cards_to_copy = {}\n\
+            for i, c in ipairs(context.full_hand) do\n\
+                table.insert(cards_to_copy, c)\n\
+            end"
+            .to_string()
+        } else {
+            format!(
+                "local cards_to_copy = {{}}\n\
+                for i, c in ipairs(context.full_hand) do\n\
+                    if {cond} then\n\
+                        table.insert(cards_to_copy, c)\n\
+                    end\n\
+                end",
+                cond = conditions.join(" and ")
+            )
+        }
+    } else {
+        if conditions.is_empty() {
+            format!(
+                "local cards_to_copy = {{}}\n\
+                local target_index = {idx}\n\
+                if context.full_hand[target_index] then\n\
+                    table.insert(cards_to_copy, context.full_hand[target_index])\n\
+                end",
+                idx = card_index
+            )
+        } else {
+            format!(
+                "local cards_to_copy = {{}}\n\
+                local target_index = {idx}\n\
+                if context.full_hand[target_index] then\n\
+                    local c = context.full_hand[target_index]\n\
+                    if {cond} then\n\
+                        table.insert(cards_to_copy, c)\n\
+                    end\n\
+                end",
+                idx = card_index,
+                cond = conditions.join(" and ")
+            )
+        }
+    }
+}
+
+/// Map a rank string to its Balatro numeric ID.
+fn rank_to_id(rank: &str) -> String {
+    match rank {
+        "2" => "2".into(),
+        "3" => "3".into(),
+        "4" => "4".into(),
+        "5" => "5".into(),
+        "6" => "6".into(),
+        "7" => "7".into(),
+        "8" => "8".into(),
+        "9" => "9".into(),
+        "10" => "10".into(),
+        "J" => "11".into(),
+        "Q" => "12".into(),
+        "K" => "13".into(),
+        "A" => "14".into(),
+        other => other.to_string(),
+    }
+}
 
 fn get_str_param<'a>(effect: &'a EffectDef, key: &str) -> Option<&'a str> {
     effect.params.get(key).and_then(|v| v.as_str())

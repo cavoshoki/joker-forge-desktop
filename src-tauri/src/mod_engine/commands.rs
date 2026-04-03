@@ -8,6 +8,7 @@ use tauri::{Emitter, State, Window};
 
 use super::{
     compiler::Compiler,
+    export::{AtlasPosInput, BatchJokerEntry, JokerDataInput},
     state::AppState,
     types::{Edge, EntityState, Node, RuleCatalogPayload, SnippetResponse, StateSyncPayload},
 };
@@ -294,4 +295,68 @@ pub fn compile_rulebuilder_node_snippet(
         object_type,
         "mod",
     ))
+}
+
+// ---------------------------------------------------------------------------
+// Unified export commands (Issue #1 + #2)
+//
+// These replace the TypeScript `mapJokerToRustDef` + per-joker IPC loop.
+// The frontend sends raw `JokerData` objects; Rust maps them to `JokerDef`
+// (via `export::joker_data_to_def`) and either returns the Lua source or
+// writes it directly to disk — both in a single round-trip.
+// ---------------------------------------------------------------------------
+
+/// Compile a single joker from raw frontend data.
+///
+/// Accepts the unmodified TypeScript `JokerData` object. The Rust `export`
+/// module handles all normalisation (rarity, description splitting, display
+/// size, user variables) that was previously done by the TypeScript
+/// `mapJokerToRustDef` helper.
+#[tauri::command]
+pub fn compile_joker_from_data(
+    joker_data: JokerDataInput,
+    pos: AtlasPosInput,
+    soul_pos: Option<AtlasPosInput>,
+    mod_prefix: String,
+    include_loc_txt: bool,
+) -> Result<String, String> {
+    let joker_def = super::export::joker_data_to_def(&joker_data, pos, soul_pos);
+    let chunk = compile_joker_with_options(&joker_def, &mod_prefix, include_loc_txt);
+    Ok(LuaEmitter::new().emit_chunk(&chunk))
+}
+
+/// Compile and write a batch of jokers to disk in a single IPC call.
+///
+/// Replaces the TypeScript `for (const joker of sorted)` loop that called
+/// `compile_joker_lua_with_options` then `writeTextFile` once per joker.
+/// Moving both steps here eliminates N round-trips across the Tauri bridge and
+/// removes `mapJokerToRustDef` / `mapRules` from the TypeScript layer entirely.
+///
+/// The `joker_folder_path` directory must already exist (TypeScript still owns
+/// directory scaffolding via the Tauri FS plugin).
+///
+/// Returns the number of files written.
+#[tauri::command]
+pub fn batch_export_jokers(
+    joker_folder_path: String,
+    mod_prefix: String,
+    jokers: Vec<BatchJokerEntry>,
+    include_loc_txt: bool,
+) -> Result<usize, String> {
+    let folder = std::path::Path::new(&joker_folder_path);
+    let mut count = 0;
+
+    for entry in &jokers {
+        let joker_def =
+            super::export::joker_data_to_def(&entry.joker_data, entry.pos.clone(), entry.soul_pos.clone());
+        let chunk = compile_joker_with_options(&joker_def, &mod_prefix, include_loc_txt);
+        let lua = LuaEmitter::new().emit_chunk(&chunk);
+
+        let path = folder.join(&entry.file_name);
+        std::fs::write(&path, lua.as_bytes())
+            .map_err(|e| format!("Failed to write {}: {}", entry.file_name, e))?;
+        count += 1;
+    }
+
+    Ok(count)
 }

@@ -21,9 +21,13 @@ pub fn run() {
             commands::disconnect_nodes,
             commands::update_node_value,
             commands::get_node_snippet,
+            // Legacy compilation commands (kept for backward compatibility)
             commands::compile_joker_lua,
             commands::compile_joker_lua_with_options,
-            commands::compile_rulebuilder_node_snippet
+            commands::compile_rulebuilder_node_snippet,
+            // Unified export commands — accept raw JokerData, eliminate TS mapping
+            commands::compile_joker_from_data,
+            commands::batch_export_jokers,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

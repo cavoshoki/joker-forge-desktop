@@ -2,6 +2,7 @@ use crate::compiler::context::CompileContext;
 use crate::lua_ast::*;
 use crate::types::EffectDef;
 
+
 /// Result of compiling a passive effect.
 /// Passive effects don't go through the normal trigger→condition→effect flow;
 /// they produce code for `add_to_deck`, `remove_from_deck`, or special
@@ -16,7 +17,7 @@ pub struct PassiveEffectOutput {
 }
 
 /// Splash — all played cards count as scored.
-pub fn splash(_effect: &EffectDef, _ctx: &CompileContext) -> PassiveEffectOutput {
+pub fn splash(_effect: &EffectDef, _ctx: &mut CompileContext) -> PassiveEffectOutput {
     // In calculate():
     // if context.modify_scoring_hand and not context.blueprint then
     //     return { add_to_hand = true }
@@ -36,7 +37,7 @@ pub fn splash(_effect: &EffectDef, _ctx: &CompileContext) -> PassiveEffectOutput
 }
 
 /// Free rerolls — sets reroll cost to 0 while joker is held.
-pub fn free_rerolls(_effect: &EffectDef, _ctx: &CompileContext) -> PassiveEffectOutput {
+pub fn free_rerolls(_effect: &EffectDef, _ctx: &mut CompileContext) -> PassiveEffectOutput {
     // add_to_deck: G.GAME.round_resets.reroll_cost = 0
     // remove_from_deck: G.GAME.round_resets.reroll_cost = 5
     let add = lua_assign(
@@ -56,7 +57,7 @@ pub fn free_rerolls(_effect: &EffectDef, _ctx: &CompileContext) -> PassiveEffect
 }
 
 /// Allow debt — lets player go into negative money.
-pub fn allow_debt(effect: &EffectDef, _ctx: &CompileContext) -> PassiveEffectOutput {
+pub fn allow_debt(effect: &EffectDef, _ctx: &mut CompileContext) -> PassiveEffectOutput {
     let amount = effect
         .params
         .get("amount")
@@ -82,12 +83,32 @@ pub fn allow_debt(effect: &EffectDef, _ctx: &CompileContext) -> PassiveEffectOut
 /// Dispatch a passive effect by type.
 pub fn compile_passive(
     effect: &EffectDef,
-    ctx: &CompileContext,
+    ctx: &mut crate::compiler::context::CompileContext,
 ) -> Option<PassiveEffectOutput> {
     match effect.effect_type.as_str() {
         "splash" => Some(splash(effect, ctx)),
         "free_rerolls" => Some(free_rerolls(effect, ctx)),
         "allow_debt" => Some(allow_debt(effect, ctx)),
+
+        // Slot management passives (delegated to slot_management module)
+        "edit_joker_slots" => {
+            let out = super::slot_management::edit_joker_slots_passive(effect, ctx);
+            Some(out)
+        }
+        "edit_joker_size" => {
+            let out = super::slot_management::edit_joker_size_passive(effect, ctx);
+            Some(out)
+        }
+        "edit_consumable_slots" => {
+            let out = super::slot_management::edit_consumable_slots_passive(effect, ctx);
+            Some(out)
+        }
+        "edit_hand_size" | "edit_play_size" | "edit_discard_size"
+        | "edit_voucher_slots" | "edit_booster_slots" | "edit_shop_slots" => {
+            let size_type = effect.effect_type.strip_prefix("edit_").unwrap_or("hand_size");
+            Some(super::slot_management::edit_item_size_passive_typed(effect, ctx, size_type))
+        }
+
         _ => None,
     }
 }

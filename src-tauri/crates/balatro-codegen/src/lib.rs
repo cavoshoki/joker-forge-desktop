@@ -97,4 +97,115 @@ mod integration_tests {
         );
         assert!(output.contains("return {"), "Should have plain return");
     }
+
+    #[test]
+    fn test_joker_with_add_chips_string_literal_uses_config_extra() {
+        let joker = JokerDef {
+            key: "newjoker_string_value".to_string(),
+            name: "New Joker".to_string(),
+            description: vec!["String literal value test".to_string()],
+            cost: 4,
+            rarity: "common".to_string(),
+            blueprint_compat: true,
+            eternal_compat: true,
+            perishable_compat: true,
+            unlocked: true,
+            discovered: true,
+            atlas: "Joker".to_string(),
+            pos: AtlasPos { x: 0, y: 0 },
+            soul_pos: None,
+            display_size: None,
+            rules: vec![RuleDef {
+                id: "rule1".to_string(),
+                trigger: "hand_played".to_string(),
+                condition_groups: vec![],
+                effects: vec![EffectDef {
+                    effect_type: "add_chips".to_string(),
+                    params: {
+                        let mut p = HashMap::new();
+                        p.insert("value".to_string(), ParamValue::Str("10".to_string()));
+                        p
+                    },
+                }],
+                random_groups: vec![],
+                loop_groups: vec![],
+            }],
+            appearance: None,
+            unlock: None,
+            user_variables: vec![],
+        };
+
+        let chunk = compile_joker(&joker, "modprefix");
+        let output = Emitter::new().emit_chunk(&chunk);
+
+        assert!(output.contains("chips0 = 10"), "Config extra should include chips0");
+        assert!(
+            output.contains("chips = card.ability.extra.chips0"),
+            "Return field should reference ability.extra var"
+        );
+        assert!(
+            !output.contains("return { chips = 10"),
+            "Should not inline numeric literal chips value in return"
+        );
+    }
+
+    #[test]
+    fn test_multiple_effects_use_nested_extra_chain() {
+        let joker = JokerDef {
+            key: "newjoker_multi_effect".to_string(),
+            name: "Multi Effect Joker".to_string(),
+            description: vec!["Multi effect chain test".to_string()],
+            cost: 4,
+            rarity: "common".to_string(),
+            blueprint_compat: true,
+            eternal_compat: true,
+            perishable_compat: true,
+            unlocked: true,
+            discovered: true,
+            atlas: "Joker".to_string(),
+            pos: AtlasPos { x: 0, y: 0 },
+            soul_pos: None,
+            display_size: None,
+            rules: vec![RuleDef {
+                id: "rule1".to_string(),
+                trigger: "hand_played".to_string(),
+                condition_groups: vec![],
+                effects: vec![
+                    EffectDef {
+                        effect_type: "add_chips".to_string(),
+                        params: {
+                            let mut p = HashMap::new();
+                            p.insert("value".to_string(), ParamValue::Int(10));
+                            p
+                        },
+                    },
+                    EffectDef {
+                        effect_type: "add_mult".to_string(),
+                        params: {
+                            let mut p = HashMap::new();
+                            p.insert("value".to_string(), ParamValue::Int(3));
+                            p
+                        },
+                    },
+                ],
+                random_groups: vec![],
+                loop_groups: vec![],
+            }],
+            appearance: None,
+            unlock: None,
+            user_variables: vec![],
+        };
+
+        let chunk = compile_joker(&joker, "modprefix");
+        let output = Emitter::new().emit_chunk(&chunk);
+
+        assert!(
+            output.contains("chips = card.ability.extra.chips0"),
+            "First effect should remain at root return level"
+        );
+        assert!(
+            output.contains("extra = {") && output.contains("mult = card.ability.extra.mult0"),
+            "Second effect should be nested in return.extra"
+        );
+    }
 }

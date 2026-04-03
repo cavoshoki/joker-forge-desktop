@@ -2,6 +2,47 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
+// ---------------------------------------------------------------------------
+// Typed node category — replaces stringly-typed `starts_with("trigger.")` checks
+// ---------------------------------------------------------------------------
+
+/// The categorical role of a graph node.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeCategory {
+    Trigger,
+    Condition,
+    Effect,
+}
+
+/// A fully-parsed node type string: category (`"trigger"`) + specific kind (`"hand_played"`).
+///
+/// Created by `Node::parsed_type()`. Pattern-match on `category` instead of calling
+/// `node_type.starts_with("trigger.")` throughout the compiler.
+#[derive(Debug, Clone)]
+pub struct ParsedNodeType {
+    pub category: NodeCategory,
+    /// The specific kind, e.g. `"hand_played"` from `"trigger.hand_played"`.
+    pub kind: String,
+}
+
+impl ParsedNodeType {
+    /// Parse a `"category.kind"` string. Returns `None` for unknown categories or
+    /// malformed strings (no dot separator).
+    pub fn from_str(node_type: &str) -> Option<Self> {
+        let (prefix, rest) = node_type.split_once('.')?;
+        let category = match prefix {
+            "trigger" => NodeCategory::Trigger,
+            "condition" => NodeCategory::Condition,
+            "effect" => NodeCategory::Effect,
+            _ => return None,
+        };
+        Some(Self {
+            category,
+            kind: rest.to_string(),
+        })
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EntityMetadata {
     pub internal_id: String,
@@ -15,6 +56,15 @@ pub struct Node {
     pub id: String,
     pub node_type: String,
     pub values: HashMap<String, Value>,
+}
+
+impl Node {
+    /// Parse `node_type` into a structured `ParsedNodeType`.
+    ///
+    /// Returns `None` for nodes with unknown or malformed categories.
+    pub fn parsed_type(&self) -> Option<ParsedNodeType> {
+        ParsedNodeType::from_str(&self.node_type)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
