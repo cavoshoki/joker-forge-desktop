@@ -2,11 +2,6 @@ import { useState, useEffect, memo } from "react";
 import { Image as ImageIcon } from "@phosphor-icons/react";
 import { BalatroText } from "@/lib/balatro-text-formatter";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
   JokerData,
   ConsumableData,
   VoucherData,
@@ -107,7 +102,6 @@ export const BalatroCard = memo(
   }: BalatroCardProps) {
     const [imageError, setImageError] = useState(false);
     const [selectedAce, setSelectedAce] = useState("HC_A_hearts");
-    const [, setHoveredButton] = useState<string | null>(null);
 
     const aceImageFolder = type === "edition" ? "acesbg" : "aces";
 
@@ -189,6 +183,10 @@ export const BalatroCard = memo(
       const commonClasses =
         "absolute inset-0 w-full h-full object-contain [image-rendering:pixelated]";
       const hasImage = data.image && !imageError;
+      const objectType = (data as any)?.objectType;
+      const isEnhancementCard =
+        type === "enhancement" || objectType === "enhancement";
+      const isSealCard = type === "seal" || isSeal || objectType === "seal";
 
       if (
         type === "edition" ||
@@ -196,19 +194,107 @@ export const BalatroCard = memo(
         type === "enhancement" ||
         type === "seal"
       ) {
+        if (isSealCard) {
+          return (
+            <div className="relative w-full h-full">
+              <img
+                src="/images/back.png"
+                alt="Card Back"
+                className={`${commonClasses} z-0`}
+                draggable="false"
+              />
+
+              {!enhancementReplaceBase && (
+                <img
+                  src={`/images/${aceImageFolder}/${selectedAce}.png`}
+                  alt="Base Card"
+                  className={`${commonClasses} z-10`}
+                  draggable="false"
+                />
+              )}
+
+              {hasImage ? (
+                <img
+                  src={data.image}
+                  alt={data.name}
+                  className={`${commonClasses} z-20`}
+                  onError={() => setImageError(true)}
+                  draggable="false"
+                />
+              ) : (
+                !enhancementReplaceBase && (
+                  <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none opacity-50"></div>
+                )
+              )}
+
+              {data.overlayImage && (
+                <img
+                  src={data.overlayImage}
+                  alt="Overlay"
+                  className={`${commonClasses} z-30`}
+                  draggable="false"
+                />
+              )}
+            </div>
+          );
+        }
+
+        if (isEnhancementCard) {
+          return (
+            <div className="relative w-full h-full">
+              {hasImage ? (
+                <img
+                  src={data.image}
+                  alt={data.name}
+                  className={commonClasses}
+                  onError={() => setImageError(true)}
+                  draggable="false"
+                />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-50"></div>
+              )}
+
+              {!enhancementReplaceBase && (
+                <img
+                  src={`/images/${aceImageFolder}/${selectedAce}.png`}
+                  alt="Base Card"
+                  className={commonClasses}
+                  draggable="false"
+                />
+              )}
+
+              {data.overlayImage && (
+                <img
+                  src={data.overlayImage}
+                  alt="Overlay"
+                  className={commonClasses}
+                  draggable="false"
+                />
+              )}
+            </div>
+          );
+        }
+
         return (
           <div className="relative w-full h-full">
+            {isSealCard && (
+              <img
+                src="/images/back.png"
+                alt="Card Back"
+                className={commonClasses}
+                draggable="false"
+              />
+            )}
+
             {!enhancementReplaceBase && (
               <img
                 src={`/images/${aceImageFolder}/${selectedAce}.png`}
                 alt="Base Card"
-                className={cn(
-                  "w-full h-full object-contain [image-rendering:pixelated]",
-                  enhancementReplaceBase ? "hidden" : "",
-                )}
+                className="w-full h-full object-contain [image-rendering:pixelated]"
                 draggable="false"
               />
             )}
+
             {hasImage ? (
               <img
                 src={data.image}
@@ -222,6 +308,7 @@ export const BalatroCard = memo(
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-50"></div>
               )
             )}
+
             {data.overlayImage && (
               <img
                 src={data.overlayImage}
@@ -294,29 +381,21 @@ export const BalatroCard = memo(
           {isCardType && (
             <div className="mb-2 flex gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity absolute -top-12 bg-balatro-black/90 p-1 rounded-lg z-50">
               {ACE_OPTIONS[0].map((ace) => (
-                <Tooltip key={ace.key}>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedAce(ace.key);
-                      }}
-                      onMouseEnter={() => setHoveredButton(ace.key)}
-                      onMouseLeave={() => setHoveredButton(null)}
-                      className={cn(
-                        "w-10 h-10 rounded border-2 flex items-center justify-center text-2xl font-bold transition-all duration-200",
-                        selectedAce === ace.key
-                          ? "bg-primary border-primary-foreground text-balatro-black shadow-lg scale-110"
-                          : "bg-balatro-black border-balatro-lightgreyshadow text-balatro-white hover:bg-balatro-light-black hover:scale-105",
-                      )}
-                    >
-                      <span className={ace.color}>{ace.name}</span>
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{ace.name}</p>
-                  </TooltipContent>
-                </Tooltip>
+                <button
+                  key={ace.key}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedAce(ace.key);
+                  }}
+                  className={cn(
+                    "w-9 h-9 rounded-md border flex items-center justify-center text-xl font-bold transition-all duration-150 cursor-pointer",
+                    selectedAce === ace.key
+                      ? "bg-accent border-primary text-foreground shadow-sm"
+                      : "bg-card border-border text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                  )}
+                >
+                  <span className={ace.color}>{ace.name}</span>
+                </button>
               ))}
             </div>
           )}
@@ -324,7 +403,7 @@ export const BalatroCard = memo(
           <div
             className={cn(
               currentSize.image,
-              "mb-2 flex items-center justify-center overflow-hidden relative z-10 transition-transform hover:scale-[1.02] duration-200",
+              "mb-2 flex items-center justify-center overflow-hidden relative z-10",
               showCost && cost !== undefined ? "rounded-t-none" : "rounded-lg",
             )}
           >

@@ -48,6 +48,7 @@ import {
 import { applyAutoFormatting } from "@/lib/balatro-text-formatter";
 import { slugify, type UserVariable } from "@/lib/balatro-utils";
 import { RaritySelect } from "@/components/balatro/rarity-select";
+import { ConsumableSetSelect } from "@/components/balatro/consumable-set-select";
 import { ListInput } from "@/components/ui/list-input";
 import {
   PlaceholderEntry,
@@ -544,7 +545,9 @@ const MemoizedField = memo(
                   <span>{maxValue}</span>
                 </div>
                 <div className="flex items-center justify-end gap-2 pt-1">
-                  <span className="text-[11px] text-muted-foreground whitespace-nowrap">Value</span>
+                  <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                    Value
+                  </span>
                   <Input
                     type="number"
                     value={Number.isNaN(sliderValue) ? "" : sliderValue}
@@ -608,6 +611,14 @@ const MemoizedField = memo(
                 onChange={(val) =>
                   onChange(field.id, isNaN(Number(val)) ? val : Number(val))
                 }
+              />
+            );
+          }
+          if (field.id === "set") {
+            return (
+              <ConsumableSetSelect
+                value={String(safeValue || "")}
+                onChange={(val) => onChange(field.id, val)}
               />
             );
           }
@@ -979,6 +990,7 @@ const PreviewPanel = memo(
     if (prev.item?.image !== next.item?.image) return false;
     if (prev.item?.overlayImage !== next.item?.overlayImage) return false;
     if (prev.item?.rarity !== next.item?.rarity) return false;
+    if (prev.item?.set !== next.item?.set) return false;
     return true;
   },
 );

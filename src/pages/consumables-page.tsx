@@ -290,7 +290,8 @@ export default function ConsumablesPage() {
         id: "set",
         label: "Type",
         options: getConsumableSetDropdownOptions(data.consumableSets),
-        predicate: (item: ConsumableData, val: string) => item.set === val,
+        predicate: (item: ConsumableData, val: string) =>
+          String(item.set) === String(val),
       },
     ],
     [data.consumableSets],
@@ -319,6 +320,7 @@ export default function ConsumablesPage() {
         description={formatBalatroText(item.description)}
         cost={item.cost}
         idValue={item.orderValue}
+        consumableSet={item.set}
         onUpdate={(updates) => handleUpdate(item.id, updates)}
         image={
           item.image ? (

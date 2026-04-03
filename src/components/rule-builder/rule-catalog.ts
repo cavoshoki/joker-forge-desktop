@@ -30,7 +30,6 @@ import { entityBridge } from "@/lib/entity-bridge";
 import {
   ALL_CONSUMABLES,
   CONSUMABLE_SETS,
-  CUSTOM_CONSUMABLES,
   DECKS,
   EDITIONS,
   ENHANCEMENTS,
@@ -108,6 +107,7 @@ export let GENERIC_TRIGGERS: string[] = [];
 export let ALL_OBJECTS: string[] = [];
 export let TRIGGER_GROUPS: Record<string, string[]> = {};
 export let COMMON_OPTION_SETS: Record<string, unknown[]> = {};
+export let AVAILABLE_OPTION_SOURCES = new Set<string>();
 
 type CatalogOption = {
   value: string;
@@ -141,23 +141,6 @@ const OPTION_SOURCES: Record<string, () => CatalogOption[]> = {
   planetCards: () => asOptionArray(PLANET_CARDS),
   spectralCards: () => asOptionArray(SPECTRAL_CARDS),
   allConsumables: () => asOptionArray(ALL_CONSUMABLES),
-};
-
-const LEGACY_PARAM_SOURCES: Record<string, string> = {
-  rarity: "rarities",
-  consumable_type: "consumableSets",
-  enhancement: "enhancements",
-  edition: "editions",
-  seal: "seals",
-  specific_voucher: "vouchers",
-  decks: "decks",
-  rank: "ranks",
-  specific_rank: "ranks",
-  new_rank: "ranks",
-  suit: "suits",
-  specific_suit: "suits",
-  new_suit: "suits",
-  specific_pokerhand: "pokerHands",
 };
 
 function asOptionArray(source: unknown): CatalogOption[] {
@@ -279,6 +262,10 @@ function applyOptionSource(
   param: ConditionParameter | EffectParameter,
   sourceKey: string,
 ) {
+  if (!AVAILABLE_OPTION_SOURCES.has(sourceKey)) {
+    return;
+  }
+
   const source = OPTION_SOURCES[sourceKey];
   if (!source) {
     return;
@@ -293,46 +280,8 @@ function applyOptionSource(
   mergeWithDynamicOptions(param, dynamic);
 }
 
-function consumablesForSet(selectedSet?: string): CatalogOption[] {
-  if (
-    !selectedSet ||
-    selectedSet === "any" ||
-    selectedSet === "random" ||
-    selectedSet === "keyvar"
-  ) {
-    return [];
-  }
-
-  const vanillaBySet: Record<string, CatalogOption[]> = {
-    Tarot: asOptionArray(TAROT_CARDS),
-    Planet: asOptionArray(PLANET_CARDS),
-    Spectral: asOptionArray(SPECTRAL_CARDS),
-  };
-
-  const setKey = selectedSet.includes("_")
-    ? selectedSet.split("_").slice(1).join("_")
-    : selectedSet;
-
-  const custom = CUSTOM_CONSUMABLES()
-    .filter(
-      (consumable) =>
-        consumable.set === selectedSet || consumable.set === setKey,
-    )
-    .map((consumable) => ({
-      value: consumable.value,
-      label: consumable.label,
-    }));
-
-  return uniqueByValue([
-    { value: "any", label: "Any from Set" },
-    ...(vanillaBySet[selectedSet] ?? []),
-    ...custom,
-  ]);
-}
-
 function applyDynamicParameterOptions(
   param: ConditionParameter | EffectParameter,
-  definitionId: string,
 ) {
   const sourcedParam = param as SourcedParameter;
 
@@ -341,57 +290,18 @@ function applyDynamicParameterOptions(
   if (sourcedParam.optionSource) {
     applyOptionSource(sourcedParam, sourcedParam.optionSource);
   }
-
-  const legacySource = LEGACY_PARAM_SOURCES[sourcedParam.id];
-  if (legacySource) {
-    applyOptionSource(sourcedParam, legacySource);
-  }
-
-  switch (param.id) {
-    case "rank_pool":
-      applyOptionSource(param, "ranks");
-      return;
-    case "suit_pool":
-      applyOptionSource(param, "suits");
-      return;
-    case "pokerhand_pool":
-      applyOptionSource(param, "pokerHands");
-      return;
-    case "specific_card":
-      if (
-        definitionId !== "consumable_count" &&
-        definitionId !== "consumable_type" &&
-        definitionId !== "create_consumable" &&
-        definitionId !== "copy_consumable"
-      ) {
-        return;
-      }
-      param.options = (
-        parentValues: Record<string, { value: unknown; valueType?: string }>,
-      ) => {
-        const selectedSet = String(
-          parentValues?.consumable_type?.value ??
-            parentValues?.set?.value ??
-            "",
-        );
-        return consumablesForSet(selectedSet);
-      };
-      return;
-    default:
-      return;
-  }
 }
 
 function applyDynamicCatalogOptions() {
   for (const definition of CONDITIONS) {
     for (const param of definition.params ?? []) {
-      applyDynamicParameterOptions(param, definition.id);
+      applyDynamicParameterOptions(param);
     }
   }
 
   for (const definition of EFFECTS) {
     for (const param of definition.params ?? []) {
-      applyDynamicParameterOptions(param, definition.id);
+      applyDynamicParameterOptions(param);
     }
   }
 }
@@ -431,6 +341,7 @@ export async function initializeRuleCatalogFromRust() {
   ALL_OBJECTS = payload.all_objects;
   TRIGGER_GROUPS = payload.trigger_groups ?? {};
   COMMON_OPTION_SETS = payload.option_sets ?? {};
+  AVAILABLE_OPTION_SOURCES = new Set(Object.keys(payload.option_sources ?? {}));
   applyTriggerGroupsToCatalog();
   applyDynamicCatalogOptions();
 }

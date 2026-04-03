@@ -9,6 +9,7 @@ import {
 import { cn } from "@/lib/utils";
 import { slugify } from "@/lib/balatro-utils";
 import { RaritySelect } from "@/components/balatro/rarity-select";
+import { ConsumableSetSelect } from "@/components/balatro/consumable-set-select";
 
 export interface CardProperty {
   id: string;
@@ -43,13 +44,15 @@ interface GenericItemCardProps {
   properties?: CardProperty[];
   actions?: ActionConfig[];
   rarity?: number | string;
+  consumableSet?: string;
   onUpdate: (updates: {
     name?: string;
     description?: string;
     cost?: number;
     idValue?: number;
     objectKey?: string;
-    rarity?: number;
+    rarity?: number | string;
+    set?: string;
   }) => void;
   onDuplicate?: () => void;
   showPlaceholderPickerButton?: boolean;
@@ -66,6 +69,7 @@ export function GenericItemCard({
   properties = [],
   actions = [],
   rarity,
+  consumableSet,
   onUpdate,
   onDuplicate,
   showPlaceholderPickerButton = false,
@@ -234,7 +238,16 @@ export function GenericItemCard({
               value={String(rarity)}
               onChange={(val) =>
                 onUpdate({
-                  rarity: isNaN(Number(val)) ? undefined : Number(val),
+                  rarity: isNaN(Number(val)) ? val : Number(val),
+                })
+              }
+            />
+          ) : consumableSet !== undefined ? (
+            <ConsumableSetSelect
+              value={consumableSet}
+              onChange={(val) =>
+                onUpdate({
+                  set: val,
                 })
               }
             />

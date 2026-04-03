@@ -681,16 +681,12 @@ export default function JokersPage() {
       {
         id: "rarity",
         label: "Rarity",
-        options: [
-          { label: "Common", value: 1 },
-          { label: "Uncommon", value: 2 },
-          { label: "Rare", value: 3 },
-          { label: "Legendary", value: 4 },
-        ],
-        predicate: (item: JokerData, val: any) => item.rarity === val,
+        options: rarityOptions,
+        predicate: (item: JokerData, val: any) =>
+          String(item.rarity) === String(val),
       },
     ],
-    [],
+    [rarityOptions],
   );
 
   // 5. Stable Render Card Function
