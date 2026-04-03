@@ -1,0 +1,116 @@
+use crate::compiler::context::CompileContext;
+use crate::compiler::effects::EffectOutput;
+use crate::compiler::values::{resolve_value, ability_path_expr};
+use crate::lua_ast::*;
+use crate::types::{EffectDef, ConfigVar, ConfigValue, ParamValue};
+
+/// Add Chips effect → `chips = N`
+pub fn add_chips(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
+    scoring_effect(effect, ctx, "chips", "G.C.CHIPS")
+}
+
+/// Add Mult effect → `mult = N`
+pub fn add_mult(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
+    scoring_effect(effect, ctx, "mult", "")
+}
+
+/// Apply XMult effect → `Xmult = N`
+pub fn apply_x_mult(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
+    scoring_effect(effect, ctx, "Xmult", "")
+}
+
+/// Apply XChips effect → `Xchips = N`
+pub fn apply_x_chips(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
+    scoring_effect(effect, ctx, "Xchips", "")
+}
+
+/// Apply Exp Chips → `chips = N` with exponential marker
+pub fn apply_exp_chips(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
+    scoring_effect(effect, ctx, "eChips", "G.C.CHIPS")
+}
+
+/// Apply Exp Mult → `mult = N` with exponential marker
+pub fn apply_exp_mult(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
+    scoring_effect(effect, ctx, "eMult", "")
+}
+
+/// Apply Hyper Chips → `hChips = N`
+pub fn apply_hyper_chips(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
+    scoring_effect(effect, ctx, "hChips", "G.C.CHIPS")
+}
+
+/// Apply Hyper Mult → `hMult = N`
+pub fn apply_hyper_mult(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
+    scoring_effect(effect, ctx, "hMult", "")
+}
+
+/// Shared implementation for all scoring effects.
+/// These all follow the same pattern: resolve the value parameter,
+/// register a config variable, and return a single table field.
+fn scoring_effect(
+    effect: &EffectDef,
+    ctx: &mut CompileContext,
+    lua_field_name: &str,
+    colour: &str,
+) -> EffectOutput {
+    let count = ctx.next_effect_count(lua_field_name);
+    let var_name = ctx.unique_var_name(lua_field_name, count);
+
+    let value = effect.params.get("value");
+    let (value_expr, config_var) = resolve_scoring_value(value, &var_name, ctx);
+
+    if let Some(cv) = config_var {
+        ctx.add_config_var(cv);
+    }
+
+    let message = effect
+        .params
+        .get("customMessage")
+        .and_then(|v| v.as_str())
+        .map(|s| lua_str(s));
+
+    EffectOutput {
+        return_fields: vec![(lua_field_name.to_string(), value_expr)],
+        pre_return: vec![],
+        config_vars: vec![],
+        message,
+        colour: if colour.is_empty() {
+            None
+        } else {
+            Some(lua_raw_expr(colour))
+        },
+    }
+}
+
+/// Resolve a scoring value and optionally produce a config variable.
+fn resolve_scoring_value(
+    value: Option<&ParamValue>,
+    var_name: &str,
+    ctx: &CompileContext,
+) -> (Expr, Option<ConfigVar>) {
+    let Some(val) = value else {
+        return (lua_int(0), None);
+    };
+
+    match val {
+        ParamValue::Int(n) => (
+            ability_path_expr(ctx.object_type, var_name),
+            Some(ConfigVar {
+                name: var_name.to_string(),
+                value: ConfigValue::Int(*n),
+            }),
+        ),
+        ParamValue::Float(n) => (
+            ability_path_expr(ctx.object_type, var_name),
+            Some(ConfigVar {
+                name: var_name.to_string(),
+                value: ConfigValue::Number(*n),
+            }),
+        ),
+        _ => {
+            // Game variable, range, or user variable — resolve directly
+            let expr = resolve_value(val, ctx.object_type, None);
+            (expr, None)
+        }
+    }
+}

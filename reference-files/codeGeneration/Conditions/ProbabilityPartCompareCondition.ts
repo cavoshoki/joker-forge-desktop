@@ -1,0 +1,18 @@
+import type { Rule } from "../../ruleBuilder/types";
+import { generateValueCode } from "../lib/gameVariableUtils";
+import { generateOperationCode } from "../lib/operationUtils";
+
+export const generateProbabilityPartCompareConditionCode = (
+  rules: Rule[],
+): string | null => {
+  const condition = rules[0].conditionGroups[0].conditions[0];
+  const part = (condition.params?.part?.value as string) || "numerator";
+  const operator = (condition.params?.operator?.value as string) || "equals";
+  const value = generateValueCode(condition.params?.value) || "0";
+  
+  return generateOperationCode(
+    operator,
+    `context.${part}`,
+    value,
+  )
+}

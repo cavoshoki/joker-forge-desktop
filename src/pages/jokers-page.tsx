@@ -50,6 +50,11 @@ import { jokerUnlockOptions, unlockTriggerOptions } from "@/lib/unlock-utils";
 import { getRandomPlaceholder } from "@/lib/placeholder-assets.ts";
 import { PlaceholderPickerDialog } from "@/components/pages/placeholder-picker-dialog";
 import { RuleBuilder } from "@/components/rule-builder";
+import { exportSingleJokerRust } from "@/lib/rust-codegen-export";
+import {
+  formatUnsupportedRulesError,
+  getUnsupportedRuleParts,
+} from "@/lib/export-compiler-support";
 
 export default function JokersPage() {
   const { data, updateJokers } = useProjectData();
@@ -134,6 +139,30 @@ export default function JokersPage() {
       updateJokers(data.jokers.filter((j) => j.id !== id));
     },
     [data.jokers, updateJokers],
+  );
+
+  const handleExport = useCallback(
+    async (joker: JokerData) => {
+      const unsupported = getUnsupportedRuleParts(joker.rules, "joker");
+      if (unsupported.length > 0) {
+        window.alert(formatUnsupportedRulesError(unsupported, "Joker"));
+        return;
+      }
+
+      try {
+        await exportSingleJokerRust(joker as any, data.metadata.prefix);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (/not\s+implemented/i.test(message)) {
+          window.alert(
+            "Joker export failed: some selected rules are not implemented yet.",
+          );
+          return;
+        }
+        window.alert(`Joker export failed: ${message}`);
+      }
+    },
+    [data.metadata.prefix],
   );
 
   const {
@@ -889,7 +918,7 @@ export default function JokersPage() {
             id: "export",
             label: "Export Code",
             icon: <DownloadSimple className="h-5 w-5" weight="regular" />,
-            onClick: () => {},
+            onClick: () => handleExport(joker),
             variant: "ghost",
           },
           {
@@ -909,7 +938,7 @@ export default function JokersPage() {
         ]}
       />
     ),
-    [handleUpdate, requestDelete, data.jokers, updateJokers],
+    [handleExport, handleUpdate, requestDelete, data.jokers, updateJokers],
   );
 
   return (

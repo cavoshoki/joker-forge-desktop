@@ -19,7 +19,7 @@ import {
   Code as Brackets,
 } from "@phosphor-icons/react";
 import { validateVariableName } from "../generic/validationUtils";
-import { getVariableUsageDetails } from "../codeGeneration/lib/userVariableUtils";
+import { getVariableUsageDetails } from "@/lib/user-variable-utils";
 import { ItemData } from "./rule-builder";
 
 export type VariableType =

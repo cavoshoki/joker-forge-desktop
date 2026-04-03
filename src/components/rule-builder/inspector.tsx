@@ -20,9 +20,13 @@ import {
   getNumberVariables,
   addKeyVariablesToOptions,
   addTextVariablesToOptions,
-} from "../codeGeneration/lib/userVariableUtils";
+} from "@/lib/user-variable-utils";
 
-import { getTriggerById, getConditionTypeById, getEffectTypeById } from "./rule-catalog";
+import {
+  getTriggerById,
+  getConditionTypeById,
+  getEffectTypeById,
+} from "./rule-catalog";
 
 import InputField from "../generic/InputField";
 import InputDropdown from "../generic/InputDropdown";
@@ -339,7 +343,7 @@ const ChanceInput: React.FC<ChanceInputProps> = React.memo(
                 className="cursor-pointer"
               >
                 Create Variable
-                </Button>
+              </Button>
             )}
           </div>
         ) : (
@@ -1959,7 +1963,7 @@ const Inspector: React.FC<InspectorProps> = ({
     <div
       ref={setNodeRef}
       style={style}
-      className="w-[28rem] bg-card/95 backdrop-blur-md border border-border rounded-xl shadow-xl max-h-[calc(100vh-6rem)] z-40 flex flex-col"
+      className="w-md bg-card/95 backdrop-blur-md border border-border rounded-xl shadow-xl max-h-[calc(100vh-6rem)] z-40 flex flex-col"
     >
       <div
         className="flex items-center justify-between p-3 border-b border-border cursor-grab active:cursor-grabbing shrink-0"
@@ -2011,9 +2015,3 @@ const Inspector: React.FC<InspectorProps> = ({
 };
 
 export default Inspector;
-
-
-
-
-
-

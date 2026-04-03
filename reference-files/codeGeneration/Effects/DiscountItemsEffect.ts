@@ -1,0 +1,156 @@
+import type { Effect } from "../../ruleBuilder/types";
+import type { EffectReturn, PassiveEffectResult } from "../lib/effectUtils";
+import { generateConfigVariables } from "../lib/gameVariableUtils";
+
+export const generateDiscountItemsPassiveEffectCode = (
+  effect: Effect,
+  jokerKey: string
+): PassiveEffectResult => {
+  const discountType = (effect.params?.discount_type?.value as string) || "planet";
+  const discountMethod =
+    (effect.params?.discount_method?.value as string) || "make_free";
+
+  const { valueCode, configVariables } = generateConfigVariables(
+    effect,
+    'discount_amount',
+    "discount_amount",
+    1,
+    "joker",
+  );
+
+  return {
+    addToDeck: `G.E_MANAGER:add_event(Event({
+    func = function()
+        for k, v in pairs(G.I.CARD) do
+            if v.set_cost then v:set_cost() end
+        end
+        return true
+    end
+}))`,
+    removeFromDeck: `G.E_MANAGER:add_event(Event({
+    func = function()
+        for k, v in pairs(G.I.CARD) do
+            if v.set_cost then v:set_cost() end
+        end
+        return true
+    end
+}))`,
+    configVariables,
+    locVars: [],
+    needsHook: {
+      hookType: "discount_items",
+      jokerKey: jokerKey,
+      effectParams: {
+        discountType,
+        discountMethod,
+        discountAmount: valueCode,
+      },
+    },
+  };
+};
+
+
+export const generateDiscountItemsEffectCode = (
+  effect: Effect,
+  itemType: string,
+  sameTypeCount: number = 0
+): EffectReturn => {
+  switch(itemType) {
+    case "voucher":
+      return generateVoucherCode(effect, sameTypeCount)
+
+    default:
+      return {
+        statement: "",
+        colour: "G.C.WHITE",
+      };
+  }
+}
+
+const generateVoucherCode = (
+  effect: Effect,
+  sameTypeCount: number = 0
+): EffectReturn => {
+  const operation = effect.params?.operation?.value as string|| "add";
+
+  const { valueCode, configVariables } = generateConfigVariables(
+    effect,
+    'value',
+    'item_prices',
+    sameTypeCount,
+    'voucher'
+  );
+
+  let ItemPriceCode = "";
+
+    if (operation === "add") {
+        ItemPriceCode += `
+         G.E_MANAGER:add_event(Event({
+            func = function()
+           G.GAME.discount_percent = (G.GAME.discount_percent or 0) + ${valueCode}
+           for _, v in pairs(G.I.CARD) do
+                    if v.set_cost then v:set_cost() end
+                return true
+                end
+            end
+        }))
+        `;
+  } else if (operation === "subtract") {
+        ItemPriceCode += `
+        G.E_MANAGER:add_event(Event({
+            func = function()
+        G.GAME.discount_percent = (G.GAME.discount_percent or 0) - ${valueCode}
+       for _, v in pairs(G.I.CARD) do
+                    if v.set_cost then v:set_cost() end
+                return true
+                end
+            end
+        }))
+        `;
+  } else if (operation === "set") {
+        ItemPriceCode += `
+        local mod = ${valueCode} - G.GAME.discount_percent
+        G.E_MANAGER:add_event(Event({
+            func = function()
+        G.GAME.discount_percent = ${valueCode}
+        for _, v in pairs(G.I.CARD) do
+                    if v.set_cost then v:set_cost() end
+                return true
+                end
+            end
+        }))
+        `;
+  } else if (operation === "multiply") {
+        ItemPriceCode += `
+        local mod = ${valueCode} - G.GAME.discount_percent
+        G.E_MANAGER:add_event(Event({
+            func = function()
+        G.GAME.discount_percent = (G.GAME.discount_percent or 0) * ${valueCode}
+        for _, v in pairs(G.I.CARD) do
+                    if v.set_cost then v:set_cost() end
+                return true
+                end
+            end
+        }))
+        `;
+  } else if (operation === "divide") {
+        ItemPriceCode += `
+        local mod = ${valueCode} - G.GAME.discount_percent
+        G.E_MANAGER:add_event(Event({
+            func = function()
+        G.GAME.discount_percent = (G.GAME.discount_percent or 0) / ${valueCode}
+        for _, v in pairs(G.I.CARD) do
+                    if v.set_cost then v:set_cost() end
+                return true
+                end
+            end
+        }))
+        `;
+  }
+
+  return {
+    statement: ItemPriceCode,
+    colour: "G.C.BLUE",
+    configVariables,
+  };
+}

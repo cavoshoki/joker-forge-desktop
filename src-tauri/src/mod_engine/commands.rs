@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use balatro_codegen::{compile_joker, Emitter as LuaEmitter, JokerDef};
 use serde_json::Value;
 use tauri::{Emitter, State, Window};
 
@@ -248,4 +249,11 @@ pub fn get_node_snippet(
     Ok(app_state
         .compiler
         .compile_node(&state, &node, &dependencies))
+}
+
+#[tauri::command]
+pub fn compile_joker_lua(joker_def: JokerDef, mod_prefix: String) -> Result<String, String> {
+    let chunk = compile_joker(&joker_def, &mod_prefix);
+    let lua = LuaEmitter::new().emit_chunk(&chunk);
+    Ok(lua)
 }

@@ -6,7 +6,6 @@ import { DeckData, Rule } from "@/lib/types";
 import {
   PencilSimple,
   Sparkle,
-  DownloadSimple,
   Trash,
   Image as ImageIcon,
   TextT,
@@ -410,12 +409,6 @@ export default function DecksPage() {
               setEditingItem(null);
               setRuleEditingItem(deck);
             },
-          },
-          {
-            id: "export",
-            label: "Code",
-            icon: <DownloadSimple className="h-4 w-4" />,
-            onClick: () => {},
           },
           {
             id: "delete",

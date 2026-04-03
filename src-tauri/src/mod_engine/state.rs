@@ -2,7 +2,7 @@ use std::sync::Mutex;
 
 use super::{
     catalog::load_rule_catalog,
-    compiler::MockCompiler,
+    compiler::BalatroCompiler,
     registry::SchemaRegistry,
     types::{EntityState, RuleCatalogPayload},
 };
@@ -10,7 +10,7 @@ use super::{
 pub struct AppState {
     pub entity_state: Mutex<EntityState>,
     pub registry: SchemaRegistry,
-    pub compiler: MockCompiler,
+    pub compiler: BalatroCompiler,
     pub rule_catalog: RuleCatalogPayload,
 }
 
@@ -22,7 +22,7 @@ impl AppState {
         Ok(Self {
             entity_state: Mutex::new(EntityState::new("joker".to_string())),
             registry,
-            compiler: MockCompiler,
+            compiler: BalatroCompiler,
             rule_catalog,
         })
     }

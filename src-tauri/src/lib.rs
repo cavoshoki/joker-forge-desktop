@@ -20,7 +20,8 @@ pub fn run() {
             commands::connect_nodes,
             commands::disconnect_nodes,
             commands::update_node_value,
-            commands::get_node_snippet
+            commands::get_node_snippet,
+            commands::compile_joker_lua
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

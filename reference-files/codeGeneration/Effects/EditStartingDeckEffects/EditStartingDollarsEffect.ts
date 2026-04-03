@@ -1,0 +1,34 @@
+import type { Effect } from "../../../ruleBuilder/types";
+import type { EffectReturn } from "../../lib/effectUtils";
+import { generateValueCode } from "../../lib/gameVariableUtils";
+
+export const generateEditStartingDollarsEffectCode = (
+  effect: Effect,
+): EffectReturn => {
+  const operation = effect.params?.operation?.value || "add";
+
+  const valueCode = generateValueCode(effect.params?.value, "deck");
+
+  let dollarsCode = "";
+
+    if (operation === "add") {
+        dollarsCode += `
+        G.GAME.starting_params.dollars = G.GAME.starting_params.dollars +${valueCode}
+        `;
+  } else if (operation === "subtract") {
+        dollarsCode += `
+        G.GAME.starting_params.dollars = G.GAME.starting_params.dollars -${valueCode}
+        `;
+  } else if (operation === "set") {
+        dollarsCode += `
+          G.GAME.starting_params.dollars = ${valueCode}
+        `;
+  }
+
+  return {
+    statement: `__PRE_RETURN_CODE__
+                   ${dollarsCode}
+                    __PRE_RETURN_CODE_END__`,
+    colour: "G.C.MONEY"
+  };
+}
