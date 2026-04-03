@@ -1,5 +1,6 @@
-import JSZip from "jszip";
 import { invoke } from "@tauri-apps/api/core";
+import { downloadDir, join } from "@tauri-apps/api/path";
+import { exists, mkdir, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import type { JokerData, ModMetadata, UserVariable } from "@/lib/types";
 import type { Rule } from "@/components/rule-builder/types";
 
@@ -73,8 +74,37 @@ interface RustJokerDef {
   atlas: string;
   pos: RustAtlasPos;
   soul_pos?: RustAtlasPos;
+  display_size?: { w: number; h: number };
   user_variables: RustUserVariableDef[];
   rules: RustRuleDef[];
+}
+
+interface CompileSingleJokerOptions {
+  includeLocTxt?: boolean;
+}
+
+interface ExportModRustOptions {
+  useLocalizationFile?: boolean;
+  localizationLocale?: string;
+  destinationMode?: "downloads" | "balatro-mods";
+  balatroModsPath?: string;
+}
+
+export interface ExportModRustResult {
+  exportRootPath: string;
+  modFolderPath: string;
+  fileCount: number;
+}
+
+interface JokerCompileOverrides {
+  pos?: RustAtlasPos;
+  soulPos?: RustAtlasPos;
+}
+
+interface AtlasBuildResult {
+  atlasDataUrl: string;
+  positionsById: Record<string, RustAtlasPos>;
+  soulPositionsById: Record<string, RustAtlasPos>;
 }
 
 const splitDescription = (description: string): string[] => {
@@ -86,6 +116,58 @@ const splitDescription = (description: string): string[] => {
   return lines.length > 0 ? lines : ["No description"];
 };
 
+const escapeLuaString = (value: string): string =>
+  value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+
+const normalizeJokerLocKey = (prefix: string, objectKey: string): string => {
+  const rawKey = objectKey.startsWith("j_") ? objectKey.slice(2) : objectKey;
+  return `j_${prefix}_${rawKey}`;
+};
+
+const buildLuaStringArray = (lines: string[]): string => {
+  if (lines.length === 0) {
+    return "{}";
+  }
+  const items = lines
+    .map((line, index) => `        [${index + 1}] = '${escapeLuaString(line)}'`)
+    .join(",\n");
+  return `{
+${items}
+      }`;
+};
+
+const buildLocalizationLua = (
+  modPrefix: string,
+  jokers: JokerData[],
+): string => {
+  const sorted = [...jokers].sort((a, b) => a.orderValue - b.orderValue);
+  const entries = sorted
+    .map((joker) => {
+      const key = normalizeJokerLocKey(modPrefix, joker.objectKey);
+      const text = splitDescription(joker.description || "");
+      const unlockText = splitDescription(joker.unlockDescription || "");
+      const unlockBlock =
+        unlockText.length > 0
+          ? `,\n      unlock = ${buildLuaStringArray(unlockText)}`
+          : "";
+
+      return `    ${key} = {
+      name = '${escapeLuaString(joker.name || "")}',
+      text = ${buildLuaStringArray(text)}${unlockBlock}
+    }`;
+    })
+    .join(",\n");
+
+  return `return {
+  descriptions = {
+    Joker = {
+${entries}
+    }
+  }
+}
+`;
+};
+
 const normalizeRarity = (rarity: JokerData["rarity"]): string => {
   if (typeof rarity === "string") return rarity.toLowerCase();
   if (rarity === 1) return "common";
@@ -93,6 +175,166 @@ const normalizeRarity = (rarity: JokerData["rarity"]): string => {
   if (rarity === 3) return "rare";
   if (rarity === 4) return "legendary";
   return "common";
+};
+
+const getDisplaySizeOverride = (
+  joker: JokerData,
+): { w: number; h: number } | undefined => {
+  const w = typeof joker.scale_w === "number" ? joker.scale_w / 100 : 1;
+  const h = typeof joker.scale_h === "number" ? joker.scale_h / 100 : 1;
+  const epsilon = 0.0001;
+  if (Math.abs(w - 1) < epsilon && Math.abs(h - 1) < epsilon) {
+    return undefined;
+  }
+  return { w, h };
+};
+
+const dataURLToUint8Array = (dataUrl: string): Uint8Array => {
+  const [, data] = dataUrl.split(",");
+  const decoded = atob(data || "");
+  const bytes = new Uint8Array(decoded.length);
+  for (let i = 0; i < decoded.length; i += 1) {
+    bytes[i] = decoded.charCodeAt(i);
+  }
+  return bytes;
+};
+
+const ensureUniqueModFolderPath = async (
+  exportRootPath: string,
+  modId: string,
+): Promise<string> => {
+  const basePath = await join(exportRootPath, modId);
+  if (!(await exists(basePath))) {
+    return basePath;
+  }
+
+  const timestamp = new Date()
+    .toISOString()
+    .replace(/[:.]/g, "-")
+    .replace("T", "_")
+    .replace("Z", "");
+  return join(exportRootPath, `${modId}_${timestamp}`);
+};
+
+const resolveExportRootPath = async (
+  options: ExportModRustOptions,
+): Promise<string> => {
+  const destinationMode = options.destinationMode ?? "downloads";
+
+  if (destinationMode === "balatro-mods") {
+    const balatroModsPath = (options.balatroModsPath || "").trim();
+    if (!balatroModsPath) {
+      throw new Error(
+        "Balatro mods folder is not configured. Set it in Settings -> Paths.",
+      );
+    }
+    if (!(await exists(balatroModsPath))) {
+      throw new Error(`Balatro mods folder does not exist: ${balatroModsPath}`);
+    }
+    return balatroModsPath;
+  }
+
+  const downloadsPath = await downloadDir();
+  if (!downloadsPath || !(await exists(downloadsPath))) {
+    throw new Error("Unable to resolve Downloads folder for export.");
+  }
+  return downloadsPath;
+};
+
+const loadImage = (src: string): Promise<HTMLImageElement | null> => {
+  return new Promise((resolve) => {
+    if (!src || src.trim().length === 0) {
+      resolve(null);
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+};
+
+const buildJokerAtlas = async (
+  jokers: JokerData[],
+  scale: number,
+): Promise<AtlasBuildResult> => {
+  const itemsPerRow = 10;
+  const sorted = [...jokers].sort((a, b) => a.orderValue - b.orderValue);
+  const totalPositions = sorted.reduce(
+    (count, joker) => count + (joker.overlayImage ? 2 : 1),
+    0,
+  );
+  const rows = Math.max(1, Math.ceil(totalPositions / itemsPerRow));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = itemsPerRow * 71 * scale;
+  canvas.height = rows * 95 * scale;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("Failed to build joker atlas: missing canvas context.");
+  }
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const positionsById: Record<string, RustAtlasPos> = {};
+  const soulPositionsById: Record<string, RustAtlasPos> = {};
+
+  let currentPosition = 0;
+  for (const joker of sorted) {
+    const col = currentPosition % itemsPerRow;
+    const row = Math.floor(currentPosition / itemsPerRow);
+    positionsById[joker.id] = { x: col, y: row };
+
+    const x = col * 71 * scale;
+    const y = row * 95 * scale;
+    const baseImage = await loadImage(joker.image || "");
+    if (baseImage) {
+      ctx.drawImage(
+        baseImage,
+        0,
+        0,
+        baseImage.width,
+        baseImage.height,
+        x,
+        y,
+        71 * scale,
+        95 * scale,
+      );
+    }
+    currentPosition += 1;
+
+    if (joker.overlayImage && joker.overlayImage.trim().length > 0) {
+      const soulCol = currentPosition % itemsPerRow;
+      const soulRow = Math.floor(currentPosition / itemsPerRow);
+      soulPositionsById[joker.id] = { x: soulCol, y: soulRow };
+
+      const soulX = soulCol * 71 * scale;
+      const soulY = soulRow * 95 * scale;
+      const overlayImage = await loadImage(joker.overlayImage);
+      if (overlayImage) {
+        ctx.drawImage(
+          overlayImage,
+          0,
+          0,
+          overlayImage.width,
+          overlayImage.height,
+          soulX,
+          soulY,
+          71 * scale,
+          95 * scale,
+        );
+      }
+      currentPosition += 1;
+    }
+  }
+
+  return {
+    atlasDataUrl: canvas.toDataURL("image/png"),
+    positionsById,
+    soulPositionsById,
+  };
 };
 
 const toRustParamValue = (
@@ -180,7 +422,10 @@ const getUserVariableInitialValue = (v: UserVariable): RustParamValue => {
     : Number(v.initialValue ?? 0) || 0;
 };
 
-const mapJokerToRustDef = (joker: JokerData): RustJokerDef => {
+const mapJokerToRustDef = (
+  joker: JokerData,
+  overrides: JokerCompileOverrides = {},
+): RustJokerDef => {
   return {
     key: joker.objectKey,
     name: joker.name,
@@ -193,7 +438,9 @@ const mapJokerToRustDef = (joker: JokerData): RustJokerDef => {
     unlocked: joker.unlocked ?? true,
     discovered: joker.discovered ?? true,
     atlas: "CustomJokers",
-    pos: { x: 0, y: 0 },
+    pos: overrides.pos ?? { x: 0, y: 0 },
+    soul_pos: overrides.soulPos,
+    display_size: getDisplaySizeOverride(joker),
     user_variables: (joker.userVariables || []).map((v) => ({
       name: v.name,
       var_type: mapUserVariableType(v.type),
@@ -209,7 +456,9 @@ const buildMainLua = (jokers: JokerData[]): string => {
     .map((j) => `assert(SMODS.load_file("jokers/${j.objectKey}.lua"))()`)
     .join("\n");
 
-  return `SMODS.Atlas({
+  const atlasDecl =
+    sorted.length > 0
+      ? `SMODS.Atlas({
     key = "CustomJokers",
     path = "CustomJokers.png",
     px = 71,
@@ -217,7 +466,10 @@ const buildMainLua = (jokers: JokerData[]): string => {
     atlas_table = "ASSET_ATLAS"
 })
 
-local NFS = require("nativefs")
+`
+      : "";
+
+  return `${atlasDecl}local NFS = require("nativefs")
 to_big = to_big or function(a) return a end
 lenient_bignum = lenient_bignum or function(a) return a end
 
@@ -260,9 +512,15 @@ const downloadBlob = (filename: string, content: Blob) => {
 export const compileSingleJokerLua = async (
   joker: JokerData,
   modPrefix: string,
+  options: CompileSingleJokerOptions = {},
 ): Promise<string> => {
   const jokerDef = mapJokerToRustDef(joker);
-  return invoke<string>("compile_joker_lua", { jokerDef, modPrefix });
+  const includeLocTxt = options.includeLocTxt ?? true;
+  return invoke<string>("compile_joker_lua_with_options", {
+    jokerDef,
+    modPrefix,
+    includeLocTxt,
+  });
 };
 
 export const exportSingleJokerRust = async (
@@ -279,20 +537,87 @@ export const exportSingleJokerRust = async (
 export const exportModRust = async (
   metadata: ModMetadata,
   jokers: JokerData[],
-): Promise<void> => {
-  const zip = new JSZip();
+  options: ExportModRustOptions = {},
+): Promise<ExportModRustResult> => {
+  const exportRootPath = await resolveExportRootPath(options);
+  const modFolderPath = await ensureUniqueModFolderPath(
+    exportRootPath,
+    metadata.id,
+  );
+  const useLocalizationFile = options.useLocalizationFile ?? false;
+  const locale = options.localizationLocale ?? "en-us";
+  let fileCount = 0;
 
-  zip.file(metadata.main_file, buildMainLua(jokers));
-  zip.file(`${metadata.id}.json`, buildModJson(metadata));
+  await mkdir(modFolderPath, { recursive: true });
 
-  const jokersFolder = zip.folder("jokers");
+  const jokersFolderPath = await join(modFolderPath, "jokers");
+  await mkdir(jokersFolderPath, { recursive: true });
+
+  await writeTextFile(
+    await join(modFolderPath, metadata.main_file),
+    buildMainLua(jokers),
+  );
+  fileCount += 1;
+  await writeTextFile(
+    await join(modFolderPath, `${metadata.id}.json`),
+    buildModJson(metadata),
+  );
+  fileCount += 1;
+
   const sorted = [...jokers].sort((a, b) => a.orderValue - b.orderValue);
 
-  for (const joker of sorted) {
-    const code = await compileSingleJokerLua(joker, metadata.prefix);
-    jokersFolder?.file(`${joker.objectKey}.lua`, code);
+  if (sorted.length > 0) {
+    const assetsFolderPath = await join(modFolderPath, "assets");
+    const assets1xPath = await join(assetsFolderPath, "1x");
+    const assets2xPath = await join(assetsFolderPath, "2x");
+    await mkdir(assets1xPath, { recursive: true });
+    await mkdir(assets2xPath, { recursive: true });
+
+    const atlas1x = await buildJokerAtlas(sorted, 1);
+    const atlas2x = await buildJokerAtlas(sorted, 2);
+
+    await writeFile(
+      await join(assets1xPath, "CustomJokers.png"),
+      dataURLToUint8Array(atlas1x.atlasDataUrl),
+    );
+    fileCount += 1;
+    await writeFile(
+      await join(assets2xPath, "CustomJokers.png"),
+      dataURLToUint8Array(atlas2x.atlasDataUrl),
+    );
+    fileCount += 1;
+
+    for (const joker of sorted) {
+      const jokerDef = mapJokerToRustDef(joker, {
+        pos: atlas1x.positionsById[joker.id] ?? { x: 0, y: 0 },
+        soulPos: atlas1x.soulPositionsById[joker.id],
+      });
+      const code = await invoke<string>("compile_joker_lua_with_options", {
+        jokerDef,
+        modPrefix: metadata.prefix,
+        includeLocTxt: !useLocalizationFile,
+      });
+      await writeTextFile(
+        await join(jokersFolderPath, `${joker.objectKey}.lua`),
+        code,
+      );
+      fileCount += 1;
+    }
   }
 
-  const content = await zip.generateAsync({ type: "blob" });
-  downloadBlob(`${metadata.id}.zip`, content);
+  if (useLocalizationFile) {
+    const localizationPath = await join(modFolderPath, "localization");
+    await mkdir(localizationPath, { recursive: true });
+    await writeTextFile(
+      await join(localizationPath, `${locale}.lua`),
+      buildLocalizationLua(metadata.prefix, sorted),
+    );
+    fileCount += 1;
+  }
+
+  return {
+    exportRootPath,
+    modFolderPath,
+    fileCount,
+  };
 };

@@ -57,6 +57,41 @@ pub fn card_seal(condition: &ConditionDef) -> Option<Expr> {
     ))
 }
 
+/// Card Index condition — checks the card's position in the scoring hand.
+pub fn card_index(condition: &ConditionDef) -> Option<Expr> {
+    let index_type = condition
+        .params
+        .get("index_type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("first");
+
+    match index_type {
+        "first" => Some(lua_eq(
+            lua_path(&["context", "other_card"]),
+            lua_raw_expr("context.scoring_hand[1]"),
+        )),
+        "last" => Some(lua_eq(
+            lua_path(&["context", "other_card"]),
+            lua_raw_expr("context.scoring_hand[#context.scoring_hand]"),
+        )),
+        "number" => {
+            let index = condition
+                .params
+                .get("index_number")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(1);
+            Some(lua_eq(
+                lua_path(&["context", "other_card"]),
+                lua_raw_expr(&format!("context.scoring_hand[{}]", index)),
+            ))
+        }
+        _ => Some(lua_eq(
+            lua_path(&["context", "other_card"]),
+            lua_raw_expr("context.scoring_hand[1]"),
+        )),
+    }
+}
+
 fn rank_to_id(rank: &str) -> &str {
     match rank {
         "Ace" => "14",

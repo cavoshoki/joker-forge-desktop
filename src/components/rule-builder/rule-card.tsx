@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDroppable } from "@dnd-kit/core";
 import {
@@ -26,6 +26,8 @@ import {
   Plus,
   Copy,
   X,
+  DiceFive,
+  Infinity,
 } from "@phosphor-icons/react";
 import {
   JokerData,
@@ -36,7 +38,6 @@ import {
   VoucherData,
   DeckData,
 } from "@/lib/balatro-utils";
-import { Wrench } from "@phosphor-icons/react";
 import {
   getTriggerById,
   getEffectTypeById,
@@ -75,8 +76,12 @@ interface RuleCardProps {
   onUpdatePosition: (
     ruleId: string,
     position: { x: number; y: number },
+    options?: { snap?: boolean },
   ) => void;
+  onMoveSelectedRulesByDelta: (deltaX: number, deltaY: number) => void;
+  onFinalizeMultiRuleDrag: () => void;
   isRuleSelected: boolean;
+  selectedRuleCount: number;
   item:
     | JokerData
     | ConsumableData
@@ -88,6 +93,7 @@ interface RuleCardProps {
   itemType: "joker" | "consumable" | "card" | "voucher" | "deck";
   generateConditionTitle: (condition: RuleCondition) => string;
   generateEffectTitle: (effect: RuleEffect) => string;
+  formatTriggerLabel?: (label: string) => string;
   getParameterCount: (
     params: Record<string, { value: unknown; valueType?: string }>,
   ) => number;
@@ -97,8 +103,15 @@ interface RuleCardProps {
     operator: "and" | "or",
   ) => void;
   onRuleDoubleClick: () => void;
+  onPreviewBlockCode?: (target: {
+    type: "trigger" | "condition" | "effect";
+    ruleId: string;
+    itemId?: string;
+    groupId?: string;
+  }) => void;
   scale: number;
   isPaletteDragging: boolean;
+  onSelectRuleCard: (ruleId: string, additive: boolean) => void;
 }
 
 const RuleTooltipButton: React.FC<{
@@ -107,10 +120,19 @@ const RuleTooltipButton: React.FC<{
   onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
   children: React.ReactNode;
 }> = ({ tooltip, className, onClick, children }) => {
+  const [isHovered, setIsHovered] = useState(false);
+
   return (
-    <Tooltip>
+    <Tooltip open={isHovered}>
       <TooltipTrigger asChild>
-        <button onClick={onClick} className={className}>
+        <button
+          onClick={onClick}
+          className={className}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          onFocus={() => setIsHovered(true)}
+          onBlur={() => setIsHovered(false)}
+        >
           {children}
         </button>
       </TooltipTrigger>
@@ -132,15 +154,19 @@ const Condition: React.FC<{
   parameterCount: number;
   dynamicTitle: string;
   itemType: "joker" | "consumable" | "card" | "voucher" | "deck";
+  onPreviewCode?: () => void;
   scale: number;
 }> = ({
   condition,
+  ruleId,
+  groupId,
   isSelected,
   isNegated,
   onSelect,
   onDelete,
   parameterCount,
   dynamicTitle,
+  onPreviewCode,
   scale,
 }) => {
   const conditionType = getConditionTypeById(condition.type);
@@ -166,7 +192,11 @@ const Condition: React.FC<{
       ref={setNodeRef}
       style={style}
       {...attributes}
-      className="flex justify-center -mt-3"
+      className="flex justify-center"
+      data-rb-context="condition"
+      data-rule-id={ruleId}
+      data-group-id={groupId}
+      data-item-id={condition.id}
     >
       <BlockComponent
         type="condition"
@@ -182,10 +212,11 @@ const Condition: React.FC<{
           onDelete();
         }}
         parameterCount={parameterCount}
-        isNegated={isNegated}
+        isNegated={isNegated && condition.type !== "check_flag"}
         isDraggable={true}
+        onIconClick={onPreviewCode}
         dragHandleProps={listeners}
-        variant="condition"
+        variant="palette"
       />
     </div>
   );
@@ -200,15 +231,21 @@ const Effect: React.FC<{
   parameterCount: number;
   dynamicTitle: string;
   randomGroupId?: string;
+  loopGroupId?: string;
   itemType: "joker" | "consumable" | "card" | "voucher" | "deck";
+  onPreviewCode?: () => void;
   scale: number;
 }> = ({
   effect,
+  ruleId,
   isSelected,
   onSelect,
   onDelete,
   parameterCount,
   dynamicTitle,
+  randomGroupId,
+  loopGroupId,
+  onPreviewCode,
   scale,
 }) => {
   const effectType = getEffectTypeById(effect.type);
@@ -235,6 +272,11 @@ const Effect: React.FC<{
       style={style}
       {...attributes}
       className="flex justify-center"
+      data-rb-context="effect"
+      data-rule-id={ruleId}
+      data-item-id={effect.id}
+      data-random-group-id={randomGroupId}
+      data-loop-group-id={loopGroupId}
     >
       <BlockComponent
         type="effect"
@@ -251,6 +293,7 @@ const Effect: React.FC<{
         }}
         parameterCount={parameterCount}
         isDraggable={true}
+        onIconClick={onPreviewCode}
         dragHandleProps={listeners}
         variant="palette"
       />
@@ -260,16 +303,20 @@ const Effect: React.FC<{
 
 const RandomGroupContainer: React.FC<{
   group: RandomGroup;
+  ruleId: string;
   children: React.ReactNode;
   isSelected: boolean;
   onSelect: () => void;
   onDelete: () => void;
-}> = ({ group, children, isSelected, onSelect, onDelete }) => {
+}> = ({ group, ruleId, children, isSelected, onSelect, onDelete }) => {
   return (
     <div
       className={`border-2 border-dashed rounded-xl p-4 bg-jungle-green-500/8 relative transition-all min-h-30 w-full max-w-full ${
         isSelected ? "border-jungle-green-400" : "border-jungle-green-400/30"
       }`}
+      data-rb-context="random-group"
+      data-rule-id={ruleId}
+      data-random-group-id={group.id}
       onClick={(e) => {
         e.stopPropagation();
         onSelect();
@@ -300,16 +347,20 @@ const RandomGroupContainer: React.FC<{
 
 const LoopGroupContainer: React.FC<{
   group: LoopGroup;
+  ruleId: string;
   children: React.ReactNode;
   isSelected: boolean;
   onSelect: () => void;
   onDelete: () => void;
-}> = ({ group, children, isSelected, onSelect, onDelete }) => {
+}> = ({ group, ruleId, children, isSelected, onSelect, onDelete }) => {
   return (
     <div
       className={`border-2 border-dashed rounded-xl p-4 bg-balatro-blue/10 relative transition-all min-h-30 w-full max-w-full ${
         isSelected ? "border-balatro-blue" : "border-balatro-blue/30"
       }`}
+      data-rb-context="loop-group"
+      data-rule-id={ruleId}
+      data-loop-group-id={group.id}
       onClick={(e) => {
         e.stopPropagation();
         onSelect();
@@ -355,15 +406,21 @@ const RuleCard: React.FC<RuleCardProps> = ({
   onDeleteLoopGroup,
   onToggleGroupOperator,
   onUpdatePosition,
+  onMoveSelectedRulesByDelta,
+  onFinalizeMultiRuleDrag,
   isRuleSelected,
+  selectedRuleCount,
   generateConditionTitle,
   generateEffectTitle,
+  formatTriggerLabel,
   getParameterCount,
   onUpdateConditionOperator,
   itemType,
   onRuleDoubleClick,
+  onPreviewBlockCode,
   scale,
   isPaletteDragging,
+  onSelectRuleCard,
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [groupOperators, setGroupOperators] = useState<Record<string, string>>(
@@ -371,16 +428,17 @@ const RuleCard: React.FC<RuleCardProps> = ({
   );
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({
-    x: 0,
-    y: 0,
-  });
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const didDragRef = useRef(false);
 
   const { setNodeRef: setDropRef, isOver } = useDroppable({
     id: `drop:rule:${rule.id}`,
   });
 
-  const transformOffset = isDragging ? dragOffset : { x: 0, y: 0 };
+  const isMultiSelectionDragging =
+    isDragging && isRuleSelected && selectedRuleCount > 1;
+  const transformOffset =
+    isDragging && !isMultiSelectionDragging ? dragOffset : { x: 0, y: 0 };
 
   const handleCardMouseDown = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -389,28 +447,51 @@ const RuleCard: React.FC<RuleCardProps> = ({
   const handleHeaderMouseDown = (e: React.MouseEvent) => {
     if (e.button === 0) {
       e.stopPropagation();
+      didDragRef.current = false;
       setIsDragging(true);
-      setDragStart({
+      dragStartRef.current = {
         x: e.clientX,
         y: e.clientY,
-      });
+      };
     }
   };
 
   const handleMouseMove = useCallback(
     (e: MouseEvent) => {
       if (isDragging) {
-        const deltaX = (e.clientX - dragStart.x) / Math.max(scale, 0.1);
-        const deltaY = (e.clientY - dragStart.y) / Math.max(scale, 0.1);
+        const deltaX =
+          (e.clientX - dragStartRef.current.x) / Math.max(scale, 0.1);
+        const deltaY =
+          (e.clientY - dragStartRef.current.y) / Math.max(scale, 0.1);
+        if (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2) {
+          didDragRef.current = true;
+        }
+
+        if (isMultiSelectionDragging) {
+          onMoveSelectedRulesByDelta(deltaX, deltaY);
+          dragStartRef.current = {
+            x: e.clientX,
+            y: e.clientY,
+          };
+          return;
+        }
+
         setDragOffset({ x: deltaX, y: deltaY });
       }
     },
-    [isDragging, dragStart, scale],
+    [isDragging, isMultiSelectionDragging, onMoveSelectedRulesByDelta, scale],
   );
 
   const handleMouseUp = useCallback(() => {
     if (isDragging) {
       setIsDragging(false);
+
+      if (isMultiSelectionDragging) {
+        onFinalizeMultiRuleDrag();
+        setDragOffset({ x: 0, y: 0 });
+        return;
+      }
+
       const finalPosition = {
         x: (rule.position?.x || 0) + dragOffset.x,
         y: (rule.position?.y || 0) + dragOffset.y,
@@ -418,7 +499,15 @@ const RuleCard: React.FC<RuleCardProps> = ({
       onUpdatePosition(rule.id, finalPosition);
       setDragOffset({ x: 0, y: 0 });
     }
-  }, [isDragging, rule.id, rule.position, dragOffset, onUpdatePosition]);
+  }, [
+    dragOffset,
+    isDragging,
+    isMultiSelectionDragging,
+    onFinalizeMultiRuleDrag,
+    onUpdatePosition,
+    rule.id,
+    rule.position,
+  ]);
 
   useEffect(() => {
     if (isDragging) {
@@ -432,6 +521,9 @@ const RuleCard: React.FC<RuleCardProps> = ({
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
   const trigger = getTriggerById(rule.trigger);
+  const triggerLabel = formatTriggerLabel
+    ? formatTriggerLabel(trigger?.label[itemType] || "Unknown Trigger")
+    : trigger?.label[itemType] || "Unknown Trigger";
   const allConditions = rule.conditionGroups.flatMap(
     (group) => group.conditions,
   );
@@ -440,6 +532,11 @@ const RuleCard: React.FC<RuleCardProps> = ({
     rule.effects.length +
     rule.randomGroups.reduce((sum, group) => sum + group.effects.length, 0) +
     rule.loops.reduce((sum, group) => sum + group.effects.length, 0);
+  const shouldRenderSingleConditionDirectly = totalConditions === 1;
+  const singleConditionGroup = shouldRenderSingleConditionDirectly
+    ? rule.conditionGroups.find((group) => group.conditions.length > 0)
+    : undefined;
+  const singleCondition = singleConditionGroup?.conditions[0];
 
   const snapFadeUp = {
     initial: { opacity: 0, y: 15 },
@@ -557,6 +654,9 @@ const RuleCard: React.FC<RuleCardProps> = ({
           className={`border-2 border-dashed rounded-xl p-4 bg-card/80 relative ${
             isSelected ? "border-jungle-green-400" : "border-border"
           }`}
+          data-rb-context="condition-group"
+          data-rule-id={rule.id}
+          data-group-id={group.id}
           onClick={(e) => {
             e.stopPropagation();
             onSelectItem({
@@ -617,6 +717,14 @@ const RuleCard: React.FC<RuleCardProps> = ({
                         parameterCount={getParameterCount(condition.params)}
                         dynamicTitle={generateConditionTitle(condition)}
                         itemType={itemType}
+                        onPreviewCode={() =>
+                          onPreviewBlockCode?.({
+                            type: "condition",
+                            ruleId: rule.id,
+                            itemId: condition.id,
+                            groupId: group.id,
+                          })
+                        }
                         scale={scale}
                       />
                     </div>
@@ -675,6 +783,7 @@ const RuleCard: React.FC<RuleCardProps> = ({
       >
         <RandomGroupContainer
           group={group}
+          ruleId={rule.id}
           isSelected={isRandomGroupSelected(group.id)}
           onSelect={() =>
             onSelectItem({
@@ -696,18 +805,27 @@ const RuleCard: React.FC<RuleCardProps> = ({
                   <Effect
                     effect={effect}
                     ruleId={rule.id}
+                    randomGroupId={group.id}
                     isSelected={isItemSelected("effect", effect.id)}
                     onSelect={() =>
                       onSelectItem({
                         type: "effect",
                         ruleId: rule.id,
                         itemId: effect.id,
+                        randomGroupId: group.id,
                       })
                     }
                     onDelete={() => onDeleteEffect(rule.id, effect.id)}
                     parameterCount={getParameterCount(effect.params)}
                     dynamicTitle={generateEffectTitle(effect)}
                     itemType={itemType}
+                    onPreviewCode={() =>
+                      onPreviewBlockCode?.({
+                        type: "effect",
+                        ruleId: rule.id,
+                        itemId: effect.id,
+                      })
+                    }
                     scale={scale}
                   />
                 </div>
@@ -731,6 +849,7 @@ const RuleCard: React.FC<RuleCardProps> = ({
       >
         <LoopGroupContainer
           group={group}
+          ruleId={rule.id}
           isSelected={isLoopGroupSelected(group.id)}
           onSelect={() =>
             onSelectItem({
@@ -752,18 +871,27 @@ const RuleCard: React.FC<RuleCardProps> = ({
                   <Effect
                     effect={effect}
                     ruleId={rule.id}
+                    loopGroupId={group.id}
                     isSelected={isItemSelected("effect", effect.id)}
                     onSelect={() =>
                       onSelectItem({
                         type: "effect",
                         ruleId: rule.id,
                         itemId: effect.id,
+                        loopGroupId: group.id,
                       })
                     }
                     onDelete={() => onDeleteEffect(rule.id, effect.id)}
                     parameterCount={getParameterCount(effect.params)}
                     dynamicTitle={generateEffectTitle(effect)}
                     itemType={itemType}
+                    onPreviewCode={() =>
+                      onPreviewBlockCode?.({
+                        type: "effect",
+                        ruleId: rule.id,
+                        itemId: effect.id,
+                      })
+                    }
                     scale={scale}
                   />
                 </div>
@@ -779,6 +907,8 @@ const RuleCard: React.FC<RuleCardProps> = ({
     <div
       ref={setDropRef}
       className="w-80 relative pl-8 select-none"
+      data-rb-context="rule"
+      data-rule-id={rule.id}
       style={{
         zIndex: isRuleSelected ? 30 : 20,
         pointerEvents: "auto",
@@ -787,7 +917,11 @@ const RuleCard: React.FC<RuleCardProps> = ({
       }}
       onClick={(e) => {
         e.stopPropagation();
-        onSelectItem({ type: "trigger", ruleId: rule.id });
+        if (didDragRef.current) {
+          didDragRef.current = false;
+          return;
+        }
+        onSelectRuleCard(rule.id, e.ctrlKey || e.metaKey);
       }}
       onDoubleClick={(e) => {
         e.stopPropagation();
@@ -833,6 +967,7 @@ const RuleCard: React.FC<RuleCardProps> = ({
                 onClick={(e) => {
                   e.stopPropagation();
                   handleDuplicateRule();
+                  setSidebarOpen(false);
                 }}
                 className="w-full h-full flex items-center rounded-lg justify-center transition-colors hover:bg-balatro-blue/15 cursor-pointer focus:outline-none"
               >
@@ -981,34 +1116,35 @@ const RuleCard: React.FC<RuleCardProps> = ({
                       }}
                       className="w-6 h-6 bg-card rounded-md flex items-center justify-center border-2 border-balatro-green/40 hover:bg-balatro-green/15 transition-colors cursor-pointer"
                     >
-                      <Plus className="h-3 w-3 text-balatro-green" />
+                      <DiceFive className="h-3.5 w-3.5 text-balatro-green" />
                     </RuleTooltipButton>
                   </div>
                   {itemType === "joker" && (
                     <div onClick={(e) => e.stopPropagation()}>
-                      {(rule.blueprintCompatible ?? true) ? (
-                        <RuleTooltipButton
-                          tooltip="Copied by Blueprint"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onToggleBlueprintCompatibility(rule.id);
-                          }}
-                          className="w-6 h-6 bg-card rounded-md flex items-center justify-center border-2 border-balatro-blue/40 hover:bg-balatro-blue/15 transition-colors cursor-pointer"
-                        >
-                          <Wrench className="h-3 w-3 text-balatro-blue" />
-                        </RuleTooltipButton>
-                      ) : (
-                        <RuleTooltipButton
-                          tooltip="Not Copied by Blueprint"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onToggleBlueprintCompatibility(rule.id);
-                          }}
-                          className="w-6 h-6 bg-card rounded-md flex items-center justify-center border-2 border-destructive/40 hover:bg-destructive/15 transition-colors cursor-pointer"
-                        >
-                          <Wrench className="h-3 w-3 text-balatro-red" />
-                        </RuleTooltipButton>
-                      )}
+                      <RuleTooltipButton
+                        tooltip={
+                          (rule.blueprintCompatible ?? true)
+                            ? "Copied by Blueprint"
+                            : "Not Copied by Blueprint"
+                        }
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleBlueprintCompatibility(rule.id);
+                        }}
+                        className={`w-6 h-6 bg-card rounded-md flex items-center justify-center transition-colors cursor-pointer ${
+                          (rule.blueprintCompatible ?? true)
+                            ? "border-2 border-balatro-blue/40 hover:bg-balatro-blue/15"
+                            : "border-2 border-destructive/40 hover:bg-destructive/15"
+                        }`}
+                      >
+                        <Infinity
+                          className={`h-3.5 w-3.5 ${
+                            (rule.blueprintCompatible ?? true)
+                              ? "text-balatro-blue"
+                              : "text-balatro-red"
+                          }`}
+                        />
+                      </RuleTooltipButton>
                     </div>
                   )}
                 </div>
@@ -1029,16 +1165,24 @@ const RuleCard: React.FC<RuleCardProps> = ({
               animate="animate"
               transition={{ duration: 0.12, delay: 0.12 }}
               className="flex justify-center"
+              data-rb-context="trigger"
+              data-rule-id={rule.id}
             >
               <BlockComponent
                 type="trigger"
-                label={trigger?.label[itemType] || "Unknown Trigger"}
+                label={triggerLabel}
                 isSelected={isItemSelected("trigger")}
+                onIconClick={() =>
+                  onPreviewBlockCode?.({
+                    type: "trigger",
+                    ruleId: rule.id,
+                  })
+                }
                 onClick={(e) => {
                   e?.stopPropagation();
-                  onSelectItem({ type: "trigger", ruleId: rule.id });
+                  onSelectRuleCard(rule.id, !!(e?.ctrlKey || e?.metaKey));
                 }}
-                variant="default"
+                variant="palette"
               />
             </motion.div>
 
@@ -1065,8 +1209,56 @@ const RuleCard: React.FC<RuleCardProps> = ({
                 transition={{ duration: 0.1, delay: 0.17 }}
                 className="space-y-3"
               >
-                {rule.conditionGroups.map((group, index) =>
-                  renderConditionGroup(group, index),
+                {shouldRenderSingleConditionDirectly &&
+                singleCondition &&
+                singleConditionGroup ? (
+                  <SortableContext
+                    items={[singleCondition.id]}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-3">
+                      <Condition
+                        condition={singleCondition}
+                        ruleId={rule.id}
+                        groupId={singleConditionGroup.id}
+                        isSelected={isItemSelected(
+                          "condition",
+                          singleCondition.id,
+                          singleConditionGroup.id,
+                        )}
+                        isNegated={singleCondition.negate}
+                        onSelect={() =>
+                          onSelectItem({
+                            type: "condition",
+                            ruleId: rule.id,
+                            itemId: singleCondition.id,
+                            groupId: singleConditionGroup.id,
+                          })
+                        }
+                        onDelete={() =>
+                          onDeleteCondition(rule.id, singleCondition.id)
+                        }
+                        parameterCount={getParameterCount(
+                          singleCondition.params,
+                        )}
+                        dynamicTitle={generateConditionTitle(singleCondition)}
+                        itemType={itemType}
+                        onPreviewCode={() =>
+                          onPreviewBlockCode?.({
+                            type: "condition",
+                            ruleId: rule.id,
+                            itemId: singleCondition.id,
+                            groupId: singleConditionGroup.id,
+                          })
+                        }
+                        scale={scale}
+                      />
+                    </div>
+                  </SortableContext>
+                ) : (
+                  rule.conditionGroups.map((group, index) =>
+                    renderConditionGroup(group, index),
+                  )
                 )}
               </motion.div>
             )}
@@ -1115,6 +1307,13 @@ const RuleCard: React.FC<RuleCardProps> = ({
                         parameterCount={getParameterCount(effect.params)}
                         dynamicTitle={generateEffectTitle(effect)}
                         itemType={itemType}
+                        onPreviewCode={() =>
+                          onPreviewBlockCode?.({
+                            type: "effect",
+                            ruleId: rule.id,
+                            itemId: effect.id,
+                          })
+                        }
                         scale={scale}
                       />
                     </div>
@@ -1148,4 +1347,35 @@ const RuleCard: React.FC<RuleCardProps> = ({
   );
 };
 
-export default RuleCard;
+const affectsRule = (selectedItem: SelectedItem, ruleId: string) => {
+  return selectedItem?.ruleId === ruleId;
+};
+
+const areRuleCardPropsEqual = (prev: RuleCardProps, next: RuleCardProps) => {
+  if (prev.rule !== next.rule) return false;
+  if (prev.ruleIndex !== next.ruleIndex) return false;
+  if (prev.isRuleSelected !== next.isRuleSelected) return false;
+  if (prev.selectedRuleCount !== next.selectedRuleCount) return false;
+  if (prev.item !== next.item) return false;
+  if (prev.itemType !== next.itemType) return false;
+  if (prev.scale !== next.scale) return false;
+  if (prev.isPaletteDragging !== next.isPaletteDragging) return false;
+
+  const prevSelectedAffectsRule = affectsRule(prev.selectedItem, prev.rule.id);
+  const nextSelectedAffectsRule = affectsRule(next.selectedItem, next.rule.id);
+  if (prevSelectedAffectsRule !== nextSelectedAffectsRule) return false;
+
+  if (prevSelectedAffectsRule && nextSelectedAffectsRule) {
+    if (prev.selectedItem?.type !== next.selectedItem?.type) return false;
+    if (prev.selectedItem?.itemId !== next.selectedItem?.itemId) return false;
+    if (prev.selectedItem?.groupId !== next.selectedItem?.groupId) return false;
+    if (prev.selectedItem?.randomGroupId !== next.selectedItem?.randomGroupId)
+      return false;
+    if (prev.selectedItem?.loopGroupId !== next.selectedItem?.loopGroupId)
+      return false;
+  }
+
+  return true;
+};
+
+export default React.memo(RuleCard, areRuleCardPropsEqual);

@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from "react";
-import { useDraggable } from "@dnd-kit/core";
 import { ConsumableData, UserVariable } from "@/lib/balatro-utils";
 import { getVariableUsageDetails } from "@/lib/user-variable-utils";
 import {
@@ -11,25 +10,31 @@ import {
 } from "@/lib/balatro-utils";
 import {
   Terminal,
-  X,
-  List,
   Warning,
   Hash,
   Sparkle,
   Cube,
   Stack,
-  Hand,
   Key,
   TextB,
   Code as Brackets,
   Plus,
   Trash,
   PencilSimple,
+  GlobeHemisphereWest,
 } from "@phosphor-icons/react";
 import InputField from "../generic/InputField";
-import InputDropdown from "../generic/InputDropdown";
 import Button from "../generic/Button";
 import { validateVariableName } from "../generic/validationUtils";
+import Panel from "./panel";
+import IconButton from "./icon-button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 type ItemData = any;
 
 interface VariablesProps {
@@ -59,20 +64,18 @@ const POKER_HAND_OPTIONS = POKER_HANDS.map((hand) => ({
 }));
 
 const VARIABLE_TYPE_OPTIONS = [
-  { value: "number", label: "Number Variable", icon: Hash },
-  { value: "suit", label: "Suit Variable", icon: Sparkle },
-  { value: "rank", label: "Rank Variable", icon: Cube },
+  { value: "number", label: "Number Variable" },
+  { value: "suit", label: "Suit Variable" },
+  { value: "rank", label: "Rank Variable" },
   {
     value: "pokerhand",
     label: "Poker Hand Variable",
-    icon: Hand,
   },
   {
     value: "key",
     label: "Key Variable",
-    icon: Stack,
   },
-  { value: "text", label: "Text Variable", icon: TextB },
+  { value: "text", label: "Text Variable" },
 ];
 
 type SuitValue = (typeof SUIT_VALUES)[number];
@@ -113,6 +116,7 @@ const Variables: React.FC<VariablesProps> = ({
     useState<PokerHandValue>(POKER_HAND_VALUES[0]);
   const [newVariableKey, setNewVariableKey] = useState<string>("none");
   const [newVariableText, setNewVariableText] = useState<string>("Hello");
+  const [newVariableIsGlobal, setNewVariableIsGlobal] = useState(false);
 
   const [nameValidationError, setNameValidationError] = useState<string>("");
   const [editValidationError, setEditValidationError] = useState<string>("");
@@ -129,22 +133,7 @@ const Variables: React.FC<VariablesProps> = ({
   const [editingPokerHand, setEditingPokerHand] = useState<PokerHandValue>(
     POKER_HAND_VALUES[0],
   );
-
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({
-    id: "panel-variables",
-  });
-
-  const style = transform
-    ? {
-        position: "absolute" as const,
-        left: position.x + transform.x,
-        top: position.y + transform.y,
-      }
-    : {
-        position: "absolute" as const,
-        left: position.x,
-        top: position.y,
-      };
+  const [editingIsGlobal, setEditingIsGlobal] = useState(false);
 
   const usageDetails = useMemo(() => getVariableUsageDetails(item), [item]);
   const userVariables =
@@ -215,6 +204,7 @@ const Variables: React.FC<VariablesProps> = ({
       id: crypto.randomUUID(),
       name: newVariableName.trim(),
       type: newVariableType,
+      isGlobal: newVariableIsGlobal,
     };
 
     if (newVariableType === "number") {
@@ -241,6 +231,7 @@ const Variables: React.FC<VariablesProps> = ({
     setNewVariablePokerHand(POKER_HAND_VALUES[0]);
     setNewVariableKey("none");
     setNewVariableText("Hello");
+    setNewVariableIsGlobal(false);
     setNewVariableType("number");
     setNameValidationError("");
     setShowAddForm(false);
@@ -263,6 +254,7 @@ const Variables: React.FC<VariablesProps> = ({
     setEditingRank((variable.initialRank as RankLabel) || "Ace");
     setEditingPokerHand(variable.initialPokerHand || POKER_HAND_VALUES[0]);
     setEditingJoker((variable.initialKey as string) || "j_joker");
+    setEditingIsGlobal(!!variable.isGlobal);
     setEditValidationError("");
   };
 
@@ -275,6 +267,7 @@ const Variables: React.FC<VariablesProps> = ({
       id: variableId,
       name: editingName,
       type: editingType,
+      isGlobal: editingIsGlobal,
     };
 
     if (editingType === "number") {
@@ -365,40 +358,48 @@ const Variables: React.FC<VariablesProps> = ({
     }
   };
 
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="w-80 bg-card/95 backdrop-blur-md border border-border rounded-xl shadow-xl z-40"
-    >
-      <div
-        className="flex items-center justify-between p-4 border-b border-border cursor-grab active:cursor-grabbing"
-        {...attributes}
-        {...listeners}
-      >
-        <div className="flex items-center gap-3">
-          <List className="h-4 w-4 text-muted-foreground" />
-          <Terminal className="h-5 w-5 text-foreground" />
-          <div>
-            <h3 className="text-foreground text-sm font-medium tracking-wider">
-              Variables
-            </h3>
-            <p className="text-muted-foreground text-xs">
-              {userVariables.length} variable
-              {userVariables.length !== 1 ? "s" : ""}
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={onClose}
-          className="p-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
+  const renderSelectField = (
+    label: string,
+    value: string,
+    onChange: (value: string) => void,
+    options: Array<{ value: string; label: string }>,
+  ) => (
+    <div className="space-y-1">
+      <label className="text-xs text-muted-foreground">{label}</label>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger size="sm" className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
 
-      <div className="p-4">
-        <div className="max-h-96 overflow-y-auto custom-scrollbar space-y-2 mb-4">
+  return (
+    <Panel
+      id="variables"
+      position={position}
+      icon={Terminal}
+      title="Variables"
+      onClose={onClose}
+      closeLabel="Close Variables"
+      className="w-80"
+      headerClassName="p-4"
+      contentClassName="p-4"
+      headerActions={
+        <span className="text-muted-foreground text-xs">
+          {userVariables.length} variable{userVariables.length !== 1 ? "s" : ""}
+        </span>
+      }
+    >
+      <div>
+        <div className="max-h-96 overflow-y-auto custom-scrollbar divide-y divide-border/40 mb-4">
           {userVariables.length === 0 && !showAddForm ? (
             <div className="text-center py-8">
               <Terminal className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
@@ -419,7 +420,7 @@ const Variables: React.FC<VariablesProps> = ({
               return (
                 <div
                   key={variable.id}
-                  className="bg-background/70 border border-border rounded-xl p-3"
+                  className="bg-background/60 rounded-xl p-3"
                 >
                   {isEditing ? (
                     <div className="space-y-3">
@@ -446,23 +447,36 @@ const Variables: React.FC<VariablesProps> = ({
                         )}
                       </div>
 
-                      <InputDropdown
-                        label="Type"
-                        value={editingType}
-                        onChange={(item) =>
-                          setEditingType(
-                            item.value as
-                              | "number"
-                              | "suit"
-                              | "rank"
-                              | "pokerhand"
-                              | "key"
-                              | "text",
-                          )
-                        }
-                        options={VARIABLE_TYPE_OPTIONS}
-                        size="sm"
-                      />
+                      <div className="flex items-end gap-2">
+                        <div className="grow">
+                          {renderSelectField(
+                            "Type",
+                            editingType,
+                            (value) =>
+                              setEditingType(
+                                value as
+                                  | "number"
+                                  | "suit"
+                                  | "rank"
+                                  | "pokerhand"
+                                  | "key"
+                                  | "text",
+                              ),
+                            VARIABLE_TYPE_OPTIONS,
+                          )}
+                        </div>
+                        <IconButton
+                          icon={GlobeHemisphereWest}
+                          tooltip={
+                            editingIsGlobal
+                              ? "Global variable enabled"
+                              : "Make variable global"
+                          }
+                          onClick={() => setEditingIsGlobal((prev) => !prev)}
+                          isActive={editingIsGlobal}
+                          className="h-8 w-8"
+                        />
+                      </div>
 
                       {editingType === "number" && (
                         <InputField
@@ -490,41 +504,30 @@ const Variables: React.FC<VariablesProps> = ({
                         />
                       )}
 
-                      {editingType === "suit" && (
-                        <InputDropdown
-                          label="Initial Suit"
-                          value={editingSuit}
-                          onChange={(item) =>
-                            setEditingSuit(item.value as SuitValue)
-                          }
-                          options={SUIT_OPTIONS}
-                          size="sm"
-                        />
-                      )}
+                      {editingType === "suit" &&
+                        renderSelectField(
+                          "Initial Suit",
+                          editingSuit,
+                          (value) => setEditingSuit(value as SuitValue),
+                          SUIT_OPTIONS,
+                        )}
 
-                      {editingType === "rank" && (
-                        <InputDropdown
-                          label="Initial Rank"
-                          value={editingRank}
-                          onChange={(item) =>
-                            setEditingRank(item.value as RankLabel)
-                          }
-                          options={RANK_OPTIONS}
-                          size="sm"
-                        />
-                      )}
+                      {editingType === "rank" &&
+                        renderSelectField(
+                          "Initial Rank",
+                          editingRank,
+                          (value) => setEditingRank(value as RankLabel),
+                          RANK_OPTIONS,
+                        )}
 
-                      {editingType === "pokerhand" && (
-                        <InputDropdown
-                          label="Initial Poker Hand"
-                          value={editingPokerHand}
-                          onChange={(item) =>
-                            setEditingPokerHand(item.value as PokerHandValue)
-                          }
-                          options={POKER_HAND_OPTIONS}
-                          size="sm"
-                        />
-                      )}
+                      {editingType === "pokerhand" &&
+                        renderSelectField(
+                          "Initial Poker Hand",
+                          editingPokerHand,
+                          (value) =>
+                            setEditingPokerHand(value as PokerHandValue),
+                          POKER_HAND_OPTIONS,
+                        )}
 
                       {editingType === "text" && (
                         <InputField
@@ -572,20 +575,20 @@ const Variables: React.FC<VariablesProps> = ({
                         </div>
 
                         <div className="flex items-center gap-1">
-                          <button
+                          <IconButton
+                            icon={PencilSimple}
+                            tooltip="Edit Variable"
                             onClick={() => handleStartEdit(variable)}
-                            className="p-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                            title="Edit"
-                          >
-                            <PencilSimple className="h-3 w-3" />
-                          </button>
-                          <button
+                            className="h-7 w-7"
+                            iconClassName="h-3.5 w-3.5"
+                          />
+                          <IconButton
+                            icon={Trash}
+                            tooltip="Delete Variable"
                             onClick={() => handleDeleteVariable(variable.id)}
-                            className="p-1 text-balatro-red hover:text-white transition-colors cursor-pointer"
-                            title="Delete"
-                          >
-                            <Trash className="h-3 w-3" />
-                          </button>
+                            className="h-7 w-7 border-destructive/40 text-destructive hover:border-destructive/60 hover:text-destructive"
+                            iconClassName="h-3.5 w-3.5"
+                          />
                         </div>
                       </div>
 
@@ -594,6 +597,11 @@ const Variables: React.FC<VariablesProps> = ({
                           {variable.type === "number" ? "Initial:" : "Value:"}{" "}
                           {getVariableDisplayValue(variable)}
                         </span>
+                        {variable.isGlobal ? (
+                          <span className="text-[10px] uppercase tracking-wide text-jungle-green-400">
+                            Global
+                          </span>
+                        ) : null}
                         {usageInfo.count > 0 && (
                           <div className="flex items-center gap-1">
                             <span className="text-muted-foreground text-xs">
@@ -603,7 +611,7 @@ const Variables: React.FC<VariablesProps> = ({
                               <span
                                 key={ruleNum}
                                 className={
-                                  "bg-opacity-20 text-xs px-1.5 py-0.5 rounded text-white"
+                                  "bg-muted/40 text-xs px-1.5 py-0.5 rounded text-white"
                                 }
                               >
                                 {ruleNum + 1}
@@ -620,7 +628,7 @@ const Variables: React.FC<VariablesProps> = ({
           )}
 
           {showAddForm && (
-            <div className="bg-background/70 border-2 border-jungle-green-400/40 rounded-xl p-3">
+            <div className="bg-background/70 rounded-xl p-3">
               <div className="space-y-3">
                 <div>
                   <InputField
@@ -641,23 +649,36 @@ const Variables: React.FC<VariablesProps> = ({
                   )}
                 </div>
 
-                <InputDropdown
-                  label="Type"
-                  value={newVariableType}
-                  onChange={(item) =>
-                    setNewVariableType(
-                      item.value as
-                        | "number"
-                        | "suit"
-                        | "rank"
-                        | "pokerhand"
-                        | "key"
-                        | "text",
-                    )
-                  }
-                  options={VARIABLE_TYPE_OPTIONS}
-                  size="sm"
-                />
+                <div className="flex items-end gap-2">
+                  <div className="grow">
+                    {renderSelectField(
+                      "Type",
+                      newVariableType,
+                      (value) =>
+                        setNewVariableType(
+                          value as
+                            | "number"
+                            | "suit"
+                            | "rank"
+                            | "pokerhand"
+                            | "key"
+                            | "text",
+                        ),
+                      VARIABLE_TYPE_OPTIONS,
+                    )}
+                  </div>
+                  <IconButton
+                    icon={GlobeHemisphereWest}
+                    tooltip={
+                      newVariableIsGlobal
+                        ? "Global variable enabled"
+                        : "Make variable global"
+                    }
+                    onClick={() => setNewVariableIsGlobal((prev) => !prev)}
+                    isActive={newVariableIsGlobal}
+                    className="h-8 w-8"
+                  />
+                </div>
 
                 {newVariableType === "number" && (
                   <InputField
@@ -692,41 +713,29 @@ const Variables: React.FC<VariablesProps> = ({
                   />
                 )}
 
-                {newVariableType === "suit" && (
-                  <InputDropdown
-                    label="Initial Suit"
-                    value={newVariableSuit}
-                    onChange={(item) =>
-                      setNewVariableSuit(item.value as SuitValue)
-                    }
-                    options={SUIT_OPTIONS}
-                    size="sm"
-                  />
-                )}
+                {newVariableType === "suit" &&
+                  renderSelectField(
+                    "Initial Suit",
+                    newVariableSuit,
+                    (value) => setNewVariableSuit(value as SuitValue),
+                    SUIT_OPTIONS,
+                  )}
 
-                {newVariableType === "rank" && (
-                  <InputDropdown
-                    label="Initial Rank"
-                    value={newVariableRank}
-                    onChange={(item) =>
-                      setNewVariableRank(item.value as RankLabel)
-                    }
-                    options={RANK_OPTIONS}
-                    size="sm"
-                  />
-                )}
+                {newVariableType === "rank" &&
+                  renderSelectField(
+                    "Initial Rank",
+                    newVariableRank,
+                    (value) => setNewVariableRank(value as RankLabel),
+                    RANK_OPTIONS,
+                  )}
 
-                {newVariableType === "pokerhand" && (
-                  <InputDropdown
-                    label="Initial Poker Hand"
-                    value={newVariablePokerHand}
-                    onChange={(item) =>
-                      setNewVariablePokerHand(item.value as PokerHandValue)
-                    }
-                    options={POKER_HAND_OPTIONS}
-                    size="sm"
-                  />
-                )}
+                {newVariableType === "pokerhand" &&
+                  renderSelectField(
+                    "Initial Poker Hand",
+                    newVariablePokerHand,
+                    (value) => setNewVariablePokerHand(value as PokerHandValue),
+                    POKER_HAND_OPTIONS,
+                  )}
 
                 <div className="flex gap-2">
                   <Button
@@ -750,6 +759,7 @@ const Variables: React.FC<VariablesProps> = ({
                       setNewVariableText("Hello");
                       setNewVariableKey("none");
                       setNewVariablePokerHand(POKER_HAND_VALUES[0]);
+                      setNewVariableIsGlobal(false);
                       setNewVariableType("number");
                       setNameValidationError("");
                     }}
@@ -776,7 +786,7 @@ const Variables: React.FC<VariablesProps> = ({
           </Button>
         )}
       </div>
-    </div>
+    </Panel>
   );
 };
 

@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from "react";
-import { useDraggable } from "@dnd-kit/core";
 import {
   GAME_VARIABLE_CATEGORIES,
   GameVariable,
@@ -7,17 +6,12 @@ import {
   GameVariableSubcategory,
 } from "@/lib/game-vars";
 import {
-  X,
-  List,
+  Cube,
   MagnifyingGlass,
   CaretRight,
   CaretDown,
 } from "@phosphor-icons/react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import Panel from "./panel";
 
 interface GameVariablesProps {
   position: { x: number; y: number };
@@ -39,22 +33,6 @@ const GameVariables: React.FC<GameVariablesProps> = ({
   const [expandedSubcategories, setExpandedSubcategories] = useState<
     Set<string>
   >(new Set());
-
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({
-    id: "panel-gameVariables",
-  });
-
-  const style = transform
-    ? {
-        position: "absolute" as const,
-        left: position.x + transform.x,
-        top: position.y + transform.y,
-      }
-    : {
-        position: "absolute" as const,
-        left: position.x,
-        top: position.y,
-      };
 
   const filteredCategories = useMemo(() => {
     if (!searchTerm.trim()) {
@@ -137,7 +115,7 @@ const GameVariables: React.FC<GameVariablesProps> = ({
   ) => (
     <div
       key={variable.id}
-      className={`p-2.5 rounded-xl border border-border bg-background/70 cursor-pointer transition-all hover:bg-accent/70 hover:border-jungle-green-400/50 active:bg-jungle-green-500/10 ${
+      className={`p-2.5 rounded-xl bg-background/60 cursor-pointer transition-all hover:bg-accent/70 active:bg-jungle-green-500/10 ${
         isNested ? "ml-4 mr-2" : ""
       }`}
       onClick={() => handleVariableSelect(variable)}
@@ -154,12 +132,6 @@ const GameVariables: React.FC<GameVariablesProps> = ({
       <p className="text-muted-foreground text-xs leading-relaxed mb-2">
         {variable.description}
       </p>
-
-      <div className="bg-card rounded-lg px-2 py-1 border border-border">
-        <code className="text-jungle-green-200 text-xs font-mono">
-          ${variable.id}
-        </code>
-      </div>
     </div>
   );
 
@@ -267,39 +239,17 @@ const GameVariables: React.FC<GameVariablesProps> = ({
   };
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="w-96 bg-card/95 backdrop-blur-md border border-border rounded-xl shadow-xl select-none max-h-[70vh] z-40 flex flex-col"
+    <Panel
+      id="gameVariables"
+      position={position}
+      icon={Cube}
+      title="Game Variables"
+      onClose={onClose}
+      closeLabel="Close Game Variables"
+      className="w-96 select-none max-h-[70vh]"
+      contentClassName="p-3 flex flex-col"
     >
-      <div
-        className="flex items-center justify-between p-3 border-b border-border cursor-grab shrink-0"
-        {...attributes}
-        {...listeners}
-      >
-        <div className="flex items-center gap-2">
-          <List className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-foreground text-sm font-medium tracking-wider">
-            Game Variables
-          </h3>
-        </div>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={onClose}
-              className="p-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-              aria-label="Close Game Variables"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6} className="text-xs">
-            Close Game Variables
-          </TooltipContent>
-        </Tooltip>
-      </div>
-
-      <div className="p-3 flex flex-col min-h-0 flex-1">
+      <div className="min-h-0 flex-1 flex flex-col">
         <div className="relative mb-3 shrink-0">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <MagnifyingGlass className="h-4 w-4 text-zinc-400" />
@@ -309,7 +259,7 @@ const GameVariables: React.FC<GameVariablesProps> = ({
             placeholder="Search variables..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-xl text-foreground placeholder-muted-foreground text-sm focus:outline-none focus:border-primary/50 transition-colors"
+            className="w-full pl-10 pr-4 py-2 bg-background/70 rounded-xl text-foreground placeholder-muted-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary/35 transition-colors"
           />
         </div>
 
@@ -330,7 +280,7 @@ const GameVariables: React.FC<GameVariablesProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </Panel>
   );
 };
 

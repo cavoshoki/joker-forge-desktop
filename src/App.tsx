@@ -14,28 +14,50 @@ import VouchersPage from "@/pages/vouchers-page";
 import SoundsPage from "@/pages/sounds-page";
 import MetadataPage from "@/pages/metadata-page";
 import { EntityBridgeListener } from "@/components/bridge/entity-bridge-listener";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuShortcut,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 
 function App() {
   return (
     <Router>
       <EntityBridgeListener />
-      <MainLayout>
-        <Routes>
-          <Route path="/" element={<OverviewPage />} />
-          <Route path="/jokers" element={<JokersPage />} />
-          <Route path="/rarities" element={<RaritiesPage />} />
-          <Route path="/seals" element={<SealsPage />} />
-          <Route path="/consumables" element={<ConsumablesPage />} />
-          <Route path="/consumable-sets" element={<ConsumableSetsPage />} />
-          <Route path="/decks" element={<DecksPage />} />
-          <Route path="/enhancements" element={<EnhancementsPage />} />
-          <Route path="/editions" element={<EditionsPage />} />
-          <Route path="/boosters" element={<BoostersPage />} />
-          <Route path="/vouchers" element={<VouchersPage />} />
-          <Route path="/sounds" element={<SoundsPage />} />
-          <Route path="/metadata" element={<MetadataPage />} />
-        </Routes>
-      </MainLayout>
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <div className="h-full w-full">
+            <MainLayout>
+              <Routes>
+                <Route path="/" element={<OverviewPage />} />
+                <Route path="/jokers" element={<JokersPage />} />
+                <Route path="/rarities" element={<RaritiesPage />} />
+                <Route path="/seals" element={<SealsPage />} />
+                <Route path="/consumables" element={<ConsumablesPage />} />
+                <Route
+                  path="/consumable-sets"
+                  element={<ConsumableSetsPage />}
+                />
+                <Route path="/decks" element={<DecksPage />} />
+                <Route path="/enhancements" element={<EnhancementsPage />} />
+                <Route path="/editions" element={<EditionsPage />} />
+                <Route path="/boosters" element={<BoostersPage />} />
+                <Route path="/vouchers" element={<VouchersPage />} />
+                <Route path="/sounds" element={<SoundsPage />} />
+                <Route path="/metadata" element={<MetadataPage />} />
+              </Routes>
+            </MainLayout>
+          </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-52 border-border/95 bg-card/98 shadow-[0_18px_35px_-18px_rgba(0,0,0,0.72)] backdrop-blur-md">
+          <ContextMenuItem onClick={() => window.location.reload()}>
+            Refresh
+            <ContextMenuShortcut>F5</ContextMenuShortcut>
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
     </Router>
   );
 }

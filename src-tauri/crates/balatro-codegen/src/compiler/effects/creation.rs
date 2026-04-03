@@ -14,9 +14,7 @@ pub fn create_joker(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutp
     let ignore_slots = get_bool_param(effect, "ignoreSlots");
 
     // Build the SMODS.add_card arguments
-    let mut add_card_entries = vec![
-        TableEntry::KeyValue("set".to_string(), lua_str("Joker")),
-    ];
+    let mut add_card_entries = vec![TableEntry::KeyValue("set".to_string(), lua_str("Joker"))];
 
     match joker_type {
         "specific" => {
@@ -27,10 +25,7 @@ pub fn create_joker(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutp
         }
         "pool" => {
             if let Some(pool) = get_str_param(effect, "pool") {
-                add_card_entries.push(TableEntry::KeyValue(
-                    "set".to_string(),
-                    lua_str(pool),
-                ));
+                add_card_entries.push(TableEntry::KeyValue("set".to_string(), lua_str(pool)));
             }
         }
         "common" | "uncommon" | "rare" | "legendary" => {
@@ -134,14 +129,21 @@ pub fn create_joker(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutp
     let event_call = lua_expr_stmt(lua_method(
         lua_path(&["G", "E_MANAGER"]),
         "add_event",
-        vec![lua_call("Event", vec![lua_table_raw(vec![
-            TableEntry::KeyValue("func".to_string(), event_func),
-        ])])],
+        vec![lua_call(
+            "Event",
+            vec![lua_table_raw(vec![TableEntry::KeyValue(
+                "func".to_string(),
+                event_func,
+            )])],
+        )],
     ));
 
     // Message for the return
     let message = if has_slot_check {
-        Some(lua_and(lua_ident("created_joker"), lua_call("localize", vec![lua_str("k_plus_joker")])))
+        Some(lua_and(
+            lua_ident("created_joker"),
+            lua_call("localize", vec![lua_str("k_plus_joker")]),
+        ))
     } else {
         Some(lua_call("localize", vec![lua_str("k_plus_joker")]))
     };
@@ -160,9 +162,10 @@ pub fn create_consumable(effect: &EffectDef, _ctx: &mut CompileContext) -> Effec
     let consumable_type = get_str_param(effect, "consumableType").unwrap_or("Tarot");
     let specific_key = get_str_param(effect, "consumableKey");
 
-    let mut add_card_entries = vec![
-        TableEntry::KeyValue("set".to_string(), lua_str(consumable_type)),
-    ];
+    let mut add_card_entries = vec![TableEntry::KeyValue(
+        "set".to_string(),
+        lua_str(consumable_type),
+    )];
 
     if let Some(key) = specific_key {
         add_card_entries.push(TableEntry::KeyValue("key".to_string(), lua_str(key)));
@@ -174,9 +177,7 @@ pub fn create_consumable(effect: &EffectDef, _ctx: &mut CompileContext) -> Effec
     );
 
     // Slot check for consumables
-    let slot_check_body = vec![
-        lua_expr_stmt(add_card_call),
-    ];
+    let slot_check_body = vec![lua_expr_stmt(add_card_call)];
 
     let slot_check = lua_if(
         lua_lt(
@@ -192,6 +193,76 @@ pub fn create_consumable(effect: &EffectDef, _ctx: &mut CompileContext) -> Effec
         config_vars: vec![],
         message: Some(lua_call("localize", vec![lua_str("k_plus_tarot")])),
         colour: Some(lua_raw_expr("G.C.SECONDARY_SET.Tarot")),
+    }
+}
+
+/// Create Playing Card effect — adds a single base playing card.
+pub fn create_playing_card(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
+    let target = get_str_param(effect, "location").unwrap_or("deck");
+    let message = get_str_param(effect, "customMessage").unwrap_or("Added Card!");
+
+    let pre = if target == "hand" {
+        vec![lua_raw_stmt(
+            "local c = SMODS.add_card({ set = 'Base' }); if c and G.hand then G.hand:emplace(c) end",
+        )]
+    } else {
+        vec![lua_raw_stmt("SMODS.add_card({ set = 'Base' })")]
+    };
+
+    EffectOutput {
+        return_fields: vec![],
+        pre_return: pre,
+        config_vars: vec![],
+        message: Some(lua_str(message)),
+        colour: Some(lua_raw_expr("G.C.GREEN")),
+    }
+}
+
+/// Create Playing Cards effect — adds multiple base playing cards.
+pub fn create_playing_cards(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
+    let count = effect
+        .params
+        .get("count")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(1)
+        .max(1);
+
+    let pre = vec![lua_raw_stmt(format!(
+        "for _ = 1, {} do SMODS.add_card({{ set = 'Base' }}) end",
+        count
+    ))];
+
+    EffectOutput {
+        return_fields: vec![],
+        pre_return: pre,
+        config_vars: vec![],
+        message: Some(lua_str("Added Cards!")),
+        colour: Some(lua_raw_expr("G.C.GREEN")),
+    }
+}
+
+/// Create Tag effect — creates a random or specific tag.
+pub fn create_tag(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
+    let mode = get_str_param(effect, "tag_type").unwrap_or("random");
+    let specific = get_str_param(effect, "specific_tag").unwrap_or("tag_double");
+
+    let stmt = if mode == "random" {
+        lua_raw_stmt(
+            "local selected_tag = pseudorandom_element(G.P_TAGS, pseudoseed('create_tag')).key; local tag = Tag(selected_tag); tag:set_ability(); add_tag(tag)",
+        )
+    } else {
+        lua_raw_stmt(format!(
+            "local tag = Tag('{}'); tag:set_ability(); add_tag(tag)",
+            specific
+        ))
+    };
+
+    EffectOutput {
+        return_fields: vec![],
+        pre_return: vec![stmt],
+        config_vars: vec![],
+        message: Some(lua_str("Created Tag!")),
+        colour: Some(lua_raw_expr("G.C.GREEN")),
     }
 }
 

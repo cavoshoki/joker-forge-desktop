@@ -1,5 +1,12 @@
 import React from "react";
-import { Palette, Terminal, ChartPieSlice, Cube } from "@phosphor-icons/react";
+import {
+  Palette,
+  Terminal,
+  ChartPieSlice,
+  Cube,
+  BracketsCurly,
+  ClockCounterClockwise,
+} from "@phosphor-icons/react";
 import IconButton from "./icon-button";
 
 interface PanelState {
@@ -44,6 +51,18 @@ const FloatingDock: React.FC<FloatingDockProps> = ({
       icon: ChartPieSlice,
       label: "Inspector",
       shortcut: "P",
+    },
+    {
+      id: "liveCode",
+      icon: BracketsCurly,
+      label: "Live Code",
+      shortcut: "L",
+    },
+    {
+      id: "history",
+      icon: ClockCounterClockwise,
+      label: "History",
+      shortcut: "H",
     },
   ];
 

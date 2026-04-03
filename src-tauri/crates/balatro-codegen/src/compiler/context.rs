@@ -68,13 +68,9 @@ impl CompileContext {
     }
 
     /// Generate a unique variable name for a config variable.
-    /// First of its kind: `base_name`, second: `base_name2`, third: `base_name3`...
+    /// Always appends the count: `chips0`, `chips1`, `chips2`...
     pub fn unique_var_name(&self, base_name: &str, same_type_count: usize) -> String {
-        if same_type_count == 0 {
-            base_name.to_string()
-        } else {
-            format!("{}{}", base_name, same_type_count + 1)
-        }
+        format!("{}{}", base_name, same_type_count)
     }
 
     /// Add a config variable.

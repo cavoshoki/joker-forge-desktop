@@ -1,10 +1,100 @@
-pub mod lua_ast;
-pub mod types;
 pub mod compiler;
+pub mod lua_ast;
 pub mod objects;
+pub mod types;
 
 // Re-export key types for convenience
+pub use compiler::{compile_joker, compile_joker_with_options, compile_node_snippet};
 pub use lua_ast::{Chunk, Emitter, Expr, Stmt};
-pub use types::{JokerDef, ObjectType, ModConfig};
-pub use compiler::{compile_joker, compile_node_snippet};
 pub use objects::GameObject;
+pub use types::{JokerDef, ModConfig, ObjectType};
+
+#[cfg(test)]
+mod integration_tests {
+    use super::*;
+    use std::collections::HashMap;
+    use types::*;
+
+    #[test]
+    fn test_joker_with_add_chips() {
+        let joker = JokerDef {
+            key: "newjoker3".to_string(),
+            name: "New Joker".to_string(),
+            description: vec!["A {C:blue}custom{} joker with {C:red}unique{} effects.".to_string()],
+            cost: 4,
+            rarity: "common".to_string(),
+            blueprint_compat: true,
+            eternal_compat: true,
+            perishable_compat: true,
+            unlocked: true,
+            discovered: true,
+            atlas: "Joker".to_string(),
+            pos: AtlasPos { x: 0, y: 0 },
+            soul_pos: None,
+            display_size: None,
+            rules: vec![RuleDef {
+                id: "rule1".to_string(),
+                trigger: "hand_played".to_string(),
+                condition_groups: vec![],
+                effects: vec![EffectDef {
+                    effect_type: "add_chips".to_string(),
+                    params: {
+                        let mut p = HashMap::new();
+                        p.insert("value".to_string(), ParamValue::Int(10));
+                        p
+                    },
+                }],
+                random_groups: vec![],
+                loop_groups: vec![],
+            }],
+            appearance: None,
+            unlock: None,
+            user_variables: vec![],
+        };
+
+        let chunk = compile_joker(&joker, "modprefix");
+        let output = Emitter::new().emit_chunk(&chunk);
+        println!("=== COMPILED JOKER OUTPUT ===\n{}", output);
+
+        // Verify key structural elements
+        assert!(
+            output.contains("SMODS.Joker {"),
+            "Should use table-call syntax (no parens)"
+        );
+        assert!(
+            !output.contains("SMODS.Joker("),
+            "Should NOT use function-call syntax"
+        );
+        assert!(
+            output.contains("['name'] = 'New Joker'"),
+            "loc_txt should use bracket keys"
+        );
+        assert!(
+            output.contains("[1] = 'A {C:blue}custom{} joker"),
+            "text should use numbered indices"
+        );
+        assert!(output.contains("['unlock']"), "Should have unlock section");
+        assert!(
+            output.contains("rarity = 1"),
+            "Common rarity should be numeric 1"
+        );
+        assert!(output.contains("config ="), "Should have config section");
+        assert!(
+            output.contains("chips0 = 10"),
+            "Config extra should have chips0"
+        );
+        assert!(
+            output.contains("display_size ="),
+            "Should have display_size"
+        );
+        assert!(
+            output.contains("71 * 1"),
+            "display_size should use 71 * scale"
+        );
+        assert!(
+            !output.contains("SMODS.calculate_effect"),
+            "Should NOT wrap in SMODS.calculate_effect"
+        );
+        assert!(output.contains("return {"), "Should have plain return");
+    }
+}

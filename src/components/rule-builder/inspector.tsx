@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { useDraggable } from "@dnd-kit/core";
 import type {
   Rule,
   Condition,
@@ -29,19 +28,23 @@ import {
 } from "./rule-catalog";
 
 import InputField from "../generic/InputField";
-import InputDropdown from "../generic/InputDropdown";
 import Button from "../generic/Button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Eye,
   Info,
   Code as Brackets,
   X,
-  List,
   Plus,
   Prohibit,
   Warning,
   ArrowsLeftRight,
-  PlayCircle,
   ArrowCounterClockwise,
   ChartPieSlice,
   Percent,
@@ -54,6 +57,17 @@ import { GameVariable, getGameVariableById } from "@/lib/game-vars";
 import { Cube } from "@phosphor-icons/react";
 import { SelectedItem } from "./types";
 import Checkbox from "../generic/Checkbox";
+import ItemTypeBadge from "./item-type-badge";
+import IconButton from "./icon-button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Toggle } from "@/components/ui/toggle";
+import Panel from "./panel";
+
+const EMPTY_SELECT_SENTINEL = "__empty_select_value__";
 
 interface InspectorProps {
   position: { x: number; y: number };
@@ -248,23 +262,22 @@ const ChanceInput: React.FC<ChanceInputProps> = React.memo(
     };
 
     return (
-      <div className="flex flex-col gap-2 items-center">
+      <div className="flex flex-col gap-2 items-start w-full">
         <div className="flex items-center gap-2">
           <span className="text-zinc-100 text-sm">{label}</span>
           {itemType !== "consumable" && (
-            <button
-              onClick={() =>
+            <Toggle
+              pressed={isVariableMode}
+              onPressedChange={() =>
                 handleModeChange(isVariableMode ? "number" : "variable")
               }
-              className={`p-1 rounded transition-colors cursor-pointer ${
-                isVariableMode
-                  ? "bg-jungle-green-500/20 text-jungle-green-400"
-                  : "bg-zinc-700 text-zinc-400 hover:text-jungle-green-400"
-              }`}
+              variant="outline"
+              size="sm"
+              className="cursor-pointer data-[state=on]:bg-jungle-green-500/20 data-[state=on]:text-jungle-green-400"
               title="Toggle variable mode"
             >
               <Brackets className="h-3 w-3" />
-            </button>
+            </Toggle>
           )}
           <button
             onClick={onOpenGameVariablesPanel}
@@ -277,17 +290,18 @@ const ChanceInput: React.FC<ChanceInputProps> = React.memo(
           >
             <Cube className="h-3 w-3" />
           </button>
-          <button
-            onClick={() => handleModeChange(isRangeMode ? "number" : "range")}
-            className={`p-1 rounded transition-colors cursor-pointer ${
-              isRangeMode
-                ? "bg-jungle-green-500/20 text-jungle-green-400"
-                : "bg-zinc-700 text-zinc-400 hover:text-jungle-green-400"
-            }`}
+          <Toggle
+            pressed={isRangeMode}
+            onPressedChange={() =>
+              handleModeChange(isRangeMode ? "number" : "range")
+            }
+            variant="outline"
+            size="sm"
+            className="cursor-pointer data-[state=on]:bg-jungle-green-500/20 data-[state=on]:text-jungle-green-400"
             title="Toggle range mode"
           >
             <ArrowsLeftRight className="h-3 w-3" />
-          </button>
+          </Toggle>
         </div>
 
         {isRangeMode ? (
@@ -325,14 +339,44 @@ const ChanceInput: React.FC<ChanceInputProps> = React.memo(
         ) : isVariableMode && itemType !== "consumable" ? (
           <div className="space-y-2 w-full">
             {availableVariables.length > 0 ? (
-              <InputDropdown
-                value={(actualValue as string) || ""}
-                onChange={(newValue) => onChange(newValue)}
-                options={availableVariables}
-                placeholder="Select variable"
-                className="bg-card"
-                size="sm"
-              />
+              <Select
+                value={
+                  ((actualValue as string) || "") === ""
+                    ? EMPTY_SELECT_SENTINEL
+                    : String(actualValue)
+                }
+                onValueChange={(selectedValue) => {
+                  const normalizedValue =
+                    selectedValue === EMPTY_SELECT_SENTINEL
+                      ? ""
+                      : selectedValue;
+                  const selectedOption = availableVariables.find(
+                    (opt) => String(opt.value) === normalizedValue,
+                  ) ?? {
+                    value: normalizedValue,
+                    label: normalizedValue,
+                    valueType: "user_var",
+                  };
+
+                  onChange(selectedOption);
+                }}
+              >
+                <SelectTrigger size="sm" className="w-full">
+                  <SelectValue placeholder="Select variable" />
+                </SelectTrigger>
+                <SelectContent className="z-120 bg-popover text-popover-foreground border-border shadow-2xl">
+                  <SelectItem value={EMPTY_SELECT_SENTINEL}>None</SelectItem>
+                  {availableVariables.map((option) => (
+                    <SelectItem
+                      key={`chance-${option.value}-${option.label}`}
+                      value={String(option.value)}
+                      className="text-foreground"
+                    >
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             ) : (
               <Button
                 variant="secondary"
@@ -776,15 +820,47 @@ const ParameterField: React.FC<ParameterFieldProps> = ({
       options.filter((option) => !option.exempt?.includes(itemType));
 
       return (
-        <InputDropdown
-          label={String(param.label)}
-          labelPosition="center"
-          value={(value as string) || ""}
-          onChange={(newValue) => onChange(newValue)}
-          options={options}
-          className="bg-card"
-          size="sm"
-        />
+        <div className="space-y-1">
+          <label className="block text-zinc-200 text-sm text-center">
+            {String(param.label)}
+          </label>
+          <Select
+            value={
+              ((value as string) || "") === ""
+                ? EMPTY_SELECT_SENTINEL
+                : String(value)
+            }
+            onValueChange={(selectedValue) => {
+              const normalizedValue =
+                selectedValue === EMPTY_SELECT_SENTINEL ? "" : selectedValue;
+              const selectedOption = options.find(
+                (opt) => String(opt.value) === normalizedValue,
+              ) ?? {
+                value: normalizedValue,
+                label: normalizedValue,
+                valueType: "text",
+              };
+
+              onChange(selectedOption);
+            }}
+          >
+            <SelectTrigger size="sm" className="w-full">
+              <SelectValue placeholder="Select option" />
+            </SelectTrigger>
+            <SelectContent className="z-120 bg-popover text-popover-foreground border-border shadow-2xl">
+              <SelectItem value={EMPTY_SELECT_SENTINEL}>None</SelectItem>
+              {options.map((option) => (
+                <SelectItem
+                  key={`param-${param.id}-${option.value}-${option.label}`}
+                  value={String(option.value)}
+                  className="text-foreground"
+                >
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       );
     }
 
@@ -899,19 +975,18 @@ const ParameterField: React.FC<ParameterFieldProps> = ({
           <div className="flex items-center gap-2 mb-2">
             <span className="text-zinc-100 text-sm">{String(param.label)}</span>
             {itemType !== "consumable" && (
-              <button
-                onClick={() =>
+              <Toggle
+                pressed={isVariableMode}
+                onPressedChange={() =>
                   handleModeChange(isVariableMode ? "number" : "variable")
                 }
-                className={`p-1 rounded transition-colors cursor-pointer ${
-                  isVariableMode
-                    ? "bg-jungle-green-500/20 text-jungle-green-400"
-                    : "bg-zinc-700 text-zinc-400 hover:text-jungle-green-400"
-                }`}
+                variant="outline"
+                size="sm"
+                className="cursor-pointer data-[state=on]:bg-jungle-green-500/20 data-[state=on]:text-jungle-green-400"
                 title="Toggle variable mode"
               >
                 <Brackets className="h-4 w-4" />
-              </button>
+              </Toggle>
             )}
             <button
               onClick={onOpenGameVariablesPanel}
@@ -925,19 +1000,18 @@ const ParameterField: React.FC<ParameterFieldProps> = ({
               <Cube className="h-4 w-4" />
             </button>
             {isEffect && (
-              <button
-                onClick={() =>
+              <Toggle
+                pressed={isRangeMode}
+                onPressedChange={() =>
                   handleModeChange(isRangeMode ? "number" : "range")
                 }
-                className={`p-1 rounded transition-colors cursor-pointer ${
-                  isRangeMode
-                    ? "bg-jungle-green-500/20 text-jungle-green-400"
-                    : "bg-zinc-700 text-zinc-400 hover:text-jungle-green-400"
-                }`}
+                variant="outline"
+                size="sm"
+                className="cursor-pointer data-[state=on]:bg-jungle-green-500/20 data-[state=on]:text-jungle-green-400"
                 title="Toggle range mode"
               >
                 <ArrowsLeftRight className="h-4 w-4" />
-              </button>
+              </Toggle>
             )}
           </div>
 
@@ -1057,14 +1131,44 @@ const ParameterField: React.FC<ParameterFieldProps> = ({
           ) : isVariableMode && itemType !== "consumable" ? (
             <div className="space-y-2">
               {availableVariables && availableVariables.length > 0 ? (
-                <InputDropdown
-                  value={(value as string) || ""}
-                  onChange={(newValue) => onChange(newValue)}
-                  options={availableVariables}
-                  placeholder="Select variable"
-                  className="bg-card"
-                  size="sm"
-                />
+                <Select
+                  value={
+                    ((value as string) || "") === ""
+                      ? EMPTY_SELECT_SENTINEL
+                      : String(value)
+                  }
+                  onValueChange={(selectedValue) => {
+                    const normalizedValue =
+                      selectedValue === EMPTY_SELECT_SENTINEL
+                        ? ""
+                        : selectedValue;
+                    const selectedOption = availableVariables.find(
+                      (opt) => String(opt.value) === normalizedValue,
+                    ) ?? {
+                      value: normalizedValue,
+                      label: normalizedValue,
+                      valueType: "user_var",
+                    };
+
+                    onChange(selectedOption);
+                  }}
+                >
+                  <SelectTrigger size="sm" className="w-full">
+                    <SelectValue placeholder="Select variable" />
+                  </SelectTrigger>
+                  <SelectContent className="z-120 bg-popover text-popover-foreground border-border shadow-2xl">
+                    <SelectItem value={EMPTY_SELECT_SENTINEL}>None</SelectItem>
+                    {availableVariables.map((option) => (
+                      <SelectItem
+                        key={`num-${option.value}-${option.label}`}
+                        value={String(option.value)}
+                        className="text-foreground"
+                      >
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               ) : (
                 <Button
                   variant="secondary"
@@ -1195,22 +1299,6 @@ const Inspector: React.FC<InspectorProps> = ({
 }) => {
   const [customMessageValidationError, setCustomMessageValidationError] =
     useState<string>("");
-
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({
-    id: "panel-inspector",
-  });
-
-  const style = transform
-    ? {
-        position: "absolute" as const,
-        left: position.x + transform.x,
-        top: position.y + transform.y,
-      }
-    : {
-        position: "absolute" as const,
-        left: position.x,
-        top: position.y,
-      };
 
   const availableVariables = getNumberVariables(joker).map(
     (variable: { name: string }) => ({
@@ -1374,62 +1462,22 @@ const Inspector: React.FC<InspectorProps> = ({
     if (!trigger) return null;
 
     return (
-      <div className="space-y-4">
-        <div className="bg-linear-to-r from-balatro-money/20 to-transparent border border-balatro-money/30 rounded-lg p-4">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-balatro-money/20 rounded-lg flex items-center justify-center">
-              <Eye className="h-5 w-5 text-balatro-money" />
-            </div>
+      <div className="space-y-3">
+        <div className="p-1">
+          <div className="mb-2 flex items-center gap-3">
+            <Eye className="h-3.5 w-3.5 text-balatro-money shrink-0" />
             <div>
-              <h4 className="text-balatro-money font-medium text-lg">
+              <h4 className="text-balatro-money font-semibold text-base leading-none mb-1">
                 {trigger.label[itemType]}
               </h4>
-              <span className="text-zinc-400 text-xs uppercase tracking-wider">
-                Trigger Event ({itemType})
+              <span className="text-zinc-400 text-[11px] uppercase tracking-wide">
+                Trigger Event
               </span>
             </div>
           </div>
-          <p className="text-zinc-100 text-sm leading-relaxed">
+          <p className="text-zinc-100 text-sm leading-snug">
             {trigger.description[itemType]}
           </p>
-        </div>
-
-        <div className="grid grid-cols-3 gap-3">
-          <div className="bg-background/70 border border-border rounded-xl p-3">
-            <div className="text-zinc-100 text-sm font-medium mb-1">
-              Conditions
-            </div>
-            <div className="text-jungle-green-400 text-2xl font-bold">
-              {selectedRule.conditionGroups.reduce(
-                (total, group) => total + group.conditions.length,
-                0,
-              )}
-            </div>
-          </div>
-          <div className="bg-background/70 border border-border rounded-xl p-3">
-            <div className="text-zinc-100 text-sm font-medium mb-1">
-              Effects
-            </div>
-            <div className="text-jungle-green-400 text-2xl font-bold">
-              {selectedRule.effects.length +
-                selectedRule.randomGroups.reduce(
-                  (sum, group) => sum + group.effects.length,
-                  0,
-                ) +
-                selectedRule.loops.reduce(
-                  (sum, group) => sum + group.effects.length,
-                  0,
-                )}
-            </div>
-          </div>
-          <div className="bg-background/70 border border-border rounded-xl p-3">
-            <div className="text-zinc-100 text-sm font-medium mb-1">
-              Random Groups
-            </div>
-            <div className="text-jungle-green-400 text-2xl font-bold">
-              {selectedRule.randomGroups.length}
-            </div>
-          </div>
         </div>
       </div>
     );
@@ -1466,83 +1514,95 @@ const Inspector: React.FC<InspectorProps> = ({
     });
 
     return (
-      <div className="space-y-4">
-        <div className="bg-linear-to-r from-balatro-blue/20 to-transparent border border-balatro-blue/30 rounded-lg p-4 relative">
-          <button
-            onClick={() =>
-              onUpdateCondition(selectedRule.id, selectedCondition.id, {
-                negate: !selectedCondition.negate,
-              })
-            }
-            className={`absolute top-4 right-4 p-2 rounded-lg border-2 transition-colors cursor-pointer z-10 ${
-              selectedCondition.negate
-                ? "bg-balatro-red/20 border-balatro-red text-balatro-red"
-                : "bg-card border-border text-muted-foreground hover:border-balatro-red hover:text-balatro-red"
-            }`}
-            title={
-              selectedCondition.negate ? "Remove negation" : "Negate condition"
-            }
-          >
-            <Prohibit className="h-4 w-4 text-balatro-red" />
-          </button>
+      <div className="space-y-3">
+        <div className="relative p-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() =>
+                  onUpdateCondition(selectedRule.id, selectedCondition.id, {
+                    negate: !selectedCondition.negate,
+                  })
+                }
+                className={`absolute top-0 right-0 px-2 py-1 rounded-lg border transition-colors cursor-pointer z-10 inline-flex items-center gap-1 ${
+                  selectedCondition.negate
+                    ? "bg-balatro-red/15 border-balatro-red/60 text-balatro-red"
+                    : "bg-background border-border text-muted-foreground hover:border-balatro-red/70 hover:text-balatro-red"
+                }`}
+                aria-label={
+                  selectedCondition.negate
+                    ? "Remove condition negation"
+                    : "Negate condition"
+                }
+              >
+                <Prohibit className="h-3.5 w-3.5" />
+                <span className="text-[10px] uppercase tracking-wide font-semibold">
+                  {selectedCondition.negate ? "Negated" : "Negate"}
+                </span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="left" sideOffset={8} className="text-xs">
+              {selectedCondition.negate
+                ? "Condition is currently negated. Click to remove NOT logic."
+                : "Apply NOT logic to this condition."}
+            </TooltipContent>
+          </Tooltip>
 
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-balatro-blue/20 rounded-lg flex items-center justify-center">
-              <Info className="h-5 w-5 text-balatro-blue" />
-            </div>
-            <div className="flex-1 pr-12">
-              <h4 className="text-balatro-blue font-medium text-lg">
+          <div className="mb-2 pr-24 flex items-center gap-3">
+            <Info className="h-3.5 w-3.5 text-balatro-blue shrink-0" />
+            <div>
+              <h4 className="text-balatro-blue font-semibold text-base leading-none mb-1">
                 {conditionType.label}
               </h4>
-              <span className="text-zinc-400 text-xs uppercase tracking-wider">
-                Condition Logic ({itemType})
+              <span className="text-zinc-400 text-[11px] uppercase tracking-wide">
+                Condition Logic
               </span>
             </div>
           </div>
-          <p className="text-zinc-100 text-sm leading-relaxed">
+          <p className="text-zinc-100 text-sm leading-snug">
             {conditionType.description}
           </p>
+          <div className="mt-3 border-b border-border/70" />
         </div>
 
         {paramsToRender.length > 0 && (
-          <div className="space-y-3">
+          <div className="space-y-2">
             <h5 className="text-zinc-100 font-medium text-sm flex items-center gap-2">
               <div className="w-2 h-2 bg-balatro-blue rounded-full"></div>
               Parameters
             </h5>
-            {paramsToRender.map((param) => (
-              <div
-                key={param.id}
-                className="bg-background/70 border border-border rounded-xl p-3"
-              >
-                <ParameterField
-                  param={param}
-                  item={selectedCondition.params[param.id]}
-                  selectedRule={selectedRule}
-                  selectedCondition={selectedCondition}
-                  selectedEffect={selectedEffect ?? undefined}
-                  onChange={(item) => {
-                    const newParams = {
-                      ...selectedCondition.params,
-                      [param.id]: item,
-                    };
-                    onUpdateCondition(selectedRule.id, selectedCondition.id, {
-                      params: newParams,
-                    });
-                  }}
-                  parentValues={selectedCondition.params}
-                  availableVariables={availableVariables}
-                  onCreateVariable={handleCreateVariable}
-                  onOpenVariablesPanel={onToggleVariablesPanel}
-                  onOpenGameVariablesPanel={onToggleGameVariablesPanel}
-                  selectedGameVariable={selectedGameVariable}
-                  onGameVariableApplied={onGameVariableApplied}
-                  isEffect={false}
-                  joker={joker}
-                  itemType={itemType}
-                />
-              </div>
-            ))}
+            <div className="divide-y divide-border/70">
+              {paramsToRender.map((param) => (
+                <div key={param.id} className="py-2.5 first:pt-1 last:pb-1">
+                  <ParameterField
+                    param={param}
+                    item={selectedCondition.params[param.id]}
+                    selectedRule={selectedRule}
+                    selectedCondition={selectedCondition}
+                    selectedEffect={selectedEffect ?? undefined}
+                    onChange={(item) => {
+                      const newParams = {
+                        ...selectedCondition.params,
+                        [param.id]: item,
+                      };
+                      onUpdateCondition(selectedRule.id, selectedCondition.id, {
+                        params: newParams,
+                      });
+                    }}
+                    parentValues={selectedCondition.params}
+                    availableVariables={availableVariables}
+                    onCreateVariable={handleCreateVariable}
+                    onOpenVariablesPanel={onToggleVariablesPanel}
+                    onOpenGameVariablesPanel={onToggleGameVariablesPanel}
+                    selectedGameVariable={selectedGameVariable}
+                    onGameVariableApplied={onGameVariableApplied}
+                    isEffect={false}
+                    joker={joker}
+                    itemType={itemType}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -1553,25 +1613,22 @@ const Inspector: React.FC<InspectorProps> = ({
     if (!selectedRandomGroup || !selectedRule) return null;
 
     return (
-      <div className="space-y-4">
-        <div className="bg-linear-to-r from-mint/20 to-transparent border border-jungle-green-400/30 rounded-lg p-4">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-jungle-green-500/20 rounded-lg flex items-center justify-center">
-              <Percent className="h-5 w-5 text-jungle-green-400" />
-            </div>
-            <div>
-              <h4 className="text-jungle-green-400 font-medium text-lg">
-                Random Group
-              </h4>
-              <span className="text-zinc-400 text-xs uppercase tracking-wider">
-                Chance-Based Effects
-              </span>
-            </div>
+      <div className="space-y-3">
+        <div className="p-1">
+          <div className="flex items-center gap-3 mb-2">
+            <Percent className="h-3.5 w-3.5 text-jungle-green-400 shrink-0" />
+            <h4 className="text-jungle-green-400 font-semibold text-base leading-none">
+              Random Group
+            </h4>
+            <span className="text-jungle-green-400 text-xs font-semibold">
+              ({selectedRandomGroup.effects.length})
+            </span>
           </div>
-          <p className="text-zinc-100 text-sm leading-relaxed">
+          <p className="text-zinc-100 text-sm leading-snug">
             Effects in this group will all be triggered together if the random
             chance succeeds.
           </p>
+          <div className="mt-3 border-b border-border/70" />
         </div>
 
         <div className="space-y-3">
@@ -1580,43 +1637,53 @@ const Inspector: React.FC<InspectorProps> = ({
             Chance Configuration
           </h5>
 
-          <div className="bg-jungle-green-500/10 border border-jungle-green-400/30 rounded-lg p-4">
-            <div className="flex flex-col items-center gap-4">
-              <ChanceInput
-                key="numerator"
-                label="Numerator"
-                value={selectedRandomGroup.chance_numerator.value}
-                onChange={(value) => {
-                  onUpdateRandomGroup(selectedRule.id, selectedRandomGroup.id, {
-                    chance_numerator: value,
-                  });
-                }}
-                availableVariables={availableVariables}
-                onCreateVariable={handleCreateVariable}
-                onOpenVariablesPanel={onToggleVariablesPanel}
-                onOpenGameVariablesPanel={onToggleGameVariablesPanel}
-                selectedGameVariable={selectedGameVariable}
-                onGameVariableApplied={onGameVariableApplied}
-                itemType={itemType}
-              />
-              <span className="text-zinc-100 text-sm">in</span>
-              <ChanceInput
-                key="denominator"
-                label="Denominator"
-                value={selectedRandomGroup.chance_denominator.value}
-                onChange={(value) => {
-                  onUpdateRandomGroup(selectedRule.id, selectedRandomGroup.id, {
-                    chance_denominator: value,
-                  });
-                }}
-                availableVariables={availableVariables}
-                onCreateVariable={handleCreateVariable}
-                onOpenVariablesPanel={onToggleVariablesPanel}
-                onOpenGameVariablesPanel={onToggleGameVariablesPanel}
-                selectedGameVariable={selectedGameVariable}
-                onGameVariableApplied={onGameVariableApplied}
-                itemType={itemType}
-              />
+          <div className="divide-y divide-border/70">
+            <div className="py-2.5 first:pt-1 last:pb-1">
+              <div className="max-w-60 mx-auto space-y-2">
+                <ChanceInput
+                  key="numerator"
+                  label="Numerator"
+                  value={selectedRandomGroup.chance_numerator.value}
+                  onChange={(value) => {
+                    onUpdateRandomGroup(
+                      selectedRule.id,
+                      selectedRandomGroup.id,
+                      {
+                        chance_numerator: value,
+                      },
+                    );
+                  }}
+                  availableVariables={availableVariables}
+                  onCreateVariable={handleCreateVariable}
+                  onOpenVariablesPanel={onToggleVariablesPanel}
+                  onOpenGameVariablesPanel={onToggleGameVariablesPanel}
+                  selectedGameVariable={selectedGameVariable}
+                  onGameVariableApplied={onGameVariableApplied}
+                  itemType={itemType}
+                />
+                <div className="border-b border-border/80" />
+                <ChanceInput
+                  key="denominator"
+                  label="Denominator"
+                  value={selectedRandomGroup.chance_denominator.value}
+                  onChange={(value) => {
+                    onUpdateRandomGroup(
+                      selectedRule.id,
+                      selectedRandomGroup.id,
+                      {
+                        chance_denominator: value,
+                      },
+                    );
+                  }}
+                  availableVariables={availableVariables}
+                  onCreateVariable={handleCreateVariable}
+                  onOpenVariablesPanel={onToggleVariablesPanel}
+                  onOpenGameVariablesPanel={onToggleGameVariablesPanel}
+                  selectedGameVariable={selectedGameVariable}
+                  onGameVariableApplied={onGameVariableApplied}
+                  itemType={itemType}
+                />
+              </div>
             </div>
           </div>
           <div className="space-y-3">
@@ -1625,8 +1692,8 @@ const Inspector: React.FC<InspectorProps> = ({
               Advanced Configuration
             </h5>
 
-            <div className="bg-jungle-green-500/10 border border-jungle-green-400/30 rounded-lg p-4">
-              <div className="flex flex-col items-center gap-4">
+            <div className="divide-y divide-border/70">
+              <div className="py-2.5 first:pt-1 last:pb-1">
                 <div className="space-y-6 p-2">
                   <Checkbox
                     id="respect_probability_effects"
@@ -1694,15 +1761,6 @@ const Inspector: React.FC<InspectorProps> = ({
               </div>
             </div>
           </div>
-
-          <div className="bg-background/70 border border-border rounded-xl p-3">
-            <div className="text-zinc-100 text-sm font-medium mb-2">
-              Effects in this group
-            </div>
-            <div className="text-jungle-green-400 text-lg font-bold">
-              {selectedRandomGroup.effects.length}
-            </div>
-          </div>
         </div>
       </div>
     );
@@ -1712,25 +1770,22 @@ const Inspector: React.FC<InspectorProps> = ({
     if (!selectedLoopGroup || !selectedRule) return null;
 
     return (
-      <div className="space-y-4">
-        <div className="bg-linear-to-r from-balatro-blue/20 to-transparent border border-balatro-blue/30 rounded-lg p-4">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-balatro-blue/20 rounded-lg flex items-center justify-center">
-              <PlayCircle className="h-5 w-5 text-balatro-blue" />
-            </div>
-            <div>
-              <h4 className="text-balatro-blue font-medium text-lg">
-                Loop Group
-              </h4>
-              <span className="text-zinc-400 text-xs uppercase tracking-wider">
-                Repeat Effects
-              </span>
-            </div>
+      <div className="space-y-3">
+        <div className="p-1">
+          <div className="flex items-center gap-3 mb-2">
+            <ArrowCounterClockwise className="h-3.5 w-3.5 text-balatro-blue shrink-0" />
+            <h4 className="text-balatro-blue font-semibold text-base leading-none">
+              Loop Group
+            </h4>
+            <span className="text-balatro-blue text-xs font-semibold">
+              ({selectedLoopGroup.effects.length})
+            </span>
           </div>
-          <p className="text-zinc-100 text-sm leading-relaxed">
+          <p className="text-zinc-100 text-sm leading-snug">
             Effects in this group will all be triggered together for the amount
             of repetitions you set.
           </p>
+          <div className="mt-3 border-b border-border/70" />
         </div>
 
         <div className="space-y-3">
@@ -1739,36 +1794,29 @@ const Inspector: React.FC<InspectorProps> = ({
             Loop Configuration
           </h5>
 
-          <div className="bg-balatro-blue/10 border border-balatro-blue/30 rounded-lg p-4">
-            <div className="flex flex-col items-center gap-4">
-              <span className="text-zinc-100 text-sm">Loop</span>
-              <ChanceInput
-                key="repetitions"
-                label=""
-                value={selectedLoopGroup.repetitions.value}
-                onChange={(value) => {
-                  onUpdateLoopGroup(selectedRule.id, selectedLoopGroup.id, {
-                    repetitions: value,
-                  });
-                }}
-                availableVariables={availableVariables}
-                onCreateVariable={handleCreateVariable}
-                onOpenVariablesPanel={onToggleVariablesPanel}
-                onOpenGameVariablesPanel={onToggleGameVariablesPanel}
-                selectedGameVariable={selectedGameVariable}
-                onGameVariableApplied={onGameVariableApplied}
-                itemType={itemType}
-              />
-              <span className="text-zinc-100 text-sm">Time(s)</span>
-            </div>
-          </div>
-
-          <div className="bg-background/70 border border-border rounded-xl p-3">
-            <div className="text-zinc-100 text-sm font-medium mb-2">
-              Effects in this group
-            </div>
-            <div className="text-balatro-blue text-lg font-bold">
-              {selectedLoopGroup.effects.length}
+          <div className="divide-y divide-border/70">
+            <div className="py-2.5 first:pt-1 last:pb-1">
+              <div className="flex flex-col items-start gap-4">
+                <span className="text-zinc-100 text-sm">Loop</span>
+                <ChanceInput
+                  key="repetitions"
+                  label=""
+                  value={selectedLoopGroup.repetitions.value}
+                  onChange={(value) => {
+                    onUpdateLoopGroup(selectedRule.id, selectedLoopGroup.id, {
+                      repetitions: value,
+                    });
+                  }}
+                  availableVariables={availableVariables}
+                  onCreateVariable={handleCreateVariable}
+                  onOpenVariablesPanel={onToggleVariablesPanel}
+                  onOpenGameVariablesPanel={onToggleGameVariablesPanel}
+                  selectedGameVariable={selectedGameVariable}
+                  onGameVariableApplied={onGameVariableApplied}
+                  itemType={itemType}
+                />
+                <span className="text-zinc-100 text-sm">Time(s)</span>
+              </div>
             </div>
           </div>
         </div>
@@ -1826,50 +1874,55 @@ const Inspector: React.FC<InspectorProps> = ({
     );
 
     return (
-      <div className="space-y-4">
-        <div className="bg-linear-to-r from-balatro-green/20 to-transparent border border-balatro-green/30 rounded-lg p-4 relative">
-          {!isInRandomGroup && !isInLoopGroup && (
-            <button
-              onClick={() =>
-                onCreateRandomGroupFromEffect(
-                  selectedRule.id,
-                  selectedEffect.id,
-                )
-              }
-              className="absolute top-4 right-4 p-2 rounded-lg border-2 transition-colors cursor-pointer z-10 bg-card border-jungle-green-400 text-jungle-green-400 hover:bg-jungle-green-500/20"
-              title="Create Random Group"
-            >
-              <Percent className="h-4 w-4" />
-            </button>
-          )}
-          {!isInRandomGroup && !isInLoopGroup && (
-            <button
-              onClick={() =>
-                onCreateLoopGroupFromEffect(selectedRule.id, selectedEffect.id)
-              }
-              className="absolute top-4 right-16 p-2 rounded-lg border-2 transition-colors cursor-pointer z-10 bg-card border-balatro-blue text-balatro-blue hover:bg-balatro-blue/20"
-              title="Create Loop Group"
-            >
-              <ArrowCounterClockwise className="h-4 w-4" />
-            </button>
-          )}
+      <div className="space-y-3">
+        <div className="p-1">
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <div className="min-w-0 flex items-center gap-2">
+              <Percent className="h-3.5 w-3.5 text-balatro-green shrink-0" />
+              <div>
+                <h4 className="text-balatro-green font-semibold text-base leading-none mb-1">
+                  {effectType.label}
+                </h4>
+                <span className="text-zinc-400 text-[11px] uppercase tracking-wide">
+                  Effect Action
+                </span>
+              </div>
+            </div>
 
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-balatro-green/20 rounded-lg flex items-center justify-center">
-              <Info className="h-5 w-5 text-balatro-green" />
-            </div>
-            <div className="flex-1 pr-12">
-              <h4 className="text-balatro-green font-medium text-lg">
-                {effectType.label}
-              </h4>
-              <span className="text-zinc-400 text-xs uppercase tracking-wider">
-                Effect Action ({itemType})
-              </span>
-            </div>
+            {!isInRandomGroup && !isInLoopGroup && (
+              <div className="shrink-0 flex items-center gap-1.5">
+                <IconButton
+                  icon={ArrowCounterClockwise}
+                  onClick={() =>
+                    onCreateLoopGroupFromEffect(
+                      selectedRule.id,
+                      selectedEffect.id,
+                    )
+                  }
+                  tooltip="Move this effect into a new loop group"
+                  className="h-8 w-8 border-balatro-blue/60 text-balatro-blue bg-balatro-blue/10 hover:bg-balatro-blue/20"
+                  iconClassName="h-3.5 w-3.5"
+                />
+
+                <IconButton
+                  icon={Percent}
+                  onClick={() =>
+                    onCreateRandomGroupFromEffect(
+                      selectedRule.id,
+                      selectedEffect.id,
+                    )
+                  }
+                  tooltip="Move this effect into a new random chance group"
+                  className="h-8 w-8 border-jungle-green-400/60 text-jungle-green-400 bg-jungle-green-500/10 hover:bg-jungle-green-500/20"
+                  iconClassName="h-3.5 w-3.5"
+                />
+              </div>
+            )}
           </div>
-          <p className="text-zinc-100 text-sm leading-relaxed">
+          <p className="text-zinc-100 text-sm leading-snug">
             {effectType.description}
           </p>
+          <div className="mt-3 border-b border-border/70" />
         </div>
 
         <div className="space-y-3">
@@ -1877,82 +1930,83 @@ const Inspector: React.FC<InspectorProps> = ({
             <div className="w-2 h-2 bg-balatro-green rounded-full"></div>
             Custom Message
           </h5>
-          <div className="bg-background/70 border border-border rounded-xl p-3">
-            <InputField
-              label="Message"
-              value={selectedEffect.customMessage || ""}
-              onChange={(e) => {
-                const value = e.target.value;
-                const validation = validateCustomMessage(value);
+          <div className="divide-y divide-border/70">
+            <div className="py-2.5 first:pt-1 last:pb-1">
+              <InputField
+                label="Message"
+                value={selectedEffect.customMessage || ""}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const validation = validateCustomMessage(value);
 
-                if (validation.isValid) {
-                  setCustomMessageValidationError("");
-                } else {
-                  setCustomMessageValidationError(
-                    validation.error || "Invalid message",
-                  );
-                }
+                  if (validation.isValid) {
+                    setCustomMessageValidationError("");
+                  } else {
+                    setCustomMessageValidationError(
+                      validation.error || "Invalid message",
+                    );
+                  }
 
-                onUpdateEffect(selectedRule.id, selectedEffect.id, {
-                  customMessage: value || undefined,
-                });
-              }}
-              placeholder="Leave blank for default message"
-              size="sm"
-            />
-            {customMessageValidationError && (
-              <div className="flex items-center gap-2 mt-1 text-balatro-red text-sm">
-                <Warning className="h-4 w-4" />
-                <span>{customMessageValidationError}</span>
-              </div>
-            )}
+                  onUpdateEffect(selectedRule.id, selectedEffect.id, {
+                    customMessage: value || undefined,
+                  });
+                }}
+                placeholder="Leave blank for default message"
+                size="sm"
+              />
+              {customMessageValidationError && (
+                <div className="flex items-center gap-2 mt-1 text-balatro-red text-sm">
+                  <Warning className="h-4 w-4" />
+                  <span>{customMessageValidationError}</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
         {paramsToRender.length > 0 && (
-          <div className="space-y-3">
+          <div className="space-y-2">
             <h5 className="text-zinc-100 font-medium text-sm flex items-center gap-2">
               <div className="w-2 h-2 bg-balatro-green rounded-full"></div>
               Parameters
             </h5>
-            {paramsToRender.map((param) => (
-              <div
-                key={param.id}
-                className="bg-background/70 border border-border rounded-xl p-3"
-              >
-                <ParameterField
-                  param={param}
-                  item={selectedEffect.params[param.id]}
-                  selectedRule={selectedRule}
-                  onChange={(item) => {
-                    if (param.type == "checkbox") {
-                      item.value = param.checkboxOptions?.map((box) =>
-                        box.checked ? true : false,
-                      );
-                    }
-                    const newParams = {
-                      ...selectedEffect.params,
-                      [param.id]: item,
-                    };
-                    onUpdateEffect(selectedRule.id, selectedEffect.id, {
-                      params: newParams,
-                    });
-                  }}
-                  selectedCondition={selectedCondition ?? undefined}
-                  selectedEffect={selectedEffect ?? undefined}
-                  parentValues={selectedEffect.params}
-                  availableVariables={availableVariables}
-                  onCreateVariable={handleCreateVariable}
-                  onOpenVariablesPanel={onToggleVariablesPanel}
-                  onOpenGameVariablesPanel={onToggleGameVariablesPanel}
-                  selectedGameVariable={selectedGameVariable}
-                  onGameVariableApplied={onGameVariableApplied}
-                  isEffect={true}
-                  joker={joker}
-                  itemType={itemType}
-                />
-              </div>
-            ))}
+            <div className="divide-y divide-border/70">
+              {paramsToRender.map((param) => (
+                <div key={param.id} className="py-2.5 first:pt-1 last:pb-1">
+                  <ParameterField
+                    param={param}
+                    item={selectedEffect.params[param.id]}
+                    selectedRule={selectedRule}
+                    onChange={(item) => {
+                      if (param.type == "checkbox") {
+                        item.value = param.checkboxOptions?.map((box) =>
+                          box.checked ? true : false,
+                        );
+                      }
+                      const newParams = {
+                        ...selectedEffect.params,
+                        [param.id]: item,
+                      };
+                      onUpdateEffect(selectedRule.id, selectedEffect.id, {
+                        params: newParams,
+                      });
+                    }}
+                    selectedCondition={selectedCondition ?? undefined}
+                    selectedEffect={selectedEffect ?? undefined}
+                    parentValues={selectedEffect.params}
+                    availableVariables={availableVariables}
+                    onCreateVariable={handleCreateVariable}
+                    onOpenVariablesPanel={onToggleVariablesPanel}
+                    onOpenGameVariablesPanel={onToggleGameVariablesPanel}
+                    selectedGameVariable={selectedGameVariable}
+                    onGameVariableApplied={onGameVariableApplied}
+                    isEffect={true}
+                    joker={joker}
+                    itemType={itemType}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -1960,38 +2014,23 @@ const Inspector: React.FC<InspectorProps> = ({
   };
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="w-md bg-card/95 backdrop-blur-md border border-border rounded-xl shadow-xl max-h-[calc(100vh-6rem)] z-40 flex flex-col"
+    <Panel
+      id="inspector"
+      position={position}
+      icon={ChartPieSlice}
+      title="Inspector"
+      titleAccessory={<ItemTypeBadge itemType={itemType} />}
+      onClose={onClose}
+      closeLabel="Close Inspector"
+      className="w-88 bg-card/98 border-2 border-border/90 rounded-2xl shadow-2xl max-h-[calc(100vh-5rem)] overflow-hidden"
+      headerClassName="p-3 border-b border-border/90"
+      contentClassName="p-3 overflow-y-auto custom-scrollbar"
     >
-      <div
-        className="flex items-center justify-between p-3 border-b border-border cursor-grab active:cursor-grabbing shrink-0"
-        {...attributes}
-        {...listeners}
-      >
-        <div className="flex items-center gap-2">
-          <List className="h-4 w-4 text-muted-foreground" />
-          <ChartPieSlice className="h-5 w-5 text-foreground" />
-          <h3 className="text-foreground text-sm font-medium tracking-wider">
-            Inspector ({itemType})
-          </h3>
-        </div>
-        <button
-          onClick={onClose}
-          className="p-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
-      <div className="p-4 overflow-y-auto custom-scrollbar min-h-0 flex-1">
-        <div className="w-1/4 h-px bg-border mx-auto mb-6"></div>
-
+      <div>
         {!selectedRule && (
-          <div className="flex items-center justify-center h-40">
+          <div className="flex items-center justify-center h-28 rounded-xl border border-dashed border-border/80 bg-background/50">
             <div className="text-center">
-              <Info className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
+              <Info className="h-9 w-9 text-muted-foreground mx-auto mb-2 opacity-60" />
               <p className="text-muted-foreground text-sm">
                 Select a rule to view its properties
               </p>
@@ -2010,7 +2049,7 @@ const Inspector: React.FC<InspectorProps> = ({
         {selectedRandomGroup && renderRandomGroupEditor()}
         {selectedLoopGroup && renderLoopGroupEditor()}
       </div>
-    </div>
+    </Panel>
   );
 };
 

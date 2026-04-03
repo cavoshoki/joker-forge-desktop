@@ -58,6 +58,10 @@ const UI_SCALE_KEY = "app-ui-scale";
 const BALATRO_PATH_KEY = "joker_forge_balatro_path";
 const BALATRO_AUTOFIND_KEY = "joker_forge_balatro_autofind";
 const BALATRO_AUTOFIND_ALERT_KEY = "joker_forge_balatro_autofind_alert";
+const SPLIT_LOCALIZATION_EXPORT_KEY = "joker_forge_split_localization_export";
+const EXPORT_DESTINATION_MODE_KEY = "joker_forge_export_destination_mode";
+
+export type ExportDestinationMode = "downloads" | "balatro-mods";
 
 const DEFAULT_STATS: ProjectStats = {
   jokers: 0,
@@ -474,6 +478,8 @@ export const resetProjectData = () => {
   window.localStorage.removeItem(BALATRO_PATH_KEY);
   window.localStorage.removeItem(BALATRO_AUTOFIND_KEY);
   window.localStorage.removeItem(BALATRO_AUTOFIND_ALERT_KEY);
+  window.localStorage.removeItem(SPLIT_LOCALIZATION_EXPORT_KEY);
+  window.localStorage.removeItem(EXPORT_DESTINATION_MODE_KEY);
   window.dispatchEvent(new Event(EVENT_KEY));
 };
 
@@ -525,6 +531,31 @@ export const setBalatroAutofindAlertShown = (value: boolean) => {
     BALATRO_AUTOFIND_ALERT_KEY,
     value ? "true" : "false",
   );
+};
+
+export const getSplitLocalizationExportEnabled = (): boolean => {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(SPLIT_LOCALIZATION_EXPORT_KEY) === "true";
+};
+
+export const setSplitLocalizationExportEnabled = (value: boolean) => {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(
+    SPLIT_LOCALIZATION_EXPORT_KEY,
+    value ? "true" : "false",
+  );
+};
+
+export const getExportDestinationMode = (): ExportDestinationMode => {
+  if (typeof window === "undefined") return "downloads";
+  const stored = window.localStorage.getItem(EXPORT_DESTINATION_MODE_KEY);
+  if (stored === "balatro-mods") return "balatro-mods";
+  return "downloads";
+};
+
+export const setExportDestinationMode = (mode: ExportDestinationMode) => {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(EXPORT_DESTINATION_MODE_KEY, mode);
 };
 
 export const useModName = () => {

@@ -21,7 +21,9 @@ pub fn run() {
             commands::disconnect_nodes,
             commands::update_node_value,
             commands::get_node_snippet,
-            commands::compile_joker_lua
+            commands::compile_joker_lua,
+            commands::compile_joker_lua_with_options,
+            commands::compile_rulebuilder_node_snippet
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

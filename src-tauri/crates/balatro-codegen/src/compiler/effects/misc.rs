@@ -210,3 +210,128 @@ pub fn edit_blind_size(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectO
         colour: None,
     }
 }
+
+/// Set Sell Value effect — adjusts card sell value.
+pub fn set_sell_value(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
+    let operation = effect
+        .params
+        .get("operation")
+        .and_then(|v| v.as_str())
+        .unwrap_or("add");
+    let value = effect
+        .params
+        .get("value")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(1);
+
+    let stmt = match operation {
+        "set" => lua_raw_stmt(format!(
+            "card.ability.extra_value = {}; if card.set_cost then card:set_cost() end",
+            value
+        )),
+        "subtract" => lua_raw_stmt(format!(
+            "card.ability.extra_value = math.max(0, (card.ability.extra_value or 0) - {}); if card.set_cost then card:set_cost() end",
+            value
+        )),
+        _ => lua_raw_stmt(format!(
+            "card.ability.extra_value = (card.ability.extra_value or 0) + {}; if card.set_cost then card:set_cost() end",
+            value
+        )),
+    };
+
+    EffectOutput {
+        return_fields: vec![],
+        pre_return: vec![stmt],
+        config_vars: vec![],
+        message: Some(lua_str("Sell Value Updated")),
+        colour: Some(lua_raw_expr("G.C.MONEY")),
+    }
+}
+
+/// Set Ante effect.
+pub fn set_ante(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
+    let operation = effect
+        .params
+        .get("operation")
+        .and_then(|v| v.as_str())
+        .unwrap_or("set");
+    let value = effect
+        .params
+        .get("value")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(1);
+
+    let mod_expr = match operation {
+        "subtract" => format!("-{}", value),
+        "add" => format!("{}", value),
+        _ => format!("{} - (G.GAME.round_resets.ante or 0)", value),
+    };
+
+    let stmt = lua_raw_stmt(format!(
+        "local mod = {}; ease_ante(mod); G.GAME.round_resets.blind_ante = (G.GAME.round_resets.blind_ante or 0) + mod",
+        mod_expr
+    ));
+
+    EffectOutput {
+        return_fields: vec![],
+        pre_return: vec![stmt],
+        config_vars: vec![],
+        message: Some(lua_str("Ante Updated")),
+        colour: Some(lua_raw_expr("G.C.YELLOW")),
+    }
+}
+
+/// Disable Boss Blind effect.
+pub fn disable_boss_blind(_effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
+    let stmt = lua_raw_stmt(
+        "if G.GAME.blind and G.GAME.blind.boss and not G.GAME.blind.disabled then G.GAME.blind:disable(); play_sound('timpani') end",
+    );
+
+    EffectOutput {
+        return_fields: vec![],
+        pre_return: vec![stmt],
+        config_vars: vec![],
+        message: Some(lua_call("localize", vec![lua_str("ph_boss_disabled")])),
+        colour: Some(lua_raw_expr("G.C.GREEN")),
+    }
+}
+
+/// Force Game Over effect.
+pub fn force_game_over(_effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
+    let stmt = lua_raw_stmt(
+        "G.E_MANAGER:add_event(Event({ trigger = 'after', delay = 0.5, func = function() if G.STAGE == G.STAGES.RUN then G.STATE = G.STATES.GAME_OVER; G.STATE_COMPLETE = false end return true end }))",
+    );
+
+    EffectOutput {
+        return_fields: vec![],
+        pre_return: vec![stmt],
+        config_vars: vec![],
+        message: Some(lua_str("Game Over")),
+        colour: Some(lua_raw_expr("G.C.RED")),
+    }
+}
+
+/// Win Game effect.
+pub fn win_game(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
+    let win_type = effect
+        .params
+        .get("win_type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("blind");
+
+    let stmt = if win_type == "run" {
+        lua_raw_stmt("win_game(); G.GAME.won = true")
+    } else {
+        lua_raw_stmt(
+            "if G.STATE == G.STATES.SELECTING_HAND then G.GAME.chips = G.GAME.blind.chips; G.STATE = G.STATES.HAND_PLAYED; G.STATE_COMPLETE = true; end_round() end",
+        )
+    };
+
+    EffectOutput {
+        return_fields: vec![],
+        pre_return: vec![stmt],
+        config_vars: vec![],
+        message: Some(lua_str("Win!")),
+        colour: Some(lua_raw_expr("G.C.ORANGE")),
+    }
+}

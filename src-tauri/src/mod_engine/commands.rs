@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use balatro_codegen::{compile_joker, Emitter as LuaEmitter, JokerDef};
+use balatro_codegen::{
+    compile_joker_with_options, compile_node_snippet, Emitter as LuaEmitter, JokerDef, ObjectType,
+};
 use serde_json::Value;
 use tauri::{Emitter, State, Window};
 
@@ -253,7 +255,43 @@ pub fn get_node_snippet(
 
 #[tauri::command]
 pub fn compile_joker_lua(joker_def: JokerDef, mod_prefix: String) -> Result<String, String> {
-    let chunk = compile_joker(&joker_def, &mod_prefix);
+    let chunk = compile_joker_with_options(&joker_def, &mod_prefix, true);
     let lua = LuaEmitter::new().emit_chunk(&chunk);
     Ok(lua)
+}
+
+#[tauri::command]
+pub fn compile_joker_lua_with_options(
+    joker_def: JokerDef,
+    mod_prefix: String,
+    include_loc_txt: bool,
+) -> Result<String, String> {
+    let chunk = compile_joker_with_options(&joker_def, &mod_prefix, include_loc_txt);
+    let lua = LuaEmitter::new().emit_chunk(&chunk);
+    Ok(lua)
+}
+
+#[tauri::command]
+pub fn compile_rulebuilder_node_snippet(
+    item_type: String,
+    node_type: String,
+    params: HashMap<String, Value>,
+) -> Result<String, String> {
+    let object_type = match item_type.as_str() {
+        "joker" => ObjectType::Joker,
+        "consumable" => ObjectType::Consumable,
+        "card" => ObjectType::Card,
+        "voucher" => ObjectType::Voucher,
+        "deck" => ObjectType::Deck,
+        _ => {
+            return Err(format!("Unsupported item type: {}", item_type));
+        }
+    };
+
+    Ok(compile_node_snippet(
+        &node_type,
+        &params,
+        object_type,
+        "mod",
+    ))
 }

@@ -6,6 +6,7 @@ export interface UserVariable {
   id: string;
   name: string;
   type: "number" | "suit" | "rank" | "pokerhand" | "key" | "text";
+  isGlobal?: boolean;
   description?: string;
   initialValue?: number | string;
   initialSuit?: "Spades" | "Hearts" | "Diamonds" | "Clubs";

@@ -4,7 +4,9 @@ import React, {
   useEffect,
   useCallback,
   useContext,
+  useMemo,
 } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import {
   TransformWrapper,
   TransformComponent,
@@ -31,23 +33,38 @@ import type {
   GlobalConditionTypeDefinition,
   LoopGroup,
   SelectedItem,
+  ConditionParameter,
+  EffectParameter,
 } from "./types";
 import RuleCard from "./rule-card";
 import FloatingDock from "./floating-dock";
 import BlockPalette from "./block-palette";
 import Variables from "./variables";
 import Inspector from "./inspector";
+import LiveCodePanel from "./live-code-panel";
+import HistoryPanel from "./history-panel";
+import { compileSingleJokerLua } from "@/lib/rust-codegen-export";
 import Button from "../generic/Button";
 import {
+  ArrowClockwise,
+  ArrowCounterClockwise,
   CheckCircle,
+  Copy,
   CornersIn,
-  Browser,
+  Eye,
   GridFour,
   MagnifyingGlassMinus,
   MagnifyingGlassPlus,
+  Plus,
+  SquaresFour,
   Terminal,
+  Trash,
 } from "@phosphor-icons/react";
-import { getConditionTypeById, getEffectTypeById } from "./rule-catalog";
+import {
+  getConditionTypeById,
+  getEffectTypeById,
+  getTriggerById,
+} from "./rule-catalog";
 import GameVariables from "./game-variables";
 import { GameVariable } from "@/lib/game-vars";
 import { motion } from "framer-motion";
@@ -63,9 +80,92 @@ import {
 } from "./selection-utils";
 import IconButton from "./icon-button";
 import ItemTypeBadge from "./item-type-badge";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 
 export type ItemData = any;
 type ItemType = "joker" | "consumable" | "card" | "voucher" | "deck";
+
+type SnippetNodeParams = Record<string, unknown>;
+const RULE_HISTORY_LIMIT = 64;
+
+type LiveCodeBlockPreviewTarget = {
+  type: "trigger" | "condition" | "effect";
+  ruleId: string;
+  itemId?: string;
+  groupId?: string;
+};
+
+type RuleBuilderContextTarget = {
+  type:
+    | "canvas"
+    | "rule"
+    | "trigger"
+    | "condition"
+    | "effect"
+    | "condition-group"
+    | "random-group"
+    | "loop-group";
+  ruleId?: string;
+  itemId?: string;
+  groupId?: string;
+  randomGroupId?: string;
+  loopGroupId?: string;
+};
+
+type SelectionRect = {
+  startClientX: number;
+  startClientY: number;
+  currentClientX: number;
+  currentClientY: number;
+};
+
+type WorldPoint = {
+  x: number;
+  y: number;
+};
+
+const toSnippetParams = (
+  params: Record<string, { value: unknown; valueType?: string }>,
+): SnippetNodeParams => {
+  return Object.fromEntries(
+    Object.entries(params || {}).map(([key, value]) => [key, value?.value]),
+  );
+};
+
+const cloneRulesSnapshot = (source: Rule[]): Rule[] => {
+  return JSON.parse(JSON.stringify(source)) as Rule[];
+};
+
+const resolveParameterDefaultValue = (
+  param: ConditionParameter | EffectParameter,
+  parentValues: Record<string, { value: unknown; valueType?: string }>,
+): unknown => {
+  if (param.default !== undefined) return param.default;
+
+  if (param.type !== "select" || !param.options) {
+    return undefined;
+  }
+
+  let options:
+    | Array<{ value: string; label: string; valueType?: string }>
+    | undefined;
+
+  if (typeof param.options === "function") {
+    options = param.options(parentValues);
+  } else {
+    options = param.options;
+  }
+
+  return options?.[0]?.value;
+};
 
 interface RuleBuilderProps {
   isOpen: boolean;
@@ -109,10 +209,39 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
   const [showNoRulesMessage, setShowNoRulesMessage] = useState(false);
 
   const modalRef = useRef<HTMLDivElement>(null);
+  const builderViewportRef = useRef<HTMLDivElement>(null);
   const transformRef = useRef<ReactZoomPanPinchRef>(null);
 
   const [selectedGameVariable, setSelectedGameVariable] =
     useState<GameVariable | null>(null);
+  const [liveCodeSnippet, setLiveCodeSnippet] = useState<string>(
+    "Live item code will appear here.",
+  );
+  const [liveCodeTitle, setLiveCodeTitle] = useState<string>("Item Preview");
+  const [liveCodeStatusMessage, setLiveCodeStatusMessage] = useState<
+    string | undefined
+  >();
+  const [liveCodeIsError, setLiveCodeIsError] = useState(false);
+  const [liveCodeIsLoading, setLiveCodeIsLoading] = useState(false);
+  const [liveCodePreviewTarget, setLiveCodePreviewTarget] =
+    useState<LiveCodeBlockPreviewTarget | null>(null);
+  const [liveCodeWidthPercent, setLiveCodeWidthPercent] = useState<number>(50);
+  const [contextTarget, setContextTarget] = useState<RuleBuilderContextTarget>({
+    type: "canvas",
+  });
+  const [selectedRuleIds, setSelectedRuleIds] = useState<string[]>([]);
+  const [selectionRect, setSelectionRect] = useState<SelectionRect | null>(
+    null,
+  );
+  const [isDragSelecting, setIsDragSelecting] = useState(false);
+  const [lastContextWorldPoint, setLastContextWorldPoint] =
+    useState<WorldPoint | null>(null);
+  const historyPastRef = useRef<Rule[][]>([]);
+  const historyFutureRef = useRef<Rule[][]>([]);
+  const historyPrevRulesRef = useRef<Rule[]>([]);
+  const suppressHistoryRef = useRef(false);
+  const copiedRulesRef = useRef<Rule[]>([]);
+  const pasteOffsetStepRef = useRef(1);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -130,6 +259,130 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
     onClose();
   }, [onSave, onClose, rules]);
 
+  const handleSelectItem = useCallback((item: NonNullable<SelectedItem>) => {
+    setSelectedItem(item);
+    setSelectedRuleIds([item.ruleId]);
+  }, []);
+
+  const setSingleSelectedRule = useCallback((ruleId: string | null) => {
+    if (!ruleId) {
+      setSelectedRuleIds([]);
+      setSelectedItem(null);
+      return;
+    }
+
+    setSelectedRuleIds([ruleId]);
+    setSelectedItem({ type: "trigger", ruleId });
+  }, []);
+
+  const clearRuleSelection = useCallback(() => {
+    setSelectedRuleIds([]);
+    setSelectedItem(null);
+  }, []);
+
+  const selectAllRules = useCallback(() => {
+    const allRuleIds = rules.map((rule) => rule.id);
+    setSelectedRuleIds(allRuleIds);
+    setSelectedItem(
+      allRuleIds.length === 1
+        ? { type: "trigger", ruleId: allRuleIds[0] }
+        : null,
+    );
+  }, [rules]);
+
+  const handleSelectRuleCard = useCallback(
+    (ruleId: string, additive: boolean) => {
+      if (!additive) {
+        setSingleSelectedRule(ruleId);
+        return;
+      }
+
+      setSelectedRuleIds((prev) => {
+        const exists = prev.includes(ruleId);
+        const next = exists
+          ? prev.filter((id) => id !== ruleId)
+          : [...prev, ruleId];
+
+        if (next.length === 1) {
+          setSelectedItem({ type: "trigger", ruleId: next[0] });
+        } else {
+          setSelectedItem(null);
+        }
+
+        return next;
+      });
+    },
+    [setSingleSelectedRule],
+  );
+
+  const handleUndo = useCallback(() => {
+    const past = historyPastRef.current;
+    if (past.length === 0) return;
+
+    const previous = past[past.length - 1];
+    historyPastRef.current = past.slice(0, -1);
+    historyFutureRef.current = [
+      ...historyFutureRef.current,
+      cloneRulesSnapshot(rules),
+    ].slice(-RULE_HISTORY_LIMIT);
+    suppressHistoryRef.current = true;
+    const snapshot = cloneRulesSnapshot(previous);
+    historyPrevRulesRef.current = snapshot;
+    setRules(snapshot);
+  }, [rules]);
+
+  const handleRedo = useCallback(() => {
+    const future = historyFutureRef.current;
+    if (future.length === 0) return;
+
+    const next = future[future.length - 1];
+    historyFutureRef.current = future.slice(0, -1);
+    historyPastRef.current = [
+      ...historyPastRef.current,
+      cloneRulesSnapshot(rules),
+    ].slice(-RULE_HISTORY_LIMIT);
+    suppressHistoryRef.current = true;
+    const snapshot = cloneRulesSnapshot(next);
+    historyPrevRulesRef.current = snapshot;
+    setRules(snapshot);
+  }, [rules]);
+
+  const restoreHistoryAt = useCallback(
+    (targetIndex: number) => {
+      const past = historyPastRef.current;
+      const future = historyFutureRef.current;
+      const timeline = [...past, rules, ...future.slice().reverse()];
+      const currentIndex = past.length;
+
+      if (
+        targetIndex < 0 ||
+        targetIndex >= timeline.length ||
+        targetIndex === currentIndex
+      ) {
+        return;
+      }
+
+      const target = cloneRulesSnapshot(timeline[targetIndex]);
+      const newPast = timeline
+        .slice(0, targetIndex)
+        .map((snapshot) => cloneRulesSnapshot(snapshot))
+        .slice(-RULE_HISTORY_LIMIT);
+      const futureChronological = timeline
+        .slice(targetIndex + 1)
+        .map((snapshot) => cloneRulesSnapshot(snapshot));
+      const newFuture = futureChronological
+        .reverse()
+        .slice(0, RULE_HISTORY_LIMIT);
+
+      historyPastRef.current = newPast;
+      historyFutureRef.current = newFuture;
+      suppressHistoryRef.current = true;
+      historyPrevRulesRef.current = target;
+      setRules(target);
+    },
+    [rules],
+  );
+
   const handleRecenter = () => {
     if (transformRef.current) {
       transformRef.current.resetTransform();
@@ -137,12 +390,80 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
     }
   };
 
-  const handleResetPosition = () => {
-    rules.forEach((rule, index) => {
-      rule.position = { x: 800 + index * 340, y: 300 };
+  const handleAutoLayoutRules = useCallback(() => {
+    setRules((prevRules) => {
+      if (prevRules.length < 2) return prevRules;
+
+      const minX = Math.min(...prevRules.map((rule) => rule.position?.x || 0));
+      const minY = Math.min(...prevRules.map((rule) => rule.position?.y || 0));
+      const originX = minX;
+      const originY = minY;
+
+      const columns = Math.ceil(Math.sqrt(prevRules.length));
+      const cardWidth = 320;
+      const colGap = 64;
+      const rowGap = 56;
+      const colStride = cardWidth + colGap;
+
+      const estimateRuleCardHeight = (rule: Rule) => {
+        const conditionCount = rule.conditionGroups.reduce(
+          (sum, group) => sum + group.conditions.length,
+          0,
+        );
+        const randomEffectCount = rule.randomGroups.reduce(
+          (sum, group) => sum + group.effects.length,
+          0,
+        );
+        const loopEffectCount = rule.loops.reduce(
+          (sum, group) => sum + group.effects.length,
+          0,
+        );
+
+        const estimated =
+          260 +
+          conditionCount * 84 +
+          rule.conditionGroups.length * 28 +
+          rule.effects.length * 78 +
+          randomEffectCount * 78 +
+          loopEffectCount * 78 +
+          rule.randomGroups.length * 56 +
+          rule.loops.length * 56;
+
+        return Math.max(340, Math.min(estimated, 1100));
+      };
+
+      const rowCount = Math.ceil(prevRules.length / columns);
+      const rowHeights = Array.from<number>({ length: rowCount }).fill(0);
+
+      prevRules.forEach((rule, index) => {
+        const row = Math.floor(index / columns);
+        rowHeights[row] = Math.max(
+          rowHeights[row],
+          estimateRuleCardHeight(rule),
+        );
+      });
+
+      const rowOffsets = Array.from<number>({ length: rowCount }).fill(0);
+      for (let row = 1; row < rowCount; row += 1) {
+        rowOffsets[row] = rowOffsets[row - 1] + rowHeights[row - 1] + rowGap;
+      }
+
+      return prevRules.map((rule, index) => {
+        const col = index % columns;
+        const row = Math.floor(index / columns);
+        const rawX = originX + col * colStride;
+        const rawY = originY + rowOffsets[row];
+
+        const x = gridSnapping ? Math.round(rawX / 20) * 20 : rawX;
+        const y = gridSnapping ? Math.round(rawY / 20) * 20 : rawY;
+
+        return {
+          ...rule,
+          position: { x, y },
+        };
+      });
     });
-    handleRecenter(); // why would you look elsewhere if the windows are at the center
-  };
+  }, [gridSnapping]);
 
   const handleGridZoomChange = (direction: "in" | "out") => {
     if (!transformRef.current) return;
@@ -162,7 +483,7 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
 
     if (conditionTypeData) {
       conditionTypeData.params.forEach((param) => {
-        const defaultValue = param.default ?? undefined;
+        const defaultValue = resolveParameterDefaultValue(param, defaultParams);
         defaultParams[param.id] = {
           value: defaultValue,
           valueType: detectValueType(defaultValue),
@@ -187,7 +508,7 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
 
     if (effectTypeData) {
       effectTypeData.params.forEach((param) => {
-        const defaultValue = param.default ?? undefined;
+        const defaultValue = resolveParameterDefaultValue(param, defaultParams);
         defaultParams[param.id] = {
           value: defaultValue,
           valueType: detectValueType(defaultValue),
@@ -284,15 +605,24 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      setRules(
-        existingRules.map((rule) => ({
-          ...rule,
-          randomGroups: rule.randomGroups || [],
-          loops: rule.loops || [],
-        })),
-      );
+      const normalizedRules = existingRules.map((rule) => ({
+        ...rule,
+        randomGroups: rule.randomGroups || [],
+        loops: rule.loops || [],
+      }));
+      const initialSnapshot = cloneRulesSnapshot(normalizedRules);
+      historyPastRef.current = [];
+      historyFutureRef.current = [];
+      historyPrevRulesRef.current = initialSnapshot;
+      suppressHistoryRef.current = true;
+      setRules(initialSnapshot);
       setSelectedItem(null);
+      setSelectedRuleIds([]);
+      setSelectionRect(null);
+      setIsDragSelecting(false);
       setSelectedGameVariable(null);
+      setLiveCodePreviewTarget(null);
+      setLiveCodeWidthPercent(50);
       setIsInitialLoadComplete(true);
       setIsFirstSelection(true);
 
@@ -311,8 +641,31 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
       // Reset states when closing
       setIsInitialLoadComplete(false);
       setShowNoRulesMessage(false);
+      setSelectedRuleIds([]);
+      setSelectionRect(null);
+      setIsDragSelecting(false);
     }
   }, [isOpen, existingRules]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (suppressHistoryRef.current) {
+      suppressHistoryRef.current = false;
+      historyPrevRulesRef.current = cloneRulesSnapshot(rules);
+      return;
+    }
+
+    const previous = historyPrevRulesRef.current;
+    if (previous === rules) return;
+
+    historyPastRef.current = [
+      ...historyPastRef.current,
+      cloneRulesSnapshot(previous),
+    ].slice(-RULE_HISTORY_LIMIT);
+    historyFutureRef.current = [];
+    historyPrevRulesRef.current = cloneRulesSnapshot(rules);
+  }, [isOpen, rules]);
 
   useEffect(() => {
     setSelectedGameVariable(null);
@@ -321,12 +674,84 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
   useEffect(() => {
     if (isOpen) {
       const handleKeyPress = (event: KeyboardEvent) => {
-        if (
+        const isEditableTarget =
           event.target instanceof HTMLInputElement ||
-          event.target instanceof HTMLTextAreaElement
-        ) {
+          event.target instanceof HTMLTextAreaElement ||
+          (event.target instanceof HTMLElement &&
+            event.target.isContentEditable);
+
+        if (isEditableTarget) {
           return;
         }
+
+        if ((event.ctrlKey || event.metaKey) && !event.altKey) {
+          const key = event.key.toLowerCase();
+          if (key === "l" && event.shiftKey) {
+            event.preventDefault();
+            handleAutoLayoutRules();
+            return;
+          }
+          if (key === "z" && !event.shiftKey) {
+            event.preventDefault();
+            handleUndo();
+            return;
+          }
+          if (key === "y" || (key === "z" && event.shiftKey)) {
+            event.preventDefault();
+            handleRedo();
+            return;
+          }
+          if (key === "a") {
+            event.preventDefault();
+            selectAllRules();
+            return;
+          }
+          if (key === "c" && selectedRuleIds.length > 0) {
+            event.preventDefault();
+            copySelectedRules();
+            return;
+          }
+          if (key === "v" && copiedRulesRef.current.length > 0) {
+            event.preventDefault();
+            pasteCopiedRules();
+            return;
+          }
+          if (key === "d") {
+            if (selectedRuleIds.length > 1) {
+              event.preventDefault();
+              duplicateSelectedRules();
+              return;
+            }
+            if (selectedRuleIds.length === 1) {
+              event.preventDefault();
+              duplicateRule(selectedRuleIds[0]);
+              return;
+            }
+          }
+        }
+
+        if (event.key === "Delete" || event.key === "Backspace") {
+          if (selectedRuleIds.length > 1) {
+            event.preventDefault();
+            deleteSelectedRules();
+            return;
+          }
+          if (selectedRuleIds.length === 1) {
+            event.preventDefault();
+            deleteRule(selectedRuleIds[0]);
+            return;
+          }
+        }
+
+        if (
+          event.key.toLowerCase() === "escape" &&
+          selectedRuleIds.length > 0
+        ) {
+          event.preventDefault();
+          clearRuleSelection();
+          return;
+        }
+
         switch (event.key.toLowerCase()) {
           case "b":
             togglePanel("blockPalette");
@@ -345,6 +770,12 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
             break;
           case "p":
             togglePanel("inspector");
+            break;
+          case "l":
+            togglePanel("liveCode");
+            break;
+          case "h":
+            togglePanel("history");
             break;
           case "s":
             setGridSnapping((prev) => !prev);
@@ -365,7 +796,18 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
         document.removeEventListener("keydown", handleKeyPress);
       };
     }
-  }, [isOpen, handleSaveAndClose, togglePanel, itemType]);
+  }, [
+    handleRedo,
+    handleSaveAndClose,
+    handleAutoLayoutRules,
+    handleUndo,
+    clearRuleSelection,
+    isOpen,
+    itemType,
+    selectAllRules,
+    selectedRuleIds,
+    togglePanel,
+  ]);
 
   useEffect(() => {
     if (!selectedItem) return;
@@ -394,6 +836,15 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
     typeDefinition: GlobalConditionTypeDefinition | GlobalEffectTypeDefinition,
     isCondition: boolean,
   ): string => {
+    if (
+      isCondition &&
+      typeDefinition.id === "check_flag" &&
+      "negate" in item &&
+      item.negate
+    ) {
+      return "Check Flag False";
+    }
+
     const baseLabel = typeDefinition.label;
     const params: Record<string, unknown> = {};
     Object.entries(item.params).map(([key, object]) => {
@@ -599,21 +1050,49 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
   const updateRulePosition = (
     ruleId: string,
     position: { x: number; y: number },
+    options?: { snap?: boolean },
   ) => {
-    const snappedPosition = gridSnapping
-      ? {
-          x: Math.round(position.x / 20) * 20,
-          y: Math.round(position.y / 20) * 20,
-        }
-      : position;
-    setRules((prev) =>
-      prev.map((rule) =>
+    const shouldSnap = options?.snap ?? true;
+    const snappedPosition =
+      shouldSnap && gridSnapping
+        ? {
+            x: Math.round(position.x / 20) * 20,
+            y: Math.round(position.y / 20) * 20,
+          }
+        : position;
+    setRules((prev) => {
+      const targetRule = prev.find((rule) => rule.id === ruleId);
+      if (!targetRule) return prev;
+
+      if (selectedRuleIds.length > 1 && selectedRuleIdSet.has(ruleId)) {
+        const current = targetRule.position || { x: 0, y: 0 };
+        const deltaX = snappedPosition.x - current.x;
+        const deltaY = snappedPosition.y - current.y;
+        return prev.map((rule) =>
+          selectedRuleIdSet.has(rule.id)
+            ? {
+                ...rule,
+                position: {
+                  x: (rule.position?.x || 0) + deltaX,
+                  y: (rule.position?.y || 0) + deltaY,
+                },
+              }
+            : rule,
+        );
+      }
+
+      return prev.map((rule) =>
         rule.id === ruleId ? { ...rule, position: snappedPosition } : rule,
-      ),
-    );
+      );
+    });
   };
 
   const duplicateRule = (ruleId: string) => {
+    if (selectedRuleIds.length > 1 && selectedRuleIdSet.has(ruleId)) {
+      duplicateSelectedRules();
+      return;
+    }
+
     const newRuleId = crypto.randomUUID();
     setRules((prevRules) => {
       const ruleToDuplicate = prevRules.find((r) => r.id === ruleId);
@@ -654,6 +1133,156 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
     });
   };
 
+  const duplicateCondition = (
+    ruleId: string,
+    groupId: string,
+    conditionId: string,
+  ) => {
+    const duplicatedConditionId = crypto.randomUUID();
+
+    setRules((prev) =>
+      prev.map((rule) => {
+        if (rule.id !== ruleId) return rule;
+
+        return {
+          ...rule,
+          conditionGroups: rule.conditionGroups.map((group) => {
+            if (group.id !== groupId) return group;
+
+            const conditionIndex = group.conditions.findIndex(
+              (condition) => condition.id === conditionId,
+            );
+
+            if (conditionIndex === -1) return group;
+
+            const original = group.conditions[conditionIndex];
+            const duplicate: Condition = {
+              ...original,
+              id: duplicatedConditionId,
+              params: JSON.parse(JSON.stringify(original.params)),
+            };
+
+            const conditions = [...group.conditions];
+            conditions.splice(conditionIndex + 1, 0, duplicate);
+
+            return {
+              ...group,
+              conditions,
+            };
+          }),
+        };
+      }),
+    );
+
+    setSelectedItem({
+      type: "condition",
+      ruleId,
+      groupId,
+      itemId: duplicatedConditionId,
+    });
+  };
+
+  const duplicateEffect = (
+    ruleId: string,
+    effectId: string,
+    randomGroupId?: string,
+    loopGroupId?: string,
+  ) => {
+    const duplicatedEffectId = crypto.randomUUID();
+
+    setRules((prev) =>
+      prev.map((rule) => {
+        if (rule.id !== ruleId) return rule;
+
+        if (randomGroupId) {
+          return {
+            ...rule,
+            randomGroups: rule.randomGroups.map((group) => {
+              if (group.id !== randomGroupId) return group;
+
+              const effectIndex = group.effects.findIndex(
+                (effect) => effect.id === effectId,
+              );
+              if (effectIndex === -1) return group;
+
+              const original = group.effects[effectIndex];
+              const duplicate: Effect = {
+                ...original,
+                id: duplicatedEffectId,
+                params: JSON.parse(JSON.stringify(original.params)),
+              };
+
+              const effects = [...group.effects];
+              effects.splice(effectIndex + 1, 0, duplicate);
+
+              return {
+                ...group,
+                effects,
+              };
+            }),
+          };
+        }
+
+        if (loopGroupId) {
+          return {
+            ...rule,
+            loops: rule.loops.map((group) => {
+              if (group.id !== loopGroupId) return group;
+
+              const effectIndex = group.effects.findIndex(
+                (effect) => effect.id === effectId,
+              );
+              if (effectIndex === -1) return group;
+
+              const original = group.effects[effectIndex];
+              const duplicate: Effect = {
+                ...original,
+                id: duplicatedEffectId,
+                params: JSON.parse(JSON.stringify(original.params)),
+              };
+
+              const effects = [...group.effects];
+              effects.splice(effectIndex + 1, 0, duplicate);
+
+              return {
+                ...group,
+                effects,
+              };
+            }),
+          };
+        }
+
+        const effectIndex = rule.effects.findIndex(
+          (effect) => effect.id === effectId,
+        );
+        if (effectIndex === -1) return rule;
+
+        const original = rule.effects[effectIndex];
+        const duplicate: Effect = {
+          ...original,
+          id: duplicatedEffectId,
+          params: JSON.parse(JSON.stringify(original.params)),
+        };
+
+        const effects = [...rule.effects];
+        effects.splice(effectIndex + 1, 0, duplicate);
+
+        return {
+          ...rule,
+          effects,
+        };
+      }),
+    );
+
+    setSelectedItem({
+      type: "effect",
+      ruleId,
+      itemId: duplicatedEffectId,
+      randomGroupId,
+      loopGroupId,
+    });
+  };
+
   const addTrigger = (triggerId: string) => {
     const centerPos = getCenterPosition();
     const newRule: Rule = {
@@ -674,27 +1303,7 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
     (conditionType: string) => {
       if (!selectedItem) return;
 
-      const conditionTypeData = getConditionType(conditionType);
-      const defaultParams: Record<
-        string,
-        { value: unknown; valueType?: string }
-      > = {};
-
-      if (conditionTypeData) {
-        conditionTypeData.params.forEach((param) => {
-          const defaultValue = param.default ?? undefined;
-          defaultParams[param.id] = {
-            value: defaultValue,
-            valueType: detectValueType(defaultValue),
-          };
-        });
-      }
-      const newCondition: Condition = {
-        id: crypto.randomUUID(),
-        type: conditionType,
-        negate: false,
-        params: defaultParams,
-      };
+      const newCondition: Condition = createConditionFromType(conditionType);
 
       let targetGroupId = selectedItem.groupId;
 
@@ -753,7 +1362,7 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
         groupId: targetGroupId,
       });
     },
-    [selectedItem, getConditionType],
+    [selectedItem],
   );
 
   const addConditionGroup = (ruleId: string) => {
@@ -1070,27 +1679,7 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
   const addEffect = (effectType: string) => {
     if (!selectedItem) return;
 
-    const effectTypeData = getEffectType(effectType);
-    const defaultParams: Record<
-      string,
-      { value: unknown; valueType?: string }
-    > = {};
-
-    if (effectTypeData) {
-      effectTypeData.params.forEach((param) => {
-        const defaultValue = param.default ?? undefined;
-        defaultParams[param.id] = {
-          value: defaultValue,
-          valueType: detectValueType(defaultValue),
-        };
-      });
-    }
-
-    const newEffect: Effect = {
-      id: crypto.randomUUID(),
-      type: effectType,
-      params: defaultParams,
-    };
+    const newEffect: Effect = createEffectFromType(effectType);
 
     setRules((prev) =>
       prev.map((rule) => {
@@ -1190,7 +1779,13 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
   };
 
   const deleteRule = (ruleId: string) => {
+    if (selectedRuleIds.length > 1 && selectedRuleIdSet.has(ruleId)) {
+      deleteSelectedRules();
+      return;
+    }
+
     setRules((prev) => prev.filter((rule) => rule.id !== ruleId));
+    setSelectedRuleIds((prev) => prev.filter((id) => id !== ruleId));
     if (selectedItem && selectedItem.ruleId === ruleId) {
       setSelectedItem(null);
     }
@@ -1456,351 +2051,1516 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
   const selectedEffect = getSelectedEffect(rules, selectedItem);
   const selectedRandomGroup = getSelectedRandomGroup(rules, selectedItem);
   const selectedLoopGroup = getSelectedLoopGroup(rules, selectedItem);
+  const liveCodeIsVisible = panels.liveCode?.isVisible ?? false;
+  const historyTimeline = [
+    ...historyPastRef.current,
+    rules,
+    ...historyFutureRef.current.slice().reverse(),
+  ];
+  const historyCurrentIndex = historyPastRef.current.length;
+  const builderWidthPercent = liveCodeIsVisible
+    ? Math.max(0, 100 - liveCodeWidthPercent)
+    : 100;
+  const selectedRuleIdSet = useMemo(
+    () => new Set(selectedRuleIds),
+    [selectedRuleIds],
+  );
+
+  const generateConditionTitleForCard = useCallback(
+    (condition: Condition) => {
+      const conditionType = getConditionType(condition.type);
+      if (!conditionType) return condition.type;
+      return generateAutoTitle(condition, conditionType, true);
+    },
+    [generateAutoTitle, getConditionType],
+  );
+
+  const generateEffectTitleForCard = useCallback(
+    (effect: Effect) => {
+      const effectType = getEffectType(effect.type);
+      if (!effectType) return effect.type;
+      return generateAutoTitle(effect, effectType, false);
+    },
+    [generateAutoTitle, getEffectType],
+  );
+
+  const formatTriggerLabelForCard = useCallback((label: string) => {
+    if (label.toLowerCase() === "when a hand is played") {
+      return "After Cards Scored";
+    }
+    return label;
+  }, []);
+
+  const handleRuleCardDoubleClick = useCallback(() => {
+    setInspectorIsOpen(true);
+  }, []);
+
+  const handlePreviewBlockCode = useCallback(
+    (target: {
+      type: "trigger" | "condition" | "effect";
+      ruleId: string;
+      itemId?: string;
+      groupId?: string;
+    }) => {
+      setLiveCodePreviewTarget(target);
+      if (!liveCodeIsVisible) {
+        togglePanel("liveCode");
+      }
+    },
+    [liveCodeIsVisible, togglePanel],
+  );
+
+  const moveSelectedRulesByDelta = useCallback(
+    (deltaX: number, deltaY: number) => {
+      if (selectedRuleIds.length < 2) return;
+      if (deltaX === 0 && deltaY === 0) return;
+
+      const selectedSet = new Set(selectedRuleIds);
+      setRules((prev) =>
+        prev.map((rule) =>
+          selectedSet.has(rule.id)
+            ? {
+                ...rule,
+                position: {
+                  x: (rule.position?.x || 0) + deltaX,
+                  y: (rule.position?.y || 0) + deltaY,
+                },
+              }
+            : rule,
+        ),
+      );
+    },
+    [selectedRuleIds],
+  );
+
+  const finalizeSelectedRulesDrag = useCallback(() => {
+    if (!gridSnapping || selectedRuleIds.length < 2) return;
+
+    const selectedSet = new Set(selectedRuleIds);
+    setRules((prev) =>
+      prev.map((rule) =>
+        selectedSet.has(rule.id)
+          ? {
+              ...rule,
+              position: {
+                x: Math.round((rule.position?.x || 0) / 20) * 20,
+                y: Math.round((rule.position?.y || 0) / 20) * 20,
+              },
+            }
+          : rule,
+      ),
+    );
+  }, [gridSnapping, selectedRuleIds]);
+
+  const duplicateSelectedRules = useCallback(() => {
+    if (selectedRuleIds.length === 0) return;
+
+    const selectedSet = new Set(selectedRuleIds);
+    const newRuleIds: string[] = [];
+
+    setRules((prevRules) => {
+      const duplicated = prevRules
+        .filter((rule) => selectedSet.has(rule.id))
+        .map((rule) => {
+          const newRuleId = crypto.randomUUID();
+          newRuleIds.push(newRuleId);
+          return {
+            ...rule,
+            id: newRuleId,
+            position: {
+              x: (rule.position?.x || 0) + 30,
+              y: (rule.position?.y || 0) + 30,
+            },
+            conditionGroups: rule.conditionGroups.map((group) => ({
+              ...group,
+              id: crypto.randomUUID(),
+              conditions: group.conditions.map((condition) => ({
+                ...condition,
+                id: crypto.randomUUID(),
+              })),
+            })),
+            effects: rule.effects.map((effect) => ({
+              ...effect,
+              id: crypto.randomUUID(),
+            })),
+            randomGroups: rule.randomGroups.map((group) => ({
+              ...group,
+              id: crypto.randomUUID(),
+            })),
+            loops: rule.loops.map((group) => ({
+              ...group,
+              id: crypto.randomUUID(),
+            })),
+          };
+        });
+
+      return [...prevRules, ...duplicated];
+    });
+
+    if (newRuleIds.length > 0) {
+      setSelectedRuleIds(newRuleIds);
+      setSelectedItem(
+        newRuleIds.length === 1
+          ? { type: "trigger", ruleId: newRuleIds[0] }
+          : null,
+      );
+    }
+  }, [selectedRuleIds]);
+
+  const copySelectedRules = useCallback(() => {
+    if (selectedRuleIds.length === 0) return;
+
+    const selectedSet = new Set(selectedRuleIds);
+    const copied = rules
+      .filter((rule) => selectedSet.has(rule.id))
+      .map((rule) => cloneRulesSnapshot([rule])[0]);
+
+    copiedRulesRef.current = copied;
+    pasteOffsetStepRef.current = 1;
+  }, [rules, selectedRuleIds]);
+
+  const pasteCopiedRules = useCallback(() => {
+    if (copiedRulesRef.current.length === 0) return;
+
+    const offset = 30 * pasteOffsetStepRef.current;
+    const newRuleIds: string[] = [];
+
+    const pastedRules = copiedRulesRef.current.map((rule) => {
+      const newRuleId = crypto.randomUUID();
+      newRuleIds.push(newRuleId);
+
+      return {
+        ...rule,
+        id: newRuleId,
+        position: {
+          x: (rule.position?.x || 0) + offset,
+          y: (rule.position?.y || 0) + offset,
+        },
+        conditionGroups: rule.conditionGroups.map((group) => ({
+          ...group,
+          id: crypto.randomUUID(),
+          conditions: group.conditions.map((condition) => ({
+            ...condition,
+            id: crypto.randomUUID(),
+          })),
+        })),
+        effects: rule.effects.map((effect) => ({
+          ...effect,
+          id: crypto.randomUUID(),
+        })),
+        randomGroups: rule.randomGroups.map((group) => ({
+          ...group,
+          id: crypto.randomUUID(),
+          effects: group.effects.map((effect) => ({
+            ...effect,
+            id: crypto.randomUUID(),
+          })),
+        })),
+        loops: rule.loops.map((group) => ({
+          ...group,
+          id: crypto.randomUUID(),
+          effects: group.effects.map((effect) => ({
+            ...effect,
+            id: crypto.randomUUID(),
+          })),
+        })),
+      };
+    });
+
+    setRules((prevRules) => [...prevRules, ...pastedRules]);
+    setSelectedRuleIds(newRuleIds);
+    setSelectedItem(
+      newRuleIds.length === 1
+        ? { type: "trigger", ruleId: newRuleIds[0] }
+        : null,
+    );
+
+    pasteOffsetStepRef.current += 1;
+  }, []);
+
+  const deleteSelectedRules = useCallback(() => {
+    if (selectedRuleIds.length === 0) return;
+    const selectedSet = new Set(selectedRuleIds);
+    setRules((prev) => prev.filter((rule) => !selectedSet.has(rule.id)));
+    setSelectedRuleIds([]);
+    setSelectedItem(null);
+  }, [selectedRuleIds]);
+
+  const moveSelectedRulesToContextPoint = useCallback(() => {
+    if (selectedRuleIds.length === 0 || !lastContextWorldPoint) return;
+    const selectedSet = new Set(selectedRuleIds);
+
+    const selectedRules = rules.filter((rule) => selectedSet.has(rule.id));
+    if (selectedRules.length === 0) return;
+
+    const minX = Math.min(
+      ...selectedRules.map((rule) => rule.position?.x || 0),
+    );
+    const minY = Math.min(
+      ...selectedRules.map((rule) => rule.position?.y || 0),
+    );
+    const offsetX = lastContextWorldPoint.x - minX;
+    const offsetY = lastContextWorldPoint.y - minY;
+
+    setRules((prev) =>
+      prev.map((rule) =>
+        selectedSet.has(rule.id)
+          ? {
+              ...rule,
+              position: {
+                x: Math.round((rule.position?.x || 0) + offsetX),
+                y: Math.round((rule.position?.y || 0) + offsetY),
+              },
+            }
+          : rule,
+      ),
+    );
+  }, [lastContextWorldPoint, rules, selectedRuleIds]);
+
+  const handleCanvasMouseDown = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (event.button !== 0) return;
+
+      const target = event.target as HTMLElement;
+      if (target.closest("[data-rb-context], [data-rb-panel='true']")) {
+        return;
+      }
+
+      setIsDragSelecting(true);
+      setSelectionRect({
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        currentClientX: event.clientX,
+        currentClientY: event.clientY,
+      });
+      setSelectedItem(null);
+      setSelectedRuleIds([]);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!isDragSelecting) return;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      setSelectionRect((prev) =>
+        prev
+          ? {
+              ...prev,
+              currentClientX: event.clientX,
+              currentClientY: event.clientY,
+            }
+          : prev,
+      );
+    };
+
+    const handleMouseUp = () => {
+      setIsDragSelecting(false);
+      setSelectionRect((rect) => {
+        if (!rect) return null;
+
+        const left = Math.min(rect.startClientX, rect.currentClientX);
+        const right = Math.max(rect.startClientX, rect.currentClientX);
+        const top = Math.min(rect.startClientY, rect.currentClientY);
+        const bottom = Math.max(rect.startClientY, rect.currentClientY);
+
+        const ruleNodes = Array.from(
+          document.querySelectorAll<HTMLElement>('[data-rb-context="rule"]'),
+        );
+
+        const intersectedRuleIds = ruleNodes
+          .filter((node) => {
+            const bounds = node.getBoundingClientRect();
+            return !(
+              bounds.right < left ||
+              bounds.left > right ||
+              bounds.bottom < top ||
+              bounds.top > bottom
+            );
+          })
+          .map((node) => node.dataset.ruleId)
+          .filter((ruleId): ruleId is string => Boolean(ruleId));
+
+        setSelectedRuleIds(intersectedRuleIds);
+        if (intersectedRuleIds.length === 1) {
+          setSelectedItem({
+            type: "trigger",
+            ruleId: intersectedRuleIds[0],
+          });
+        } else {
+          setSelectedItem(null);
+        }
+
+        return null;
+      });
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isDragSelecting]);
+
+  const resolveContextTarget = useCallback(
+    (target: EventTarget | null): RuleBuilderContextTarget => {
+      if (!(target instanceof HTMLElement)) {
+        return { type: "canvas" };
+      }
+
+      const node = target.closest<HTMLElement>("[data-rb-context]");
+
+      if (!node) {
+        return { type: "canvas" };
+      }
+
+      const contextType = node.dataset.rbContext;
+      const ruleId = node.dataset.ruleId;
+
+      if (!contextType) {
+        return { type: "canvas" };
+      }
+
+      return {
+        type: contextType as RuleBuilderContextTarget["type"],
+        ruleId,
+        itemId: node.dataset.itemId,
+        groupId: node.dataset.groupId,
+        randomGroupId: node.dataset.randomGroupId,
+        loopGroupId: node.dataset.loopGroupId,
+      };
+    },
+    [],
+  );
+
+  const applyContextSelection = useCallback(
+    (target: RuleBuilderContextTarget) => {
+      if (!target.ruleId) return;
+
+      if (
+        selectedRuleIds.length > 1 &&
+        selectedRuleIdSet.has(target.ruleId) &&
+        (target.type === "rule" || target.type === "trigger")
+      ) {
+        return;
+      }
+
+      if (target.type === "rule" || target.type === "trigger") {
+        setSelectedItem({ type: "trigger", ruleId: target.ruleId });
+        setSelectedRuleIds([target.ruleId]);
+        return;
+      }
+
+      if (target.type === "condition" && target.itemId) {
+        setSelectedItem({
+          type: "condition",
+          ruleId: target.ruleId,
+          itemId: target.itemId,
+          groupId: target.groupId,
+        });
+        setSelectedRuleIds([target.ruleId]);
+        return;
+      }
+
+      if (target.type === "effect" && target.itemId) {
+        setSelectedItem({
+          type: "effect",
+          ruleId: target.ruleId,
+          itemId: target.itemId,
+          randomGroupId: target.randomGroupId,
+          loopGroupId: target.loopGroupId,
+        });
+        setSelectedRuleIds([target.ruleId]);
+        return;
+      }
+
+      if (target.type === "condition-group" && target.groupId) {
+        setSelectedItem({
+          type: "condition",
+          ruleId: target.ruleId,
+          groupId: target.groupId,
+        });
+        setSelectedRuleIds([target.ruleId]);
+        return;
+      }
+
+      if (target.type === "random-group" && target.randomGroupId) {
+        setSelectedItem({
+          type: "randomgroup",
+          ruleId: target.ruleId,
+          randomGroupId: target.randomGroupId,
+        });
+        setSelectedRuleIds([target.ruleId]);
+        return;
+      }
+
+      if (target.type === "loop-group" && target.loopGroupId) {
+        setSelectedItem({
+          type: "loopgroup",
+          ruleId: target.ruleId,
+          loopGroupId: target.loopGroupId,
+        });
+        setSelectedRuleIds([target.ruleId]);
+      }
+    },
+    [selectedRuleIdSet, selectedRuleIds.length],
+  );
+
+  const handleRuleBuilderContextMenuCapture = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      const nextTarget = resolveContextTarget(event.target);
+      setContextTarget(nextTarget);
+
+      const viewportRect = builderViewportRef.current?.getBoundingClientRect();
+      if (viewportRect) {
+        const localX = event.clientX - viewportRect.left;
+        const localY = event.clientY - viewportRect.top;
+        setLastContextWorldPoint({
+          x: (localX - panState.x) / Math.max(panState.scale, 0.1),
+          y: (localY - panState.y) / Math.max(panState.scale, 0.1),
+        });
+      }
+
+      applyContextSelection(nextTarget);
+    },
+    [
+      applyContextSelection,
+      panState.scale,
+      panState.x,
+      panState.y,
+      resolveContextTarget,
+    ],
+  );
+
+  const handleContextDelete = useCallback(() => {
+    if (!contextTarget.ruleId) return;
+
+    switch (contextTarget.type) {
+      case "rule":
+      case "trigger":
+        deleteRule(contextTarget.ruleId);
+        break;
+      case "condition":
+        if (contextTarget.itemId) {
+          deleteCondition(contextTarget.ruleId, contextTarget.itemId);
+        }
+        break;
+      case "effect":
+        if (contextTarget.itemId) {
+          deleteEffect(contextTarget.ruleId, contextTarget.itemId);
+        }
+        break;
+      case "condition-group":
+        if (contextTarget.groupId) {
+          deleteConditionGroup(contextTarget.ruleId, contextTarget.groupId);
+        }
+        break;
+      case "random-group":
+        if (contextTarget.randomGroupId) {
+          deleteRandomGroup(contextTarget.ruleId, contextTarget.randomGroupId);
+        }
+        break;
+      case "loop-group":
+        if (contextTarget.loopGroupId) {
+          deleteLoopGroup(contextTarget.ruleId, contextTarget.loopGroupId);
+        }
+        break;
+      default:
+        break;
+    }
+  }, [
+    contextTarget,
+    deleteCondition,
+    deleteConditionGroup,
+    deleteEffect,
+    deleteLoopGroup,
+    deleteRandomGroup,
+    deleteRule,
+  ]);
+
+  const handleContextDuplicate = useCallback(() => {
+    if (!contextTarget.ruleId) return;
+
+    if (contextTarget.type === "rule" || contextTarget.type === "trigger") {
+      duplicateRule(contextTarget.ruleId);
+      return;
+    }
+
+    if (
+      contextTarget.type === "condition" &&
+      contextTarget.itemId &&
+      contextTarget.groupId
+    ) {
+      duplicateCondition(
+        contextTarget.ruleId,
+        contextTarget.groupId,
+        contextTarget.itemId,
+      );
+      return;
+    }
+
+    if (contextTarget.type === "effect" && contextTarget.itemId) {
+      duplicateEffect(
+        contextTarget.ruleId,
+        contextTarget.itemId,
+        contextTarget.randomGroupId,
+        contextTarget.loopGroupId,
+      );
+    }
+  }, [contextTarget, duplicateCondition, duplicateEffect, duplicateRule]);
+
+  const handleContextPreview = useCallback(() => {
+    if (!contextTarget.ruleId) return;
+
+    if (contextTarget.type === "trigger") {
+      setLiveCodePreviewTarget({
+        type: "trigger",
+        ruleId: contextTarget.ruleId,
+      });
+    }
+
+    if (contextTarget.type === "condition" && contextTarget.itemId) {
+      setLiveCodePreviewTarget({
+        type: "condition",
+        ruleId: contextTarget.ruleId,
+        itemId: contextTarget.itemId,
+        groupId: contextTarget.groupId,
+      });
+    }
+
+    if (contextTarget.type === "effect" && contextTarget.itemId) {
+      setLiveCodePreviewTarget({
+        type: "effect",
+        ruleId: contextTarget.ruleId,
+        itemId: contextTarget.itemId,
+      });
+    }
+
+    if (!liveCodeIsVisible) {
+      togglePanel("liveCode");
+    }
+  }, [contextTarget, liveCodeIsVisible, togglePanel]);
+
+  const canDeleteContextTarget =
+    (contextTarget.type === "rule" && !!contextTarget.ruleId) ||
+    (contextTarget.type === "trigger" && !!contextTarget.ruleId) ||
+    (contextTarget.type === "condition" &&
+      !!contextTarget.ruleId &&
+      !!contextTarget.itemId) ||
+    (contextTarget.type === "effect" &&
+      !!contextTarget.ruleId &&
+      !!contextTarget.itemId) ||
+    (contextTarget.type === "condition-group" &&
+      !!contextTarget.ruleId &&
+      !!contextTarget.groupId) ||
+    (contextTarget.type === "random-group" &&
+      !!contextTarget.ruleId &&
+      !!contextTarget.randomGroupId) ||
+    (contextTarget.type === "loop-group" &&
+      !!contextTarget.ruleId &&
+      !!contextTarget.loopGroupId);
+
+  const canDuplicateContextTarget =
+    (contextTarget.type === "rule" && !!contextTarget.ruleId) ||
+    (contextTarget.type === "trigger" && !!contextTarget.ruleId) ||
+    (contextTarget.type === "condition" &&
+      !!contextTarget.ruleId &&
+      !!contextTarget.itemId &&
+      !!contextTarget.groupId) ||
+    (contextTarget.type === "effect" &&
+      !!contextTarget.ruleId &&
+      !!contextTarget.itemId);
+
+  const canPreviewContextTarget =
+    (contextTarget.type === "trigger" && !!contextTarget.ruleId) ||
+    (contextTarget.type === "condition" &&
+      !!contextTarget.ruleId &&
+      !!contextTarget.itemId) ||
+    (contextTarget.type === "effect" &&
+      !!contextTarget.ruleId &&
+      !!contextTarget.itemId);
+
+  const hasBulkSelection = selectedRuleIds.length > 1;
+
+  const contextTargetTitle =
+    contextTarget.type === "canvas"
+      ? "Canvas"
+      : contextTarget.type === "rule"
+        ? "Rule"
+        : contextTarget.type === "trigger"
+          ? "Trigger"
+          : contextTarget.type === "condition"
+            ? "Condition"
+            : contextTarget.type === "effect"
+              ? "Effect"
+              : contextTarget.type === "condition-group"
+                ? "Condition Group"
+                : contextTarget.type === "random-group"
+                  ? "Random Group"
+                  : "Loop Group";
+
+  const clampPanelIntoViewport = useCallback(
+    (panelId: string, widthPx: number) => {
+      const panel = panels[panelId];
+      if (!panel || !panel.isVisible) return;
+
+      const headerHeight = 112;
+      const viewportHeight =
+        (modalRef.current?.clientHeight || window.innerHeight) - headerHeight;
+      const maxX = Math.max(0, widthPx - panel.size.width - 12);
+      const maxY = Math.max(0, viewportHeight - panel.size.height - 12);
+      const clampedX = Math.min(Math.max(0, panel.position.x), maxX);
+      const clampedY = Math.min(Math.max(0, panel.position.y), maxY);
+
+      if (clampedX !== panel.position.x || clampedY !== panel.position.y) {
+        updatePanelPosition(panelId, { x: clampedX, y: clampedY });
+      }
+    },
+    [panels, updatePanelPosition],
+  );
+
+  const handleLiveCodeResizeStart = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const startX = e.clientX;
+      const startWidth = liveCodeWidthPercent;
+      const containerWidth = modalRef.current?.clientWidth || window.innerWidth;
+
+      const onMouseMove = (event: MouseEvent) => {
+        const deltaPercent = ((startX - event.clientX) / containerWidth) * 100;
+        const nextWidth = Math.max(0, Math.min(70, startWidth + deltaPercent));
+        setLiveCodeWidthPercent(nextWidth);
+
+        const nextBuilderWidthPx = ((100 - nextWidth) / 100) * containerWidth;
+        [
+          "blockPalette",
+          "variables",
+          "inspector",
+          "gameVariables",
+          "history",
+        ].forEach((panelId) =>
+          clampPanelIntoViewport(panelId, nextBuilderWidthPx),
+        );
+      };
+
+      const onMouseUp = () => {
+        window.removeEventListener("mousemove", onMouseMove);
+        window.removeEventListener("mouseup", onMouseUp);
+        document.body.style.userSelect = "";
+        document.body.style.cursor = "";
+      };
+
+      document.body.style.userSelect = "none";
+      document.body.style.cursor = "col-resize";
+
+      window.addEventListener("mousemove", onMouseMove);
+      window.addEventListener("mouseup", onMouseUp);
+    },
+    [clampPanelIntoViewport, liveCodeWidthPercent],
+  );
+
+  useEffect(() => {
+    if (!liveCodeIsVisible) {
+      setLiveCodePreviewTarget(null);
+    }
+  }, [liveCodeIsVisible]);
+
+  useEffect(() => {
+    if (liveCodeIsVisible && liveCodeWidthPercent <= 1) {
+      togglePanel("liveCode");
+      setLiveCodeWidthPercent(50);
+    }
+  }, [liveCodeIsVisible, liveCodeWidthPercent, togglePanel]);
+
+  useEffect(() => {
+    if (!liveCodeIsVisible) return;
+    const containerWidth = modalRef.current?.clientWidth || window.innerWidth;
+    const builderWidthPx = (builderWidthPercent / 100) * containerWidth;
+    [
+      "blockPalette",
+      "variables",
+      "inspector",
+      "gameVariables",
+      "history",
+    ].forEach((panelId) => clampPanelIntoViewport(panelId, builderWidthPx));
+  }, [builderWidthPercent, clampPanelIntoViewport, liveCodeIsVisible]);
+
+  useEffect(() => {
+    if (!isOpen || !liveCodeIsVisible) {
+      return;
+    }
+
+    if (itemType !== "joker") {
+      setLiveCodeTitle("Unsupported Object Type");
+      setLiveCodeSnippet("-- live item preview unavailable");
+      setLiveCodeStatusMessage(
+        "Live code generation is currently coded only for Jokers. This item type has not been coded in yet.",
+      );
+      setLiveCodeIsError(false);
+      setLiveCodeIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const run = async () => {
+      setLiveCodeIsLoading(true);
+      setLiveCodeIsError(false);
+      setLiveCodeStatusMessage(undefined);
+
+      try {
+        if (liveCodePreviewTarget) {
+          const targetRule = rules.find(
+            (rule) => rule.id === liveCodePreviewTarget.ruleId,
+          );
+
+          if (!targetRule) {
+            setLiveCodeTitle("Block Preview");
+            setLiveCodeSnippet("-- unable to resolve selected block");
+            setLiveCodeStatusMessage(
+              "The selected block could not be resolved.",
+            );
+            setLiveCodeIsError(true);
+            return;
+          }
+
+          let nodeType = "";
+          let params: SnippetNodeParams = {};
+          let title = "Block Preview";
+
+          if (liveCodePreviewTarget.type === "trigger") {
+            const triggerDef = getTriggerById(targetRule.trigger);
+            const triggerLabel =
+              triggerDef?.label?.en ??
+              Object.values(triggerDef?.label ?? {})[0] ??
+              targetRule.trigger;
+            nodeType = `trigger.${targetRule.trigger}`;
+            title = `Block Preview: Trigger - ${triggerLabel}`;
+          }
+
+          if (
+            liveCodePreviewTarget.type === "condition" &&
+            liveCodePreviewTarget.itemId
+          ) {
+            const targetCondition = targetRule.conditionGroups
+              .flatMap((group) => group.conditions)
+              .find(
+                (condition) => condition.id === liveCodePreviewTarget.itemId,
+              );
+
+            if (!targetCondition) {
+              setLiveCodeTitle("Block Preview");
+              setLiveCodeSnippet("-- unable to resolve selected condition");
+              setLiveCodeStatusMessage(
+                "The selected block could not be resolved.",
+              );
+              setLiveCodeIsError(true);
+              return;
+            }
+
+            const conditionDef = getConditionType(targetCondition.type);
+            nodeType = `condition.${targetCondition.type}`;
+            params = toSnippetParams(targetCondition.params);
+            title = `Block Preview: Condition - ${conditionDef?.label ?? targetCondition.type}`;
+          }
+
+          if (
+            liveCodePreviewTarget.type === "effect" &&
+            liveCodePreviewTarget.itemId
+          ) {
+            const targetEffect = [
+              ...targetRule.effects,
+              ...targetRule.randomGroups.flatMap((group) => group.effects),
+              ...targetRule.loops.flatMap((group) => group.effects),
+            ].find((effect) => effect.id === liveCodePreviewTarget.itemId);
+
+            if (!targetEffect) {
+              setLiveCodeTitle("Block Preview");
+              setLiveCodeSnippet("-- unable to resolve selected effect");
+              setLiveCodeStatusMessage(
+                "The selected block could not be resolved.",
+              );
+              setLiveCodeIsError(true);
+              return;
+            }
+
+            const effectDef = getEffectType(targetEffect.type);
+            nodeType = `effect.${targetEffect.type}`;
+            params = toSnippetParams(targetEffect.params);
+            title = `Block Preview: Effect - ${effectDef?.label ?? targetEffect.type}`;
+          }
+
+          if (!nodeType) {
+            setLiveCodeTitle("Block Preview");
+            setLiveCodeSnippet("-- snippet preview unavailable");
+            setLiveCodeStatusMessage(
+              "This selected block has not been coded in yet for live snippet preview.",
+            );
+            setLiveCodeIsError(false);
+            return;
+          }
+
+          setLiveCodeTitle(title);
+
+          const snippetCode = await invoke<string>(
+            "compile_rulebuilder_node_snippet",
+            {
+              itemType,
+              nodeType,
+              params,
+            },
+          );
+
+          if (cancelled) {
+            return;
+          }
+
+          const normalizedSnippet = (snippetCode || "").toLowerCase();
+          const isNotImplemented = normalizedSnippet.includes(
+            "not yet implemented",
+          );
+
+          setLiveCodeSnippet(snippetCode || "-- no snippet output");
+          setLiveCodeStatusMessage(
+            isNotImplemented
+              ? "This selected block has not been coded in yet for live snippet preview."
+              : "Showing block preview. Click another block icon to switch, or keep editing to see full-item code by default.",
+          );
+          setLiveCodeIsError(false);
+          return;
+        }
+
+        setLiveCodeTitle(`Item Preview: ${item.name || "Current Joker"}`);
+
+        const code = await compileSingleJokerLua(
+          { ...(item as any), rules },
+          "mod",
+          { includeLocTxt: true },
+        );
+
+        if (cancelled) {
+          return;
+        }
+
+        const normalized = (code || "").toLowerCase();
+        const isNotImplemented = normalized.includes("not yet implemented");
+
+        setLiveCodeSnippet(code || "-- no snippet output");
+        setLiveCodeStatusMessage(
+          isNotImplemented
+            ? "This item has not been fully coded in yet for live generation."
+            : undefined,
+        );
+        setLiveCodeIsError(false);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        setLiveCodeSnippet("-- failed to generate snippet");
+        setLiveCodeStatusMessage(
+          error instanceof Error
+            ? error.message
+            : "Failed to compile live snippet.",
+        );
+        setLiveCodeIsError(true);
+      } finally {
+        if (!cancelled) {
+          setLiveCodeIsLoading(false);
+        }
+      }
+    };
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    getConditionType,
+    getEffectType,
+    item,
+    isOpen,
+    itemType,
+    liveCodeIsVisible,
+    liveCodePreviewTarget,
+    rules,
+  ]);
+
+  const viewportBounds = builderViewportRef.current?.getBoundingClientRect();
+  const selectionOverlayStyle =
+    selectionRect && viewportBounds
+      ? {
+          left:
+            Math.min(selectionRect.startClientX, selectionRect.currentClientX) -
+            viewportBounds.left,
+          top:
+            Math.min(selectionRect.startClientY, selectionRect.currentClientY) -
+            viewportBounds.top,
+          width: Math.abs(
+            selectionRect.currentClientX - selectionRect.startClientX,
+          ),
+          height: Math.abs(
+            selectionRect.currentClientY - selectionRect.startClientY,
+          ),
+        }
+      : null;
 
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-x-0 bottom-0 top-9 flex bg-background items-center justify-center z-120 font-lexend">
-      <div
-        ref={modalRef}
-        className="bg-background w-full h-full overflow-hidden flex flex-col"
-      >
-        <div className="relative h-28 bg-background/95 backdrop-blur-md border-b border-border shadow-sm z-50">
-          <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
-            <Terminal className="h-4 w-4 text-muted-foreground" />
-            <span className="text-xs font-bold tracking-widest text-muted-foreground uppercase">
-              Rule Builder
-            </span>
-            <span className="text-[11px] text-muted-foreground hidden xl:block">
-              Pan: {Math.round(panState.x)}, {Math.round(panState.y)}
-            </span>
-          </div>
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2">
-            <IconButton
-              icon={CornersIn}
-              onClick={handleRecenter}
-              tooltip="Recenter View"
-            />
-            <IconButton
-              icon={Browser}
-              onClick={handleResetPosition}
-              tooltip="Reset Window Position"
-            />
-            <IconButton
-              icon={GridFour}
-              onClick={() => {
-                setUserConfig((prevConfig) => ({
-                  ...prevConfig,
-                  defaultGridSnap: !gridSnapping,
-                }));
-                setGridSnapping((prev) => !prev);
-              }}
-              tooltip="Toggle Grid Snapping"
-              shortcut="S"
-              isActive={gridSnapping}
-              className={
-                gridSnapping
-                  ? "text-mint-light hover:text-mint-lighter"
-                  : undefined
-              }
-            />
-            <IconButton
-              icon={MagnifyingGlassMinus}
-              onClick={() => handleGridZoomChange("out")}
-              tooltip="Zoom Out"
-              shortcut="-"
-            />
-            <IconButton
-              icon={MagnifyingGlassPlus}
-              onClick={() => handleGridZoomChange("in")}
-              tooltip="Zoom In"
-              shortcut="+"
-            />
-            <span className="text-[11px] text-muted-foreground w-12 text-center">
-              {Math.round(panState.scale * 100)}%
-            </span>
-            <div className="w-px h-5 bg-border" />
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleSaveAndClose}
-              icon={<CheckCircle className="h-4 w-4" />}
-              className="text-xs cursor-pointer"
-            >
-              Save Changes
-            </Button>
-          </div>
-          <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
-            <span className="text-xs font-medium text-foreground/70 uppercase tracking-wide">
-              Mode
-            </span>
-            <span className="text-xs font-semibold text-foreground/90">
-              {modeLabel}
-            </span>
-            <ItemTypeBadge itemType={itemType} />
-          </div>
-        </div>
-        <div className="grow relative overflow-hidden">
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div
+          className="fixed inset-x-0 bottom-0 top-9 flex bg-background items-center justify-center z-120 font-lexend"
+          onContextMenuCapture={handleRuleBuilderContextMenuCapture}
+        >
           <div
-            className="absolute inset-0 w-full h-full pointer-events-none"
-            style={{
-              backgroundImage: createAlternatingDotPattern(),
-              backgroundSize: `${24 * panState.scale}px ${24 * panState.scale}px`,
-              backgroundPosition: `${panState.x}px ${panState.y}px`,
-              backgroundColor: "hsl(var(--background))",
-            }}
-          />
-          {isInitialLoadComplete &&
-            rules.length === 0 &&
-            showNoRulesMessage && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                transition={{
-                  duration: 0.4,
-                  ease: "easeOut",
-                  delay: 0.1,
-                }}
-                className="absolute inset-0 flex items-center justify-center z-40"
-              >
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{
-                    duration: 0.3,
-                    delay: 0.2,
-                    ease: "easeOut",
-                  }}
-                  className="text-center bg-card/95 backdrop-blur-sm rounded-xl p-8 border border-border shadow-xl"
-                >
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.4, duration: 0.3 }}
-                    className="text-foreground text-lg mb-3"
-                  >
-                    No Rules Created
-                  </motion.div>
-                  <motion.p
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.5, duration: 0.3 }}
-                    className="text-muted-foreground text-sm max-w-md"
-                  >
-                    Select a trigger from the Block Palette to create your first
-                    rule.
-                  </motion.p>
-                </motion.div>
-              </motion.div>
-            )}
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-            modifiers={
-              activeId &&
-              (activeId.startsWith("panel-") || activeId.startsWith("palette:"))
-                ? []
-                : [restrictToVerticalAxis]
-            }
+            ref={modalRef}
+            className="bg-background w-full h-full overflow-hidden flex flex-col"
           >
-            <TransformWrapper
-              ref={transformRef}
-              initialScale={1}
-              initialPositionX={0}
-              initialPositionY={0}
-              minScale={0.5}
-              maxScale={2.4}
-              smooth={false}
-              centerOnInit={false}
-              limitToBounds={false}
-              wheel={{
-                disabled: false,
-                step: 0.25,
-                smoothStep: 0.25,
-                wheelDisabled: false,
-              }}
-              pinch={{
-                disabled: false,
-              }}
-              doubleClick={{
-                disabled: true,
-              }}
-              panning={{
-                velocityDisabled: true,
-              }}
-              onTransformed={(_, state) => {
-                setPanState({
-                  x: state.positionX,
-                  y: state.positionY,
-                  scale: state.scale,
-                });
-              }}
-            >
-              <TransformComponent
-                wrapperClass="w-full h-full"
-                contentClass="relative"
-                wrapperStyle={{
-                  width: "100%",
-                  height: "100%",
-                  overflow: "hidden",
-                }}
-                contentStyle={{
-                  width: "5600px",
-                  height: "3200px",
-                }}
-              >
-                <div className="relative z-10">
-                  <div className="p-6 min-h-full">
-                    <div className="relative">
-                      {rules.map((rule, index) => (
-                        <div
-                          key={rule.id}
-                          className="absolute"
-                          style={{
-                            left: rule.position?.x || 0,
-                            top: rule.position?.y || 0,
-                            zIndex:
-                              selectedItem?.ruleId === rule.id
-                                ? 50 + index
-                                : 20 + index,
-                          }}
-                        >
-                          <RuleCard
-                            rule={rule}
-                            ruleIndex={index}
-                            selectedItem={selectedItem}
-                            onSelectItem={setSelectedItem}
-                            onDuplicateRule={duplicateRule}
-                            onDeleteRule={deleteRule}
-                            onDeleteCondition={deleteCondition}
-                            onDeleteConditionGroup={deleteConditionGroup}
-                            onDeleteEffect={deleteEffect}
-                            onAddConditionGroup={addConditionGroup}
-                            onAddRandomGroup={addRandomGroup}
-                            onAddLoop={addLoopGroup}
-                            onToggleBlueprintCompatibility={
-                              toggleBlueprintCompatibility
-                            }
-                            onDeleteRandomGroup={deleteRandomGroup}
-                            onDeleteLoopGroup={deleteLoopGroup}
-                            onToggleGroupOperator={toggleGroupOperator}
-                            onUpdatePosition={updateRulePosition}
-                            isRuleSelected={selectedItem?.ruleId === rule.id}
-                            item={item as any}
-                            itemType={itemType}
-                            generateConditionTitle={(condition) => {
-                              const conditionType = getConditionType(
-                                condition.type,
-                              );
-                              if (!conditionType) return condition.type; // Fallback if type not found
-                              return generateAutoTitle(
-                                condition,
-                                conditionType,
-                                true,
-                              );
-                            }}
-                            generateEffectTitle={(effect) => {
-                              const effectType = getEffectType(effect.type);
-                              if (!effectType) return effect.type; // Fallback if type not found
-                              return generateAutoTitle(
-                                effect,
-                                effectType,
-                                false,
-                              );
-                            }}
-                            getParameterCount={getParameterCount}
-                            onUpdateConditionOperator={updateConditionOperator}
-                            onRuleDoubleClick={() => {
-                              setInspectorIsOpen(true);
-                            }}
-                            scale={panState.scale}
-                            isPaletteDragging={
-                              !!activeId && activeId.startsWith("palette:")
-                            }
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+            <div className="bg-background/95 backdrop-blur-md border-b border-border shadow-sm z-50 px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Terminal className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-xs font-bold tracking-widest text-muted-foreground uppercase shrink-0">
+                    Rule Builder
+                  </span>
+                  <span className="text-[11px] text-muted-foreground hidden xl:block truncate">
+                    Pan: {Math.round(panState.x)}, {Math.round(panState.y)}
+                  </span>
                 </div>
-              </TransformComponent>
-            </TransformWrapper>
 
-            {panels.blockPalette.isVisible && (
-              <BlockPalette
-                position={panels.blockPalette.position}
-                selectedRule={selectedRule}
-                onAddTrigger={addTrigger}
-                onAddCondition={addCondition}
-                onAddEffect={addEffect}
-                onClose={() => togglePanel("blockPalette")}
-                onPositionChange={(position) =>
-                  updatePanelPosition("blockPalette", position)
-                }
-                itemType={itemType}
-              />
-            )}
-            {itemType !== "consumable" && panels.variables?.isVisible && (
-              <Variables
-                position={panels.variables.position}
-                item={item as any}
-                onUpdateItem={onUpdateItem}
-                onClose={() => togglePanel("variables")}
-                onPositionChange={(position) =>
-                  updatePanelPosition("variables", position)
-                }
-              />
-            )}
-            {panels.inspector.isVisible && (
-              <Inspector
-                position={panels.inspector.position}
-                joker={item as any}
-                selectedRule={selectedRule}
-                selectedCondition={selectedCondition}
-                selectedEffect={selectedEffect}
-                selectedRandomGroup={selectedRandomGroup}
-                selectedLoopGroup={selectedLoopGroup}
-                onUpdateCondition={updateCondition}
-                onUpdateEffect={updateEffect}
-                onUpdateRandomGroup={updateRandomGroup}
-                onUpdateLoopGroup={updateLoopGroup}
-                onUpdateJoker={onUpdateItem as (updates: Partial<any>) => void}
-                onClose={() => togglePanel("inspector")}
-                onPositionChange={(position) =>
-                  updatePanelPosition("inspector", position)
-                }
-                onToggleVariablesPanel={() => togglePanel("variables")}
-                onToggleGameVariablesPanel={() => togglePanel("gameVariables")}
-                onCreateRandomGroupFromEffect={createRandomGroupFromEffect}
-                onCreateLoopGroupFromEffect={createLoopGroupFromEffect}
-                selectedGameVariable={selectedGameVariable}
-                onGameVariableApplied={handleGameVariableApplied}
-                selectedItem={selectedItem}
-                itemType={itemType}
-              />
-            )}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <IconButton
+                    icon={CornersIn}
+                    onClick={handleRecenter}
+                    tooltip="Recenter View"
+                  />
+                  <IconButton
+                    icon={SquaresFour}
+                    onClick={handleAutoLayoutRules}
+                    tooltip="Auto Layout Rules"
+                  />
+                  <IconButton
+                    icon={GridFour}
+                    onClick={() => {
+                      setUserConfig((prevConfig) => ({
+                        ...prevConfig,
+                        defaultGridSnap: !gridSnapping,
+                      }));
+                      setGridSnapping((prev) => !prev);
+                    }}
+                    tooltip="Toggle Grid Snapping"
+                    shortcut="S"
+                    isActive={gridSnapping}
+                    className={
+                      gridSnapping
+                        ? "text-mint-light hover:text-mint-lighter"
+                        : undefined
+                    }
+                  />
+                  <IconButton
+                    icon={MagnifyingGlassMinus}
+                    onClick={() => handleGridZoomChange("out")}
+                    tooltip="Zoom Out"
+                    shortcut="-"
+                  />
+                  <IconButton
+                    icon={MagnifyingGlassPlus}
+                    onClick={() => handleGridZoomChange("in")}
+                    tooltip="Zoom In"
+                    shortcut="+"
+                  />
+                  <span className="text-[11px] text-muted-foreground w-12 text-center">
+                    {Math.round(panState.scale * 100)}%
+                  </span>
+                  <div className="w-px h-5 bg-border" />
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={handleSaveAndClose}
+                    icon={<CheckCircle className="h-4 w-4" />}
+                    className="text-xs cursor-pointer"
+                  >
+                    Save Changes
+                  </Button>
+                </div>
 
-            {panels.gameVariables.isVisible && (
-              <GameVariables
-                position={panels.gameVariables.position}
-                selectedGameVariable={selectedGameVariable}
-                onSelectGameVariable={setSelectedGameVariable}
-                onClose={() => togglePanel("gameVariables")}
-                onPositionChange={(position) =>
-                  updatePanelPosition("gameVariables", position)
-                }
-              />
-            )}
-            <FloatingDock
-              panels={panels}
-              onTogglePanel={togglePanel}
-              itemType={itemType}
-            />
-          </DndContext>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs font-medium text-foreground/70 uppercase tracking-wide">
+                    Mode
+                  </span>
+                  <span className="text-xs font-semibold text-foreground/90">
+                    {modeLabel}
+                  </span>
+                  <ItemTypeBadge itemType={itemType} />
+                </div>
+              </div>
+            </div>
+            <div className="grow relative overflow-hidden">
+              <div
+                className={`h-full w-full ${liveCodeIsVisible ? "flex" : "block"}`}
+              >
+                <div
+                  ref={builderViewportRef}
+                  className="relative h-full overflow-hidden"
+                  style={{ width: `${builderWidthPercent}%` }}
+                  onMouseDown={handleCanvasMouseDown}
+                >
+                  <div
+                    className="absolute inset-0 w-full h-full pointer-events-none"
+                    style={{
+                      backgroundImage: createAlternatingDotPattern(),
+                      backgroundSize: `${24 * panState.scale}px ${24 * panState.scale}px`,
+                      backgroundPosition: `${panState.x}px ${panState.y}px`,
+                      backgroundColor: "hsl(var(--background))",
+                    }}
+                  />
+                  {isInitialLoadComplete &&
+                    rules.length === 0 &&
+                    showNoRulesMessage && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        transition={{
+                          duration: 0.4,
+                          ease: "easeOut",
+                          delay: 0.1,
+                        }}
+                        className="absolute inset-0 flex items-center justify-center z-40"
+                      >
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{
+                            duration: 0.3,
+                            delay: 0.2,
+                            ease: "easeOut",
+                          }}
+                          className="text-center bg-card/95 backdrop-blur-sm rounded-xl p-8 border border-border shadow-xl"
+                        >
+                          <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: 0.4, duration: 0.3 }}
+                            className="text-foreground text-lg mb-3"
+                          >
+                            No Rules Created
+                          </motion.div>
+                          <motion.p
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: 0.5, duration: 0.3 }}
+                            className="text-muted-foreground text-sm max-w-md"
+                          >
+                            Select a trigger from the Block Palette to create
+                            your first rule.
+                          </motion.p>
+                        </motion.div>
+                      </motion.div>
+                    )}
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                    modifiers={
+                      activeId &&
+                      (activeId.startsWith("panel-") ||
+                        activeId.startsWith("palette:"))
+                        ? []
+                        : [restrictToVerticalAxis]
+                    }
+                  >
+                    <TransformWrapper
+                      ref={transformRef}
+                      initialScale={1}
+                      initialPositionX={0}
+                      initialPositionY={0}
+                      minScale={0.5}
+                      maxScale={2.4}
+                      smooth={false}
+                      centerOnInit={false}
+                      limitToBounds={false}
+                      wheel={{
+                        disabled: false,
+                        step: 0.25,
+                        smoothStep: 0.25,
+                        wheelDisabled: false,
+                      }}
+                      pinch={{
+                        disabled: false,
+                      }}
+                      doubleClick={{
+                        disabled: true,
+                      }}
+                      panning={{
+                        allowLeftClickPan: false,
+                        allowRightClickPan: false,
+                        allowMiddleClickPan: true,
+                        wheelPanning: false,
+                        velocityDisabled: true,
+                      }}
+                      onTransformed={(_, state) => {
+                        setPanState({
+                          x: state.positionX,
+                          y: state.positionY,
+                          scale: state.scale,
+                        });
+                      }}
+                    >
+                      <TransformComponent
+                        wrapperClass="w-full h-full"
+                        contentClass="relative"
+                        wrapperStyle={{
+                          width: "100%",
+                          height: "100%",
+                          overflow: "hidden",
+                        }}
+                        contentStyle={{
+                          width: "5600px",
+                          height: "3200px",
+                        }}
+                      >
+                        <div className="relative z-10">
+                          <div className="p-6 min-h-full">
+                            <div className="relative">
+                              {rules.map((rule, index) => (
+                                <div
+                                  key={rule.id}
+                                  className="absolute"
+                                  style={{
+                                    left: rule.position?.x || 0,
+                                    top: rule.position?.y || 0,
+                                    zIndex:
+                                      selectedItem?.ruleId === rule.id
+                                        ? 50 + index
+                                        : 20 + index,
+                                  }}
+                                >
+                                  <RuleCard
+                                    rule={rule}
+                                    ruleIndex={index + 1}
+                                    selectedItem={selectedItem}
+                                    onSelectItem={handleSelectItem}
+                                    onSelectRuleCard={handleSelectRuleCard}
+                                    onDuplicateRule={duplicateRule}
+                                    onDeleteRule={deleteRule}
+                                    onDeleteCondition={deleteCondition}
+                                    onDeleteConditionGroup={
+                                      deleteConditionGroup
+                                    }
+                                    onDeleteEffect={deleteEffect}
+                                    onAddConditionGroup={addConditionGroup}
+                                    onAddRandomGroup={addRandomGroup}
+                                    onAddLoop={addLoopGroup}
+                                    onToggleBlueprintCompatibility={
+                                      toggleBlueprintCompatibility
+                                    }
+                                    onDeleteRandomGroup={deleteRandomGroup}
+                                    onDeleteLoopGroup={deleteLoopGroup}
+                                    onToggleGroupOperator={toggleGroupOperator}
+                                    onUpdatePosition={updateRulePosition}
+                                    onMoveSelectedRulesByDelta={
+                                      moveSelectedRulesByDelta
+                                    }
+                                    onFinalizeMultiRuleDrag={
+                                      finalizeSelectedRulesDrag
+                                    }
+                                    isRuleSelected={selectedRuleIdSet.has(
+                                      rule.id,
+                                    )}
+                                    selectedRuleCount={selectedRuleIds.length}
+                                    item={item as any}
+                                    itemType={itemType}
+                                    generateConditionTitle={
+                                      generateConditionTitleForCard
+                                    }
+                                    formatTriggerLabel={
+                                      formatTriggerLabelForCard
+                                    }
+                                    generateEffectTitle={
+                                      generateEffectTitleForCard
+                                    }
+                                    getParameterCount={getParameterCount}
+                                    onUpdateConditionOperator={
+                                      updateConditionOperator
+                                    }
+                                    onRuleDoubleClick={
+                                      handleRuleCardDoubleClick
+                                    }
+                                    onPreviewBlockCode={handlePreviewBlockCode}
+                                    scale={panState.scale}
+                                    isPaletteDragging={
+                                      !!activeId &&
+                                      activeId.startsWith("palette:")
+                                    }
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </TransformComponent>
+                    </TransformWrapper>
+
+                    {selectionOverlayStyle ? (
+                      <div
+                        className="pointer-events-none absolute z-70 border border-primary/85 bg-primary/20 rounded-sm"
+                        style={selectionOverlayStyle}
+                      />
+                    ) : null}
+
+                    {panels.blockPalette.isVisible && (
+                      <BlockPalette
+                        position={panels.blockPalette.position}
+                        selectedRule={selectedRule}
+                        onAddTrigger={addTrigger}
+                        onAddCondition={addCondition}
+                        onAddEffect={addEffect}
+                        onClose={() => togglePanel("blockPalette")}
+                        onPositionChange={(position) =>
+                          updatePanelPosition("blockPalette", position)
+                        }
+                        itemType={itemType}
+                      />
+                    )}
+                    {itemType !== "consumable" &&
+                      panels.variables?.isVisible && (
+                        <Variables
+                          position={panels.variables.position}
+                          item={item as any}
+                          onUpdateItem={onUpdateItem}
+                          onClose={() => togglePanel("variables")}
+                          onPositionChange={(position) =>
+                            updatePanelPosition("variables", position)
+                          }
+                        />
+                      )}
+                    {panels.inspector.isVisible && (
+                      <Inspector
+                        position={panels.inspector.position}
+                        joker={item as any}
+                        selectedRule={selectedRule}
+                        selectedCondition={selectedCondition}
+                        selectedEffect={selectedEffect}
+                        selectedRandomGroup={selectedRandomGroup}
+                        selectedLoopGroup={selectedLoopGroup}
+                        onUpdateCondition={updateCondition}
+                        onUpdateEffect={updateEffect}
+                        onUpdateRandomGroup={updateRandomGroup}
+                        onUpdateLoopGroup={updateLoopGroup}
+                        onUpdateJoker={
+                          onUpdateItem as (updates: Partial<any>) => void
+                        }
+                        onClose={() => togglePanel("inspector")}
+                        onPositionChange={(position) =>
+                          updatePanelPosition("inspector", position)
+                        }
+                        onToggleVariablesPanel={() => togglePanel("variables")}
+                        onToggleGameVariablesPanel={() =>
+                          togglePanel("gameVariables")
+                        }
+                        onCreateRandomGroupFromEffect={
+                          createRandomGroupFromEffect
+                        }
+                        onCreateLoopGroupFromEffect={createLoopGroupFromEffect}
+                        selectedGameVariable={selectedGameVariable}
+                        onGameVariableApplied={handleGameVariableApplied}
+                        selectedItem={selectedItem}
+                        itemType={itemType}
+                      />
+                    )}
+
+                    {panels.gameVariables.isVisible && (
+                      <GameVariables
+                        position={panels.gameVariables.position}
+                        selectedGameVariable={selectedGameVariable}
+                        onSelectGameVariable={setSelectedGameVariable}
+                        onClose={() => togglePanel("gameVariables")}
+                        onPositionChange={(position) =>
+                          updatePanelPosition("gameVariables", position)
+                        }
+                      />
+                    )}
+
+                    {panels.history?.isVisible && (
+                      <HistoryPanel
+                        position={panels.history.position}
+                        entries={historyTimeline}
+                        currentIndex={historyCurrentIndex}
+                        onRestoreAt={restoreHistoryAt}
+                        onClose={() => togglePanel("history")}
+                        onPositionChange={(position) =>
+                          updatePanelPosition("history", position)
+                        }
+                      />
+                    )}
+                    <FloatingDock
+                      panels={panels}
+                      onTogglePanel={togglePanel}
+                      itemType={itemType}
+                    />
+                  </DndContext>
+                </div>
+
+                {liveCodeIsVisible && (
+                  <LiveCodePanel
+                    title={liveCodeTitle}
+                    code={liveCodeSnippet}
+                    isLoading={liveCodeIsLoading}
+                    statusMessage={liveCodeStatusMessage}
+                    isError={liveCodeIsError}
+                    widthPercent={liveCodeWidthPercent}
+                    isBlockPreview={!!liveCodePreviewTarget}
+                    onBackToItem={() => setLiveCodePreviewTarget(null)}
+                    onStartResize={handleLiveCodeResizeStart}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-62 border-border/95 bg-card/98 shadow-[0_24px_45px_-20px_rgba(0,0,0,0.78)] backdrop-blur-md">
+        {hasBulkSelection ? (
+          <>
+            <ContextMenuLabel>Selection Actions</ContextMenuLabel>
+            <ContextMenuLabel className="text-xs text-muted-foreground pt-0">
+              Selected Rules: {selectedRuleIds.length}
+            </ContextMenuLabel>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              onClick={moveSelectedRulesToContextPoint}
+              disabled={!lastContextWorldPoint}
+            >
+              Move Selection Here
+            </ContextMenuItem>
+            <ContextMenuItem onClick={duplicateSelectedRules}>
+              <Copy className="h-4 w-4" />
+              Duplicate Selection
+              <ContextMenuShortcut>Ctrl+D</ContextMenuShortcut>
+            </ContextMenuItem>
+            <ContextMenuItem
+              onClick={deleteSelectedRules}
+              variant="destructive"
+            >
+              <Trash className="h-4 w-4" />
+              Delete Selection
+              <ContextMenuShortcut>Del</ContextMenuShortcut>
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem onClick={clearRuleSelection}>
+              Clear Selection
+              <ContextMenuShortcut>Esc</ContextMenuShortcut>
+            </ContextMenuItem>
+          </>
+        ) : (
+          <>
+            <ContextMenuLabel>{contextTargetTitle} Actions</ContextMenuLabel>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              onClick={handleUndo}
+              disabled={historyPastRef.current.length === 0}
+            >
+              <ArrowCounterClockwise className="h-4 w-4" />
+              Undo
+              <ContextMenuShortcut>Ctrl+Z</ContextMenuShortcut>
+            </ContextMenuItem>
+            <ContextMenuItem
+              onClick={handleRedo}
+              disabled={historyFutureRef.current.length === 0}
+            >
+              <ArrowClockwise className="h-4 w-4" />
+              Redo
+              <ContextMenuShortcut>Ctrl+Y</ContextMenuShortcut>
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem onClick={handleRecenter}>
+              Recenter Canvas
+            </ContextMenuItem>
+            <ContextMenuItem onClick={handleAutoLayoutRules}>
+              Auto Layout Rules
+              <ContextMenuShortcut>Ctrl+Shift+L</ContextMenuShortcut>
+            </ContextMenuItem>
+            {contextTarget.ruleId ? (
+              <ContextMenuItem
+                onClick={() => setSingleSelectedRule(contextTarget.ruleId!)}
+              >
+                Select Rule
+              </ContextMenuItem>
+            ) : null}
+            <ContextMenuItem
+              onClick={selectAllRules}
+              disabled={rules.length === 0}
+            >
+              Select All Rules
+              <ContextMenuShortcut>Ctrl+A</ContextMenuShortcut>
+            </ContextMenuItem>
+            {canPreviewContextTarget ? (
+              <ContextMenuItem onClick={handleContextPreview}>
+                <Eye className="h-4 w-4" />
+                Preview Block Code
+              </ContextMenuItem>
+            ) : null}
+            {contextTarget.ruleId ? (
+              <ContextMenuItem
+                onClick={() => addConditionGroup(contextTarget.ruleId!)}
+              >
+                <Plus className="h-4 w-4" />
+                Add Condition Group
+              </ContextMenuItem>
+            ) : null}
+            {contextTarget.ruleId ? (
+              <ContextMenuItem
+                onClick={() => addRandomGroup(contextTarget.ruleId!)}
+              >
+                <Plus className="h-4 w-4" />
+                Add Random Group
+              </ContextMenuItem>
+            ) : null}
+            {contextTarget.ruleId ? (
+              <ContextMenuItem
+                onClick={() => addLoopGroup(contextTarget.ruleId!)}
+              >
+                <Plus className="h-4 w-4" />
+                Add Loop Group
+              </ContextMenuItem>
+            ) : null}
+            {itemType === "joker" && contextTarget.ruleId ? (
+              <ContextMenuItem
+                onClick={() =>
+                  toggleBlueprintCompatibility(contextTarget.ruleId!)
+                }
+              >
+                Toggle Blueprint Compatibility
+              </ContextMenuItem>
+            ) : null}
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              onClick={handleContextDuplicate}
+              disabled={!canDuplicateContextTarget}
+            >
+              <Copy className="h-4 w-4" />
+              Duplicate
+              <ContextMenuShortcut>Ctrl+D</ContextMenuShortcut>
+            </ContextMenuItem>
+            <ContextMenuItem
+              onClick={handleContextDelete}
+              disabled={!canDeleteContextTarget}
+              variant="destructive"
+            >
+              <Trash className="h-4 w-4" />
+              Delete
+              <ContextMenuShortcut>Del</ContextMenuShortcut>
+            </ContextMenuItem>
+          </>
+        )}
+      </ContextMenuContent>
+    </ContextMenu>
   );
 };
 

@@ -1,5 +1,5 @@
-pub mod context;
 pub mod conditions;
+pub mod context;
 pub mod effects;
 pub mod triggers;
 pub mod values;
@@ -10,6 +10,15 @@ use context::CompileContext;
 
 /// Compile a complete joker definition into a Lua chunk.
 pub fn compile_joker(joker: &JokerDef, mod_prefix: &str) -> Chunk {
+    compile_joker_with_options(joker, mod_prefix, true)
+}
+
+/// Compile a complete joker definition into a Lua chunk with optional loc_txt emission.
+pub fn compile_joker_with_options(
+    joker: &JokerDef,
+    mod_prefix: &str,
+    include_loc_txt: bool,
+) -> Chunk {
     let mut ctx = CompileContext::new(
         ObjectType::Joker,
         mod_prefix.to_string(),
@@ -22,19 +31,19 @@ pub fn compile_joker(joker: &JokerDef, mod_prefix: &str) -> Chunk {
     let rule_outputs = compile_rules(&joker.rules, &mut ctx);
 
     // Build the SMODS.Joker table
-    let joker_table = build_joker_table(joker, &ctx, &rule_outputs);
+    let joker_table = build_joker_table(joker, &ctx, &rule_outputs, include_loc_txt);
 
-    // Wrap in SMODS.Joker{ ... }
-    let smods_call = Stmt::ExprStmt(Expr::Call(
-        Box::new(lua_path(&["SMODS", "Joker"])),
-        vec![joker_table],
+    // Wrap in SMODS.Joker { ... } (table-call syntax, no parens)
+    let smods_call = Stmt::ExprStmt(lua_table_call(
+        lua_path(&["SMODS", "Joker"]),
+        match joker_table {
+            Expr::Table(entries) => entries,
+            _ => vec![],
+        },
     ));
 
     Chunk {
-        stmts: vec![
-            lua_comment(format!(" {}", joker.name)),
-            smods_call,
-        ],
+        stmts: vec![lua_comment(format!(" {}", joker.name)), smods_call],
     }
 }
 
@@ -122,10 +131,8 @@ fn compile_single_rule(rule: &RuleDef, ctx: &mut CompileContext) -> RuleOutput {
     let is_passive = trigger == "passive";
 
     // Compile conditions
-    let condition_expr = conditions::compile_condition_chain(
-        &rule.condition_groups,
-        ctx.object_type,
-    );
+    let condition_expr =
+        conditions::compile_condition_chain(&rule.condition_groups, ctx.object_type);
 
     // Check for passive effects
     let mut passive_outputs = Vec::new();
@@ -223,6 +230,7 @@ fn build_joker_table(
     joker: &JokerDef,
     ctx: &CompileContext,
     rule_outputs: &[RuleOutput],
+    include_loc_txt: bool,
 ) -> Expr {
     let mut entries: Vec<TableEntry> = Vec::new();
 
@@ -241,52 +249,97 @@ fn build_joker_table(
         ));
     }
 
-    // Localization
-    let desc_expr = if joker.description.len() == 1 {
-        lua_str(&joker.description[0])
-    } else {
-        lua_table_raw(
-            joker
+    if include_loc_txt {
+        // Localization — use ['name'], ['text'], ['unlock'] bracket keys
+        // Text and unlock use numbered array entries: [1] = '...', [2] = '...'
+        let text_entries: Vec<TableEntry> = joker
+            .description
+            .iter()
+            .enumerate()
+            .map(|(i, d)| TableEntry::IndexValue(lua_int(i as i64 + 1), lua_str(d)))
+            .collect();
+
+        let mut loc_txt_entries = vec![
+            TableEntry::IndexValue(lua_str("name"), lua_str(&joker.name)),
+            TableEntry::IndexValue(lua_str("text"), lua_table_raw(text_entries)),
+        ];
+
+        // Unlock description
+        if let Some(unlock) = &joker.unlock {
+            let unlock_entries: Vec<TableEntry> = unlock
                 .description
                 .iter()
-                .map(|d| TableEntry::Value(lua_str(d)))
-                .collect(),
-        )
-    };
+                .enumerate()
+                .map(|(i, d)| TableEntry::IndexValue(lua_int(i as i64 + 1), lua_str(d)))
+                .collect();
+            loc_txt_entries.push(TableEntry::IndexValue(
+                lua_str("unlock"),
+                lua_table_raw(unlock_entries),
+            ));
+        }
 
-    entries.push(TableEntry::KeyValue(
-        "loc_txt".to_string(),
-        lua_table_raw(vec![
-            TableEntry::KeyValue("name".to_string(), lua_str(&joker.name)),
-            TableEntry::KeyValue("text".to_string(), desc_expr),
-        ]),
-    ));
+        entries.push(TableEntry::KeyValue(
+            "loc_txt".to_string(),
+            lua_table_raw(loc_txt_entries),
+        ));
+    }
 
     // Position
     entries.push(TableEntry::KeyValue(
         "pos".to_string(),
-        lua_table(vec![("x", lua_int(joker.pos.x as i64)), ("y", lua_int(joker.pos.y as i64))]),
+        lua_table(vec![
+            ("x", lua_int(joker.pos.x as i64)),
+            ("y", lua_int(joker.pos.y as i64)),
+        ]),
     ));
 
     // Soul position
     if let Some(soul) = &joker.soul_pos {
         entries.push(TableEntry::KeyValue(
             "soul_pos".to_string(),
-            lua_table(vec![("x", lua_int(soul.x as i64)), ("y", lua_int(soul.y as i64))]),
+            lua_table(vec![
+                ("x", lua_int(soul.x as i64)),
+                ("y", lua_int(soul.y as i64)),
+            ]),
         ));
     }
 
-    // Display size
+    // Display size — only include when changed from default 1x scale.
     if let Some(size) = &joker.display_size {
-        entries.push(TableEntry::KeyValue(
-            "display_size".to_string(),
-            lua_table(vec![("w", lua_num(size.w)), ("h", lua_num(size.h))]),
-        ));
+        let epsilon = 0.0001_f64;
+        let is_default = (size.w - 1.0).abs() < epsilon && (size.h - 1.0).abs() < epsilon;
+        if !is_default {
+            let scale_w = if size.w.fract() == 0.0 {
+                lua_int(size.w as i64)
+            } else {
+                lua_num(size.w)
+            };
+            let scale_h = if size.h.fract() == 0.0 {
+                lua_int(size.h as i64)
+            } else {
+                lua_num(size.h)
+            };
+            entries.push(TableEntry::KeyValue(
+                "display_size".to_string(),
+                lua_table(vec![
+                    ("w", lua_mul(lua_int(71), scale_w)),
+                    ("h", lua_mul(lua_int(95), scale_h)),
+                ]),
+            ));
+        }
     }
 
     // Scalar properties
     entries.push(kv("cost", lua_int(joker.cost as i64)));
-    entries.push(kv("rarity", lua_str(&joker.rarity)));
+    // Rarity — standard rarities are numeric, custom rarities are strings
+    let rarity_expr = match joker.rarity.as_str() {
+        "common" | "Common" | "1" => lua_int(1),
+        "uncommon" | "Uncommon" | "2" => lua_int(2),
+        "rare" | "Rare" | "3" => lua_int(3),
+        "legendary" | "Legendary" | "4" => lua_int(4),
+        other => lua_str(other), // Custom rarity key
+    };
+    entries.push(kv("rarity", rarity_expr));
     entries.push(kv("blueprint_compat", lua_bool(joker.blueprint_compat)));
     entries.push(kv("eternal_compat", lua_bool(joker.eternal_compat)));
     entries.push(kv("perishable_compat", lua_bool(joker.perishable_compat)));
@@ -326,10 +379,7 @@ fn build_joker_table(
 }
 
 /// Build the `calculate` function from non-passive rules.
-fn build_calculate_function(
-    rule_outputs: &[RuleOutput],
-    ctx: &CompileContext,
-) -> Option<Expr> {
+fn build_calculate_function(rule_outputs: &[RuleOutput], ctx: &CompileContext) -> Option<Expr> {
     let non_passive: Vec<&RuleOutput> = rule_outputs
         .iter()
         .filter(|r| !r.is_passive && !r.effect_stmts.is_empty())
@@ -366,11 +416,7 @@ fn build_calculate_function(
             .collect();
 
         // Get the trigger context expression
-        let trigger_ctx = triggers::trigger_context(
-            ctx.object_type,
-            trigger,
-            ctx.blueprint_compat,
-        );
+        let trigger_ctx = triggers::trigger_context(ctx.object_type, trigger, ctx.blueprint_compat);
 
         let mut trigger_body: Vec<Stmt> = Vec::new();
 
@@ -400,9 +446,7 @@ fn build_calculate_function(
 }
 
 /// Build `add_to_deck` and `remove_from_deck` from passive effects.
-fn build_passive_functions(
-    rule_outputs: &[RuleOutput],
-) -> (Option<Expr>, Option<Expr>) {
+fn build_passive_functions(rule_outputs: &[RuleOutput]) -> (Option<Expr>, Option<Expr>) {
     let mut add_stmts: Vec<Stmt> = Vec::new();
     let mut remove_stmts: Vec<Stmt> = Vec::new();
 
@@ -446,15 +490,13 @@ fn build_loc_vars(ctx: &CompileContext) -> Option<Expr> {
     // Return { vars = { var1, var2, ... } }
     let var_refs: Vec<TableEntry> = vars
         .iter()
-        .map(|v| TableEntry::Value(lua_field(
-            lua_raw_expr("self.config.extra"),
-            &v.name,
-        )))
+        .map(|v| TableEntry::Value(lua_field(lua_raw_expr("self.config.extra"), &v.name)))
         .collect();
 
-    let body = vec![lua_return(lua_table_raw(vec![
-        TableEntry::KeyValue("vars".to_string(), lua_table_raw(var_refs)),
-    ]))];
+    let body = vec![lua_return(lua_table_raw(vec![TableEntry::KeyValue(
+        "vars".to_string(),
+        lua_table_raw(var_refs),
+    )]))];
 
     Some(Expr::Function {
         params: vec!["self".into(), "info_queue".into()],

@@ -18,11 +18,15 @@ import { Switch } from "@/components/ui/switch";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
+  getExportDestinationMode,
   getConfirmDeleteEnabled,
   getBalatroInstallPath,
+  getSplitLocalizationExportEnabled,
   resetProjectData,
   setBalatroInstallPath,
   setConfirmDeleteEnabled,
+  setExportDestinationMode,
+  setSplitLocalizationExportEnabled,
 } from "@/lib/storage";
 import { Gear, Monitor, FolderOpen } from "@phosphor-icons/react";
 
@@ -31,6 +35,8 @@ export function SettingsPopover() {
   const [confirmDeletes, setConfirmDeletes] = useState(true);
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [balatroPath, setBalatroPath] = useState("");
+  const [splitLocalizationExport, setSplitLocalizationExport] = useState(false);
+  const [exportToBalatroMods, setExportToBalatroMods] = useState(false);
 
   useEffect(() => {
     const storedScale = localStorage.getItem("app-ui-scale") || "1";
@@ -38,6 +44,8 @@ export function SettingsPopover() {
     applyScale(storedScale);
     setConfirmDeletes(getConfirmDeleteEnabled());
     setBalatroPath(getBalatroInstallPath());
+    setSplitLocalizationExport(getSplitLocalizationExportEnabled());
+    setExportToBalatroMods(getExportDestinationMode() === "balatro-mods");
   }, []);
 
   const applyScale = (value: string) => {
@@ -63,6 +71,16 @@ export function SettingsPopover() {
   const handleBalatroPathChange = (value: string) => {
     setBalatroPath(value);
     setBalatroInstallPath(value);
+  };
+
+  const handleSplitLocalizationToggle = (value: boolean) => {
+    setSplitLocalizationExport(value);
+    setSplitLocalizationExportEnabled(value);
+  };
+
+  const handleExportDestinationToggle = (value: boolean) => {
+    setExportToBalatroMods(value);
+    setExportDestinationMode(value ? "balatro-mods" : "downloads");
   };
 
   const handleBrowseBalatroPath = async () => {
@@ -148,6 +166,35 @@ export function SettingsPopover() {
                   onClick={(event) => event.stopPropagation()}
                 />
               </div>
+
+              <div
+                className="flex items-center justify-between cursor-pointer rounded-lg px-2 py-1 -mx-2"
+                role="button"
+                tabIndex={0}
+                onClick={() =>
+                  handleSplitLocalizationToggle(!splitLocalizationExport)
+                }
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    handleSplitLocalizationToggle(!splitLocalizationExport);
+                  }
+                }}
+              >
+                <Label
+                  htmlFor="split-localization-export"
+                  className="flex items-center gap-2"
+                >
+                  Split Localization On Full Export
+                </Label>
+                <Switch
+                  id="split-localization-export"
+                  checked={splitLocalizationExport}
+                  onCheckedChange={handleSplitLocalizationToggle}
+                  className="cursor-pointer"
+                  onClick={(event) => event.stopPropagation()}
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -175,6 +222,40 @@ export function SettingsPopover() {
                 >
                   <FolderOpen className="h-4 w-4" />
                 </Button>
+              </div>
+
+              <div
+                className="mt-2 flex items-center justify-between cursor-pointer rounded-lg px-2 py-1 -mx-2"
+                role="button"
+                tabIndex={0}
+                onClick={() =>
+                  handleExportDestinationToggle(!exportToBalatroMods)
+                }
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    handleExportDestinationToggle(!exportToBalatroMods);
+                  }
+                }}
+              >
+                <div>
+                  <Label
+                    htmlFor="export-destination-toggle"
+                    className="flex items-center gap-2"
+                  >
+                    Export To Balatro Mods Folder
+                  </Label>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Off: Downloads folder. On: Balatro mods folder above.
+                  </p>
+                </div>
+                <Switch
+                  id="export-destination-toggle"
+                  checked={exportToBalatroMods}
+                  onCheckedChange={handleExportDestinationToggle}
+                  className="cursor-pointer"
+                  onClick={(event) => event.stopPropagation()}
+                />
               </div>
             </div>
 

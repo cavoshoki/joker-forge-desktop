@@ -19,6 +19,7 @@ interface BlockComponentProps {
   label: string;
   type: "trigger" | "condition" | "effect";
   onClick: (e?: React.MouseEvent) => void;
+  onIconClick?: (e?: React.MouseEvent) => void;
   isSelected?: boolean;
   showTrash?: boolean;
   onDelete?: () => void;
@@ -36,6 +37,7 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
   label,
   type,
   onClick,
+  onIconClick,
   isSelected = false,
   showTrash = false,
   onDelete,
@@ -48,6 +50,15 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
   dragHandleProps,
   variant = "default",
 }) => {
+  const typeLabelLeft = onIconClick
+    ? type === "effect"
+      ? "3.75rem"
+      : "3.25rem"
+    : type === "effect"
+      ? "3.25rem"
+      : "2.75rem";
+  const containerPaddingClass = onIconClick ? "p-2.5 pt-5" : "p-3 pt-6";
+
   const getTypeConfig = () => {
     switch (type) {
       case "trigger":
@@ -135,7 +146,7 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
           config.borderColor
         } border-l-4 border-2 
         ${isSelected ? config.selectColor : "border-border"}
-        rounded-xl cursor-pointer transition-all ${config.hoverColor} p-3 pt-6 shadow-sm
+        rounded-xl cursor-pointer transition-all ${config.hoverColor} ${containerPaddingClass} shadow-sm
         ${getVariantStyles()}
         ${
           isDraggable
@@ -147,7 +158,10 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
       style={{ pointerEvents: "auto" }}
       {...(isDraggable ? dragHandleProps : {})}
     >
-      <div className="absolute top-2 left-11 text-muted-foreground text-xs font-medium tracking-wider">
+      <div
+        className="absolute top-2 text-muted-foreground text-xs font-medium tracking-wider"
+        style={{ left: typeLabelLeft }}
+      >
         {config.typeLabel}
       </div>
 
@@ -190,7 +204,29 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 grow min-w-0">
           <div className="flex items-center gap-2">
-            <div className="shrink-0">{config.icon}</div>
+            <div className="shrink-0">
+              {onIconClick ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onIconClick(e);
+                      }}
+                      className="h-7 w-7 inline-flex items-center justify-center rounded-md bg-transparent hover:scale-105 transition-all cursor-pointer"
+                    >
+                      {config.icon}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" sideOffset={4} className="text-xs">
+                    Preview Block Code
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                config.icon
+              )}
+            </div>
             {isNegated && (
               <div className="shrink-0 -mr-2">
                 <Prohibit className="h-4 w-4 text-balatro-red" />

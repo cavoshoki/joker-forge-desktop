@@ -13,8 +13,6 @@ import {
   CaretDown,
   CaretRight,
   MagnifyingGlass,
-  X,
-  List,
   Sparkle,
   Lightning,
   PuzzlePiece,
@@ -22,6 +20,7 @@ import {
 } from "@phosphor-icons/react";
 import IconButton from "./icon-button";
 import ItemTypeBadge from "./item-type-badge";
+import Panel from "./panel";
 
 import {
   TRIGGER_CATEGORIES,
@@ -96,10 +95,6 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({
     selectedRule,
   );
 
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({
-    id: "panel-blockPalette",
-  });
-
   const triggers = getTriggers(itemType);
 
   const triggerCategories = TRIGGER_CATEGORIES;
@@ -108,18 +103,6 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({
 
   const getConditionsForTriggerFn = getConditionsForTrigger;
   const getEffectsForTriggerFn = getEffectsForTrigger;
-
-  const style = transform
-    ? {
-        position: "absolute" as const,
-        left: position.x + transform.x,
-        top: position.y + transform.y,
-      }
-    : {
-        position: "absolute" as const,
-        left: position.x,
-        top: position.y,
-      };
 
   useEffect(() => {
     const ruleChanged = selectedRule !== previousSelectedRule;
@@ -475,28 +458,18 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({
   };
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="w-80 bg-card/95 backdrop-blur-md border border-border rounded-xl shadow-xl z-40"
+    <Panel
+      id="blockPalette"
+      position={position}
+      icon={Palette}
+      title="Block Palette"
+      titleAccessory={<ItemTypeBadge itemType={itemType} />}
+      onClose={onClose}
+      closeLabel="Close Block Palette"
+      className="w-80"
+      contentClassName="p-3"
     >
-      <div
-        className="flex items-center justify-between p-3 border-b border-border cursor-grab active:cursor-grabbing"
-        {...attributes}
-        {...listeners}
-      >
-        <div className="flex items-center gap-2">
-          <List className="h-4 w-4 text-muted-foreground" />
-          <Palette className="h-5 w-5 text-foreground" />
-          <h3 className="text-foreground text-sm font-medium tracking-wider uppercase">
-            Block Palette
-          </h3>
-          <ItemTypeBadge itemType={itemType} />
-        </div>
-        <IconButton icon={X} onClick={onClose} tooltip="Close Block Palette" />
-      </div>
-
-      <div className="p-3">
+      <div>
         <div className="w-1/4 h-px bg-border mx-auto mb-4"></div>
 
         <div className="flex justify-center gap-2 mb-4">
@@ -577,7 +550,7 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </Panel>
   );
 };
 

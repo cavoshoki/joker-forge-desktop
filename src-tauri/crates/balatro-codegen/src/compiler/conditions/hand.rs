@@ -153,7 +153,263 @@ pub fn hand_level(condition: &ConditionDef) -> Option<Expr> {
     ))
 }
 
+/// Discarded Card Count — checks the number of discarded cards.
+pub fn discarded_card_count(condition: &ConditionDef) -> Option<Expr> {
+    let operator = condition
+        .params
+        .get("operator")
+        .and_then(|v| v.as_str())
+        .unwrap_or("equals");
+    let value = condition.params.get("value")?.as_i64()?;
+
+    Some(comparison_op(
+        operator,
+        lua_len(lua_path(&["context", "full_hand"])),
+        lua_int(value),
+    ))
+}
+
+/// Discarded Suit Count — count of discarded cards of a specific suit.
+pub fn discarded_suit_count(condition: &ConditionDef) -> Option<Expr> {
+    let suit = condition
+        .params
+        .get("specific_suit")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Hearts");
+    let quantifier = condition
+        .params
+        .get("quantifier")
+        .and_then(|v| v.as_str())
+        .unwrap_or("at_least");
+    let count = condition.params.get("count").and_then(|v| v.as_i64()).unwrap_or(1);
+
+    let count_expr = lua_raw_expr(&format!(
+        "(function() local c = 0; for _, v in ipairs(context.full_hand or {{}}) do \
+         if v:is_suit('{}') then c = c + 1 end end return c end)()",
+        suit
+    ));
+
+    let op = quantifier_to_op(quantifier);
+    Some(comparison_op(op, count_expr, lua_int(count)))
+}
+
+/// Discarded Rank Count — count of discarded cards of a specific rank.
+pub fn discarded_rank_count(condition: &ConditionDef) -> Option<Expr> {
+    let rank = condition
+        .params
+        .get("specific_rank")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Ace");
+    let quantifier = condition
+        .params
+        .get("quantifier")
+        .and_then(|v| v.as_str())
+        .unwrap_or("at_least");
+    let count = condition.params.get("count").and_then(|v| v.as_i64()).unwrap_or(1);
+
+    let rank_id = rank_to_id(rank);
+    let count_expr = lua_raw_expr(&format!(
+        "(function() local c = 0; for _, v in ipairs(context.full_hand or {{}}) do \
+         if v:get_id() == {} then c = c + 1 end end return c end)()",
+        rank_id
+    ));
+
+    let op = quantifier_to_op(quantifier);
+    Some(comparison_op(op, count_expr, lua_int(count)))
+}
+
+/// Enhancement Count — count of cards with a specific enhancement in hand/play.
+pub fn enhancement_count(condition: &ConditionDef) -> Option<Expr> {
+    let enhancement = condition
+        .params
+        .get("enhancement")
+        .and_then(|v| v.as_str())
+        .unwrap_or("any");
+    let operator = condition
+        .params
+        .get("operator")
+        .and_then(|v| v.as_str())
+        .unwrap_or("greater_than");
+    let value = condition.params.get("value")?.as_i64()?;
+
+    let check = if enhancement == "any" {
+        "v.config.center.key ~= 'c_base'".to_string()
+    } else {
+        format!("v.config.center.key == '{}'", enhancement)
+    };
+
+    let count_expr = lua_raw_expr(&format!(
+        "(function() local c = 0; for _, v in ipairs(context.scoring_hand or {{}}) do \
+         if {} then c = c + 1 end end return c end)()",
+        check
+    ));
+
+    Some(comparison_op(operator, count_expr, lua_int(value)))
+}
+
+/// Edition Count — count of cards with a specific edition in hand/play.
+pub fn edition_count(condition: &ConditionDef) -> Option<Expr> {
+    let edition = condition
+        .params
+        .get("edition")
+        .and_then(|v| v.as_str())
+        .unwrap_or("any");
+    let operator = condition
+        .params
+        .get("operator")
+        .and_then(|v| v.as_str())
+        .unwrap_or("greater_than");
+    let value = condition.params.get("value")?.as_i64()?;
+
+    let check = if edition == "any" {
+        "v.edition and next(v.edition)".to_string()
+    } else {
+        format!("v.edition and v.edition.key == '{}'", edition)
+    };
+
+    let count_expr = lua_raw_expr(&format!(
+        "(function() local c = 0; for _, v in ipairs(context.scoring_hand or {{}}) do \
+         if {} then c = c + 1 end end return c end)()",
+        check
+    ));
+
+    Some(comparison_op(operator, count_expr, lua_int(value)))
+}
+
+/// Seal Count — count of cards with a specific seal in hand/play.
+pub fn seal_count(condition: &ConditionDef) -> Option<Expr> {
+    let seal = condition
+        .params
+        .get("seal")
+        .and_then(|v| v.as_str())
+        .unwrap_or("any");
+    let operator = condition
+        .params
+        .get("operator")
+        .and_then(|v| v.as_str())
+        .unwrap_or("greater_than");
+    let value = condition.params.get("value")?.as_i64()?;
+
+    let check = if seal == "any" {
+        "v.seal".to_string()
+    } else {
+        format!("v.seal == '{}'", seal)
+    };
+
+    let count_expr = lua_raw_expr(&format!(
+        "(function() local c = 0; for _, v in ipairs(context.scoring_hand or {{}}) do \
+         if {} then c = c + 1 end end return c end)()",
+        check
+    ));
+
+    Some(comparison_op(operator, count_expr, lua_int(value)))
+}
+
+/// Poker Hand Been Played — check if the current poker hand has been played before.
+pub fn poker_hand_been_played(_condition: &ConditionDef) -> Option<Expr> {
+    Some(lua_gt(
+        lua_raw_expr("(G.GAME.hands[context.scoring_name].played or 0)"),
+        lua_int(0),
+    ))
+}
+
+/// First Played Hand — check if this is the first hand played this round.
+pub fn first_played_hand(_condition: &ConditionDef) -> Option<Expr> {
+    Some(lua_eq(
+        lua_path(&["G", "GAME", "current_round", "hands_played"]),
+        lua_int(0),
+    ))
+}
+
+/// First Discarded Hand — check if this is the first discard this round.
+pub fn first_discarded_hand(_condition: &ConditionDef) -> Option<Expr> {
+    Some(lua_eq(
+        lua_path(&["G", "GAME", "current_round", "discards_used"]),
+        lua_int(0),
+    ))
+}
+
+/// First/Last Scored — check if scored card is first or last.
+pub fn first_last_scored(condition: &ConditionDef) -> Option<Expr> {
+    let position = condition
+        .params
+        .get("position")
+        .and_then(|v| v.as_str())
+        .unwrap_or("first");
+    let check_type = condition
+        .params
+        .get("check_type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("any");
+
+    let index_expr = match position {
+        "first" => "1",
+        "last" => "#context.scoring_hand",
+        _ => "1",
+    };
+
+    match check_type {
+        "any" => Some(lua_eq(
+            lua_path(&["context", "other_card"]),
+            lua_raw_expr(&format!("context.scoring_hand[{}]", index_expr)),
+        )),
+        "rank" => {
+            let rank = condition.params.get("specific_rank").and_then(|v| v.as_str()).unwrap_or("Ace");
+            let rank_id = rank_to_id(rank);
+            Some(lua_and(
+                lua_eq(
+                    lua_path(&["context", "other_card"]),
+                    lua_raw_expr(&format!("context.scoring_hand[{}]", index_expr)),
+                ),
+                lua_eq(
+                    lua_method(lua_path(&["context", "other_card"]), "get_id", vec![]),
+                    lua_int(rank_id.parse().unwrap_or(0)),
+                ),
+            ))
+        }
+        "suit" => {
+            let suit = condition.params.get("specific_suit").and_then(|v| v.as_str()).unwrap_or("Hearts");
+            Some(lua_and(
+                lua_eq(
+                    lua_path(&["context", "other_card"]),
+                    lua_raw_expr(&format!("context.scoring_hand[{}]", index_expr)),
+                ),
+                lua_method(lua_path(&["context", "other_card"]), "is_suit", vec![lua_str(suit)]),
+            ))
+        }
+        _ => Some(lua_eq(
+            lua_path(&["context", "other_card"]),
+            lua_raw_expr(&format!("context.scoring_hand[{}]", index_expr)),
+        )),
+    }
+}
+
+/// Cards Selected — check count of selected/highlighted cards.
+pub fn cards_selected(condition: &ConditionDef) -> Option<Expr> {
+    let operator = condition
+        .params
+        .get("operator")
+        .and_then(|v| v.as_str())
+        .unwrap_or("equals");
+    let value = condition.params.get("value")?.as_i64()?;
+
+    Some(comparison_op(
+        operator,
+        lua_len(lua_path(&["G", "hand", "highlighted"])),
+        lua_int(value),
+    ))
+}
+
+/// Hand Drawn — check if hand has been drawn (context.first_hand_drawn).
+pub fn hand_drawn(_condition: &ConditionDef) -> Option<Expr> {
+    Some(lua_path(&["context", "first_hand_drawn"]))
+}
+
 /// Convert rank name to Balatro's numeric ID.
+pub fn rank_id_from_name(rank: &str) -> &str {
+    rank_to_id(rank)
+}
+
 fn rank_to_id(rank: &str) -> &str {
     match rank {
         "Ace" => "14",
@@ -170,5 +426,17 @@ fn rank_to_id(rank: &str) -> &str {
         "3" => "3",
         "2" => "2",
         _ => rank,
+    }
+}
+
+/// Convert quantifier to comparison operator string.
+fn quantifier_to_op(quantifier: &str) -> &str {
+    match quantifier {
+        "all" => "equals",
+        "none" => "equals",
+        "exactly" => "equals",
+        "at_least" => "greater_equals",
+        "at_most" => "less_equals",
+        _ => "greater_equals",
     }
 }

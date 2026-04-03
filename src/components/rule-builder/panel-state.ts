@@ -42,6 +42,20 @@ const createInitialPanels = (
       size: { width: 384, height: 600 },
       positionSet: false,
     },
+    liveCode: {
+      id: "liveCode",
+      isVisible: false,
+      position: { x: 0, y: 0 },
+      size: { width: 640, height: 600 },
+      positionSet: false,
+    },
+    history: {
+      id: "history",
+      isVisible: false,
+      position: { x: 0, y: 0 },
+      size: { width: 320, height: 360 },
+      positionSet: false,
+    },
   };
 
   if (itemType !== "consumable") {

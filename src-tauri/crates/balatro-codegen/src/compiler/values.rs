@@ -211,8 +211,8 @@ pub fn comparison_op(operator: &str, lhs: Expr, rhs: Expr) -> Expr {
         "not_equals" | "not_equal" | "~=" => lua_neq(lhs, rhs),
         "greater_than" | ">" => lua_gt(lhs, rhs),
         "less_than" | "<" => lua_lt(lhs, rhs),
-        "greater_than_or_equal" | ">=" => lua_ge(lhs, rhs),
-        "less_than_or_equal" | "<=" => lua_le(lhs, rhs),
+        "greater_than_or_equal" | "greater_equals" | ">=" => lua_ge(lhs, rhs),
+        "less_than_or_equal" | "less_equals" | "<=" => lua_le(lhs, rhs),
         _ => lua_eq(lhs, rhs),
     }
 }

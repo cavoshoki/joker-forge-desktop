@@ -1,6 +1,8 @@
-pub mod hand;
 pub mod card;
 pub mod game_state;
+pub mod hand;
+pub mod joker;
+pub mod variables;
 
 use crate::lua_ast::*;
 use crate::types::{ConditionDef, ConditionGroupDef, LogicOp, ObjectType};
@@ -8,10 +10,7 @@ use crate::types::{ConditionDef, ConditionGroupDef, LogicOp, ObjectType};
 /// Compile a single condition into a Lua boolean expression.
 ///
 /// Returns `None` for unknown/unimplemented condition types.
-pub fn compile_condition(
-    condition: &ConditionDef,
-    _object_type: ObjectType,
-) -> Option<Expr> {
+pub fn compile_condition(condition: &ConditionDef, _object_type: ObjectType) -> Option<Expr> {
     let expr = match condition.condition_type.as_str() {
         // Hand conditions
         "hand_type" => hand::hand_type(condition)?,
@@ -20,6 +19,18 @@ pub fn compile_condition(
         "suit_count" => hand::suit_count(condition)?,
         "rank_count" => hand::rank_count(condition)?,
         "hand_level" => hand::hand_level(condition)?,
+        "discarded_card_count" | "discarded_hand_count" => hand::discarded_card_count(condition)?,
+        "discarded_suit_count" => hand::discarded_suit_count(condition)?,
+        "discarded_rank_count" => hand::discarded_rank_count(condition)?,
+        "hand_enhancement_count" => hand::enhancement_count(condition)?,
+        "hand_edition_count" => hand::edition_count(condition)?,
+        "hand_seal_count" => hand::seal_count(condition)?,
+        "poker_hand_been_played" => hand::poker_hand_been_played(condition)?,
+        "first_played_hand" => hand::first_played_hand(condition)?,
+        "first_discarded_hand" => hand::first_discarded_hand(condition)?,
+        "first_last_scored" => hand::first_last_scored(condition)?,
+        "cards_selected" => hand::cards_selected(condition)?,
+        "hand_drawn" => hand::hand_drawn(condition)?,
 
         // Card conditions
         "card_rank" => card::card_rank(condition)?,
@@ -27,52 +38,58 @@ pub fn compile_condition(
         "card_enhancement" => card::card_enhancement(condition)?,
         "card_edition" => card::card_edition(condition)?,
         "card_seal" => card::card_seal(condition)?,
+        "card_index" => card::card_index(condition)?,
+
+        // Joker conditions
+        "specific_joker_owned" | "owned_joker" => joker::specific_joker_owned(condition)?,
+        "joker_rarity_count" => joker::joker_rarity_count(condition)?,
+        "joker_position" => joker::joker_position(condition)?,
+        "joker_flipped" => joker::joker_flipped(condition)?,
+        "joker_selected" => joker::joker_selected(condition)?,
+        "joker_sticker" => joker::joker_sticker(condition)?,
+        "joker_edition" => joker::joker_edition(condition)?,
 
         // Game state conditions
         "ante_level" => game_state::ante_level(condition)?,
         "blind_type" => game_state::blind_type(condition)?,
+        "boss_blind_type" => game_state::boss_blind_type(condition)?,
         "blind_name" => game_state::blind_name(condition)?,
+        "blind_requirements" | "check_blind_requirements" => {
+            game_state::check_blind_requirements(condition)?
+        }
         "player_money" => game_state::player_money(condition)?,
         "remaining_hands" => game_state::remaining_hands(condition)?,
         "remaining_discards" => game_state::remaining_discards(condition)?,
         "joker_count" => game_state::joker_count(condition)?,
         "consumable_count" => game_state::consumable_count(condition)?,
         "deck_size" => game_state::deck_size(condition)?,
+        "check_deck" => game_state::check_deck(condition)?,
+        "deck_count" => game_state::deck_count(condition)?,
+        "in_blind" => game_state::in_blind(condition)?,
+        "game_speed" => game_state::game_speed(condition)?,
+        "triggered_boss_blind" => game_state::triggered_boss_blind(condition)?,
+        "check_flag" => game_state::check_flag(condition)?,
+        "which_tag" => game_state::which_tag(condition)?,
+        "consumable_type" => game_state::consumable_type(condition)?,
+        "voucher_redeemed" => game_state::voucher_redeemed(condition)?,
+        "system_condition" => game_state::system_condition(condition)?,
+        "glass_card_destroyed" => game_state::glass_card_destroyed(condition)?,
+        "lucky_card_triggered" => game_state::lucky_card_triggered(condition)?,
+        "probability_identifier" => game_state::probability_identifier(condition)?,
+        "probability_part_compare" => game_state::probability_part_compare(condition)?,
+        "probability_succeeded" => game_state::probability_succeeded(condition)?,
+        "booster_pack_type" => game_state::booster_type(condition)?,
+
+        // Variable conditions
+        "internal_variable" => variables::internal_variable(condition)?,
+        "key_variable" => variables::key_variable(condition)?,
+        "text_variable" => variables::text_variable(condition)?,
+        "poker_hand_variable" => variables::poker_hand_variable(condition)?,
+        "rank_variable" => variables::rank_variable(condition)?,
+        "suit_variable" => variables::suit_variable(condition)?,
 
         // Generic compare
         "generic_compare" => game_state::generic_compare(condition)?,
-
-        // TODO: Implement remaining conditions:
-        //
-        // Hand conditions:
-        // "discarded_card_count" | "discarded_suit_count" | "discarded_rank_count"
-        // "hand_enhancement_count" | "hand_edition_count" | "hand_seal_count"
-        //
-        // Card conditions:
-        // "card_index"
-        //
-        // Joker conditions:
-        // "specific_joker_owned" | "joker_rarity_count"
-        // "joker_position" | "joker_flipped" | "joker_selected"
-        // "joker_sticker" | "joker_edition"
-        //
-        // Consumable conditions:
-        // "consumable_type"
-        //
-        // Deck conditions:
-        // "check_deck"
-        //
-        // Variable conditions:
-        // "internal_variable" | "key_variable" | "text_variable"
-        // "poker_hand_variable" | "rank_variable" | "suit_variable"
-        //
-        // Probability conditions:
-        // "probability_identifier" | "probability_part_compare"
-        // "probability_succeeded"
-        //
-        // Special:
-        // "poker_hand_been_played" | "glass_card_destroyed"
-        // "lucky_card_triggered" | "system_condition"
         _ => {
             return None;
         }
@@ -113,10 +130,7 @@ pub fn compile_condition_chain(
 }
 
 /// Compile a single condition group.
-fn compile_condition_group(
-    group: &ConditionGroupDef,
-    object_type: ObjectType,
-) -> Option<Expr> {
+fn compile_condition_group(group: &ConditionGroupDef, object_type: ObjectType) -> Option<Expr> {
     let cond_exprs: Vec<Expr> = group
         .conditions
         .iter()

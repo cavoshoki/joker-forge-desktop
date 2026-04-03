@@ -85,6 +85,9 @@ pub enum Expr {
     },
     /// Raw Lua expression string — escape hatch.
     Raw(String),
+    /// `func { entries }` — Lua table-call syntax (single table arg, no parens).
+    /// Used for `SMODS.Joker { ... }` style calls.
+    TableCall(Box<Expr>, Vec<TableEntry>),
 }
 
 /// Table constructor entry.
@@ -327,6 +330,11 @@ pub fn lua_path(segments: &[&str]) -> Expr {
         expr = lua_field(expr, *seg);
     }
     expr
+}
+
+/// `func { entries }` — table-call syntax.
+pub fn lua_table_call(func: Expr, entries: Vec<TableEntry>) -> Expr {
+    Expr::TableCall(Box::new(func), entries)
 }
 
 /// Expression as statement (for function / method calls).
@@ -699,6 +707,26 @@ impl Emitter {
                 self.buf.push_str("end");
             }
             Expr::Raw(s) => self.buf.push_str(s),
+            Expr::TableCall(func, entries) => {
+                self.emit_expr(func);
+                if entries.is_empty() {
+                    self.buf.push_str(" {}");
+                    return;
+                }
+                self.buf.push_str(" {\n");
+                self.indent += 1;
+                for (i, entry) in entries.iter().enumerate() {
+                    self.write_indent();
+                    self.emit_table_entry(entry);
+                    if i < entries.len() - 1 {
+                        self.buf.push(',');
+                    }
+                    self.buf.push('\n');
+                }
+                self.indent -= 1;
+                self.write_indent();
+                self.buf.push('}');
+            }
         }
     }
 

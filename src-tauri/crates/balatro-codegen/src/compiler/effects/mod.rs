@@ -52,13 +52,19 @@ pub fn compile_effect(
         // Creation effects
         "create_joker" => creation::create_joker(effect, ctx),
         "create_consumable" | "add_consumable" => creation::create_consumable(effect, ctx),
+        "create_playing_card" => creation::create_playing_card(effect, ctx),
+        "create_playing_cards" => creation::create_playing_cards(effect, ctx),
+        "create_tag" => creation::create_tag(effect, ctx),
 
         // Destruction effects
         "destroy_card" => destruction::destroy_card(effect, ctx, trigger),
         "destroy_joker" => destruction::destroy_joker(effect, ctx),
+        "destroy_consumable" => destruction::destroy_consumable(effect, ctx),
+        "destroy_cards" => destruction::destroy_cards(effect, ctx),
 
         // Economy
         "set_dollars" => misc::set_dollars(effect, ctx),
+        "set_sell_value" => misc::set_sell_value(effect, ctx),
 
         // Retrigger
         "retrigger" => misc::retrigger(effect, ctx),
@@ -71,43 +77,10 @@ pub fn compile_effect(
         // Game state
         "level_up_hand" => misc::level_up_hand(effect, ctx),
         "edit_blind_size" => misc::edit_blind_size(effect, ctx),
-
-        // TODO: Implement remaining effects. Each follows the same pattern:
-        // parse params → build AST nodes → return EffectOutput.
-        //
-        // Card modification:
-        // "edit_card" | "edit_card_appearance"
-        // "add_card_enhancement" | "add_card_seal" | "add_card_edition"
-        // "convert_to_rank" | "convert_to_suit"
-        //
-        // More creation:
-        // "create_playing_card" | "create_playing_cards" | "create_tag"
-        //
-        // More destruction:
-        // "destroy_consumable" | "destroy_cards"
-        //
-        // Economy:
-        // "set_sell_value" | "reduce_price" | "earn_extra_money"
-        // "edit_end_round_hand_money" | "discount_items"
-        //
-        // Probability:
-        // "fix_probability" | "mod_probability"
-        //
-        // Game rules:
-        // "shortcut" | "showman" | "reduce_flush_straight_requirements"
-        // "combine_ranks" | "combine_suits"
-        //
-        // Game state:
-        // "set_ante" | "disable_boss_blind" | "force_game_over"
-        // "win_game" | "change_game_speed"
-        //
-        // Variables:
-        // "modify_internal_variable" | "change_key_variable"
-        // "change_text_variable" | "change_poker_hand_variable"
-        // "change_rank_variable" | "change_suit_variable"
-        //
-        // Special:
-        // "emit_flag" | "splash_effect" | "copy_joker_ability"
+        "set_ante" => misc::set_ante(effect, ctx),
+        "disable_boss_blind" => misc::disable_boss_blind(effect, ctx),
+        "force_game_over" => misc::force_game_over(effect, ctx),
+        "win_game" => misc::win_game(effect, ctx),
         _ => {
             return None;
         }
@@ -145,23 +118,8 @@ pub fn build_return_block(effects: &[EffectOutput]) -> Vec<Stmt> {
     }
 
     if !return_entries.is_empty() {
-        // Use SMODS.calculate_effect for scoring returns
-        let has_scoring = effects.iter().any(|e| {
-            e.return_fields.iter().any(|(k, _)| {
-                matches!(
-                    k.as_str(),
-                    "chips" | "mult" | "Xmult" | "Xchips" | "eChips" | "eMult"
-                        | "hChips" | "hMult"
-                )
-            })
-        });
-
         let table = lua_table_raw(return_entries);
-        if has_scoring {
-            stmts.push(lua_return(lua_call("SMODS.calculate_effect", vec![table, lua_ident("card")])));
-        } else {
-            stmts.push(lua_return(table));
-        }
+        stmts.push(lua_return(table));
     }
 
     stmts

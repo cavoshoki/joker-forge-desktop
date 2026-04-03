@@ -51,7 +51,7 @@ fn scoring_effect(
     effect: &EffectDef,
     ctx: &mut CompileContext,
     lua_field_name: &str,
-    colour: &str,
+    _colour: &str,
 ) -> EffectOutput {
     let count = ctx.next_effect_count(lua_field_name);
     let var_name = ctx.unique_var_name(lua_field_name, count);
@@ -74,11 +74,7 @@ fn scoring_effect(
         pre_return: vec![],
         config_vars: vec![],
         message,
-        colour: if colour.is_empty() {
-            None
-        } else {
-            Some(lua_raw_expr(colour))
-        },
+        colour: None,
     }
 }
 
