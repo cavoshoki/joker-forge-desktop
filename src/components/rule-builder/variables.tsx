@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useDraggable } from "@dnd-kit/core";
-import { ConsumableData, UserVariable } from "../data/BalatroUtils";
+import { ConsumableData, UserVariable } from "@/lib/balatro-utils";
 import { getVariableUsageDetails } from "../codeGeneration/lib/userVariableUtils";
 import {
   SUITS,
@@ -8,7 +8,7 @@ import {
   POKER_HANDS,
   SUIT_VALUES,
   POKER_HAND_VALUES,
-} from "../data/BalatroUtils";
+} from "@/lib/balatro-utils";
 import {
   Terminal,
   X,
@@ -766,4 +766,5 @@ const Variables: React.FC<VariablesProps> = ({
 };
 
 export default Variables;
+
 

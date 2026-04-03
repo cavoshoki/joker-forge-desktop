@@ -15,8 +15,8 @@ export type {
 } from "./types";
 
 // Export constants and helpers
-export { TRIGGERS, getTriggerById } from "../data/Triggers";
-export { CONDITIONS, getConditionTypeById } from "../data/Conditions";
-export { EFFECTS, getEffectTypeById } from "../data/Effects";
+export { TRIGGERS, getTriggerById } from "./rule-catalog";
+export { CONDITIONS, getConditionTypeById } from "./rule-catalog";
+export { EFFECTS, getEffectTypeById } from "./rule-catalog";
 
 export { LOGICAL_OPERATORS } from "./types";

@@ -78,6 +78,7 @@ export interface ConditionParameter {
   type: "select" | "number" | "range" | "text";
   label: string;
   description?: string;
+  optionSource?: string;
   options?:
     | ConditionParameterOption[]
     | (() => ConditionParameterOption[])
@@ -115,6 +116,7 @@ export interface GlobalConditionTypeDefinition {
   description: string;
   params: ConditionParameter[];
   applicableTriggers?: string[];
+  applicableTriggerGroups?: string[];
   category: string;
   objectUsers: string[];
 }
@@ -134,6 +136,7 @@ export interface EffectParameter {
   type: "select" | "number" | "range" | "text" | "checkbox";
   label: string;
   description?: string;
+  optionSource?: string;
   options?:
     | EffectParameterOption[]
     | (() => EffectParameterOption[])
@@ -172,6 +175,7 @@ export interface GlobalEffectTypeDefinition {
   description: string;
   params: EffectParameter[];
   applicableTriggers?: string[];
+  applicableTriggerGroups?: string[];
   category: string;
   objectUsers: string[];
 }
@@ -197,3 +201,5 @@ export const LOGICAL_OPERATORS: LogicalOperator[] = [
   { value: "and", label: "AND" },
   { value: "or", label: "OR" },
 ];
+
+

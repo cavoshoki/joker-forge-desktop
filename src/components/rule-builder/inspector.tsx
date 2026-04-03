@@ -10,7 +10,7 @@ import type {
   ShowWhenCondition,
   LoopGroup,
 } from "./types";
-import { getModPrefix, JokerData } from "../data/BalatroUtils";
+import { getModPrefix, JokerData } from "@/lib/balatro-utils";
 import {
   addSuitVariablesToOptions,
   addRankVariablesToOptions,
@@ -22,9 +22,7 @@ import {
   addTextVariablesToOptions,
 } from "../codeGeneration/lib/userVariableUtils";
 
-import { getTriggerById } from "../data/Triggers";
-import { getConditionTypeById } from "../data/Conditions";
-import { getEffectTypeById } from "../data/Effects";
+import { getTriggerById, getConditionTypeById, getEffectTypeById } from "./rule-catalog";
 
 import InputField from "../generic/InputField";
 import InputDropdown from "../generic/InputDropdown";
@@ -48,7 +46,7 @@ import {
   validateVariableName,
   validateCustomMessage,
 } from "../generic/validationUtils";
-import { GameVariable, getGameVariableById } from "../data/GameVars";
+import { GameVariable, getGameVariableById } from "@/lib/game-vars";
 import { Cube } from "@phosphor-icons/react";
 import { SelectedItem } from "./types";
 import Checkbox from "../generic/Checkbox";
@@ -2013,6 +2011,9 @@ const Inspector: React.FC<InspectorProps> = ({
 };
 
 export default Inspector;
+
+
+
 
 
 

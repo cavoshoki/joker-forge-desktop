@@ -1,6 +1,6 @@
-export type { Rule } from "@/lib/rule-builder-types";
+export type { Rule } from "@/components/rule-builder/types";
 
-import type { Rule } from "@/lib/rule-builder-types";
+import type { Rule } from "@/components/rule-builder/types";
 
 export interface UserVariable {
   id: string;

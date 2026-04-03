@@ -13,10 +13,12 @@ import BoostersPage from "@/pages/boosters-page";
 import VouchersPage from "@/pages/vouchers-page";
 import SoundsPage from "@/pages/sounds-page";
 import MetadataPage from "@/pages/metadata-page";
+import { EntityBridgeListener } from "@/components/bridge/entity-bridge-listener";
 
 function App() {
   return (
     <Router>
+      <EntityBridgeListener />
       <MainLayout>
         <Routes>
           <Route path="/" element={<OverviewPage />} />

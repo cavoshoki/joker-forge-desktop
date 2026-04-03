@@ -5,7 +5,7 @@ import {
   GameVariable,
   GameVariableCategory,
   GameVariableSubcategory,
-} from "../data/GameVars";
+} from "@/lib/game-vars";
 import {
   X,
   List,

@@ -7,7 +7,7 @@ import {
   SUIT_VALUES,
   ConsumableData,
   UserVariable,
-} from "../data/BalatroUtils";
+} from "@/lib/balatro-utils";
 import {
   Cube,
   Hand,

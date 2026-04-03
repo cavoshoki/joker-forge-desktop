@@ -35,11 +35,13 @@ import {
   EditionData,
   VoucherData,
   DeckData,
-} from "../data/BalatroUtils";
+} from "@/lib/balatro-utils";
 import { Wrench } from "@phosphor-icons/react";
-import { getTriggerById } from "../data/Triggers";
-import { getEffectTypeById } from "../data/Effects";
-import { getConditionTypeById } from "../data/Conditions";
+import {
+  getTriggerById,
+  getEffectTypeById,
+  getConditionTypeById,
+} from "./rule-catalog";
 import {
   Tooltip,
   TooltipContent,

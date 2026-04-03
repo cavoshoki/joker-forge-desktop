@@ -1,0 +1,323 @@
+{
+  "genericTriggers": [
+    "blind_selected",
+    "card_scored",
+    "hand_played",
+    "blind_skipped",
+    "boss_defeated",
+    "booster_opened",
+    "booster_skipped",
+    "booster_exited",
+    "consumable_used",
+    "hand_drawn",
+    "first_hand_drawn",
+    "shop_entered",
+    "shop_exited",
+    "card_discarded",
+    "hand_discarded",
+    "round_end",
+    "shop_reroll",
+    "card_held_in_hand",
+    "card_held_in_hand_end_of_round",
+    "after_hand_played",
+    "before_hand_played",
+    "joker_evaluated",
+    "joker_triggered",
+    "card_sold",
+    "card_bought",
+    "selling_self",
+    "buying_self",
+    "card_destroyed",
+    "playing_card_added",
+    "game_over",
+    "probability_result",
+    "tag_added",
+    "ante_start",
+    "player_action",
+    "blind_disabled"
+  ],
+  "allObjects": ["joker", "consumable", "card", "voucher", "deck"],
+  "triggerGroups": {
+    "allTriggers": [
+      "card_used",
+      "hand_played",
+      "card_scored",
+      "card_destroyed",
+      "first_hand_drawn",
+      "hand_drawn",
+      "hand_discarded",
+      "card_discarded",
+      "card_held_in_hand",
+      "card_held_in_hand_end_of_round",
+      "playing_card_added",
+      "before_hand_played",
+      "joker_evaluated",
+      "joker_triggered",
+      "after_hand_played",
+      "round_end",
+      "blind_selected",
+      "blind_skipped",
+      "blind_disabled",
+      "boss_defeated",
+      "booster_opened",
+      "booster_skipped",
+      "booster_exited",
+      "shop_entered",
+      "shop_exited",
+      "tag_added",
+      "selling_self",
+      "card_sold",
+      "buying_self",
+      "card_bought",
+      "shop_reroll",
+      "consumable_used",
+      "player_action",
+      "game_over",
+      "ante_start",
+      "change_probability",
+      "probability_result",
+      "passive"
+    ],
+    "scoringTriggers": [
+      "hand_played",
+      "card_scored",
+      "card_held_in_hand",
+      "before_hand_played",
+      "joker_evaluated",
+      "joker_triggered",
+      "after_hand_played"
+    ],
+    "cardTriggers": [
+      "card_scored",
+      "card_discarded",
+      "card_held_in_hand",
+      "card_held_in_hand_end_of_round"
+    ],
+    "jokerTriggers": [
+      "hand_played",
+      "card_scored",
+      "card_destroyed",
+      "first_hand_drawn",
+      "hand_drawn",
+      "hand_discarded",
+      "card_discarded",
+      "card_held_in_hand",
+      "card_held_in_hand_end_of_round",
+      "playing_card_added",
+      "before_hand_played",
+      "joker_evaluated",
+      "joker_triggered",
+      "after_hand_played",
+      "round_end",
+      "blind_selected",
+      "blind_skipped",
+      "blind_disabled",
+      "boss_defeated",
+      "booster_opened",
+      "booster_skipped",
+      "booster_exited",
+      "shop_entered",
+      "shop_exited",
+      "tag_added",
+      "selling_self",
+      "card_sold",
+      "buying_self",
+      "card_bought",
+      "shop_reroll",
+      "consumable_used",
+      "player_action",
+      "game_over",
+      "ante_start",
+      "change_probability",
+      "probability_result",
+      "passive"
+    ],
+    "consumableTriggers": ["card_used"],
+    "deckTriggers": [
+      "card_used",
+      "round_end",
+      "blind_selected",
+      "blind_skipped",
+      "blind_disabled",
+      "boss_defeated",
+      "booster_opened",
+      "booster_skipped",
+      "shop_entered",
+      "shop_exited"
+    ],
+    "voucherTriggers": [
+      "card_used",
+      "round_end",
+      "blind_selected",
+      "blind_skipped",
+      "blind_disabled",
+      "boss_defeated",
+      "booster_opened",
+      "booster_skipped",
+      "shop_entered",
+      "shop_exited"
+    ],
+    "roundTriggers": [
+      "blind_selected",
+      "blind_skipped",
+      "boss_defeated",
+      "shop_entered",
+      "shop_exited",
+      "tag_added",
+      "ante_start"
+    ],
+    "economyTriggers": [
+      "selling_self",
+      "card_sold",
+      "buying_self",
+      "card_bought",
+      "shop_reroll"
+    ],
+    "packAndConsumableTriggers": [
+      "playing_card_added",
+      "booster_opened",
+      "booster_skipped",
+      "booster_exited",
+      "consumable_used"
+    ],
+    "specialTriggers": [
+      "card_destroyed",
+      "player_action",
+      "game_over",
+      "change_probability",
+      "probability_result",
+      "passive"
+    ]
+  },
+  "optionSources": {
+    "rarities": "src/lib/balatro-utils.ts::RARITIES",
+    "consumableSets": "src/lib/balatro-utils.ts::CONSUMABLE_SETS",
+    "enhancements": "src/lib/balatro-utils.ts::ENHANCEMENTS",
+    "editions": "src/lib/balatro-utils.ts::EDITIONS",
+    "seals": "src/lib/balatro-utils.ts::SEALS",
+    "vouchers": "src/lib/balatro-utils.ts::VOUCHERS",
+    "decks": "src/lib/balatro-utils.ts::DECKS",
+    "ranks": "src/lib/balatro-utils.ts::RANKS",
+    "suits": "src/lib/balatro-utils.ts::SUITS",
+    "pokerHands": "src/lib/balatro-utils.ts::POKER_HANDS",
+    "tags": "src/lib/balatro-utils.ts::TAGS",
+    "tarotCards": "src/lib/balatro-utils.ts::TAROT_CARDS",
+    "planetCards": "src/lib/balatro-utils.ts::PLANET_CARDS",
+    "spectralCards": "src/lib/balatro-utils.ts::SPECTRAL_CARDS",
+    "allConsumables": "src/lib/balatro-utils.ts::ALL_CONSUMABLES"
+  },
+  "optionSets": {
+    "firstLastPosition": [
+      {
+        "value": "first",
+        "label": "First"
+      },
+      {
+        "value": "last",
+        "label": "Last"
+      }
+    ],
+    "jokerPositionSimple": [
+      {
+        "value": "first",
+        "label": "First Joker"
+      },
+      {
+        "value": "last",
+        "label": "Last Joker"
+      },
+      {
+        "value": "specific",
+        "label": "Specific Index"
+      }
+    ],
+    "jokerPositionRelative": [
+      {
+        "value": "first",
+        "label": "First Joker"
+      },
+      {
+        "value": "last",
+        "label": "Last Joker"
+      },
+      {
+        "value": "left",
+        "label": "Left of This Joker"
+      },
+      {
+        "value": "right",
+        "label": "Right of This Joker"
+      },
+      {
+        "value": "specific",
+        "label": "Specific Index"
+      }
+    ],
+    "jokerPositionRelativeConsumableCard": [
+      {
+        "value": "first",
+        "label": "First Joker"
+      },
+      {
+        "value": "last",
+        "label": "Last Joker"
+      },
+      {
+        "value": "left",
+        "label": "Left of This Joker",
+        "exempt": ["consumable", "card"]
+      },
+      {
+        "value": "right",
+        "label": "Right of This Joker",
+        "exempt": ["consumable", "card"]
+      },
+      {
+        "value": "specific",
+        "label": "Specific Index"
+      }
+    ],
+    "jokerPositionRelativeConsumable": [
+      {
+        "value": "first",
+        "label": "First Joker"
+      },
+      {
+        "value": "last",
+        "label": "Last Joker"
+      },
+      {
+        "value": "left",
+        "label": "Left of This Joker",
+        "exempt": ["consumable"]
+      },
+      {
+        "value": "right",
+        "label": "Right of This Joker",
+        "exempt": ["consumable"]
+      },
+      {
+        "value": "specific",
+        "label": "Specific Index"
+      }
+    ],
+    "gameSpeedMultipliers": [
+      {
+        "value": "0.5",
+        "label": "X0.5"
+      },
+      {
+        "value": "1",
+        "label": "X1"
+      },
+      {
+        "value": "2",
+        "label": "X2"
+      },
+      {
+        "value": "4",
+        "label": "X4"
+      }
+    ]
+  }
+}

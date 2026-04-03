@@ -27,14 +27,11 @@ import {
   TRIGGER_CATEGORIES,
   getTriggers,
   CategoryDefinition,
-} from "../data/Triggers";
-
-import {
   CONDITION_CATEGORIES,
   getConditionsForTrigger,
-} from "../data/Conditions";
-
-import { EFFECT_CATEGORIES, getEffectsForTrigger } from "../data/Effects";
+  EFFECT_CATEGORIES,
+  getEffectsForTrigger,
+} from "./rule-catalog";
 
 interface BlockPaletteProps {
   position: { x: number; y: number };

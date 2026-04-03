@@ -1,6 +1,6 @@
 import type { ItemData } from "@/components/rule-builder/rule-builder";
 import type { Rule } from "@/components/rule-builder/types";
-import type { JokerData, UserVariable } from "@/components/data/BalatroUtils";
+import type { JokerData, UserVariable } from "@/lib/balatro-utils";
 
 interface VariableOption {
   value: string;

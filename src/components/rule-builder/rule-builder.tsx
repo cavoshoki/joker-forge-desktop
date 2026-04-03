@@ -47,10 +47,9 @@ import {
   MagnifyingGlassPlus,
   Terminal,
 } from "@phosphor-icons/react";
-import { getConditionTypeById } from "../data/Conditions";
-import { getEffectTypeById } from "../data/Effects";
+import { getConditionTypeById, getEffectTypeById } from "./rule-catalog";
 import GameVariables from "./game-variables";
-import { GameVariable } from "../data/GameVars";
+import { GameVariable } from "@/lib/game-vars";
 import { motion } from "framer-motion";
 import { UserConfigContext } from "@/components/Contexts";
 import { detectValueType } from "../generic/RuleBlockUpdater";
