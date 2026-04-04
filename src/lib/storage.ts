@@ -11,8 +11,9 @@ import {
   SoundData,
   RarityData,
   ConsumableSetData,
+  ModMetadata,
 } from "@/lib/types";
-import { ModMetadata, updateDataRegistry } from "@/lib/balatro-utils";
+import { updateDataRegistry } from "@/lib/balatro-utils";
 
 export interface ProjectStats {
   jokers: number;

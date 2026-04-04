@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useProjectData } from "@/lib/storage";
-import { ModMetadata } from "@/lib/balatro-utils";
+import type { ModMetadata } from "@/lib/types";
 import {
   FileText,
   Tag,

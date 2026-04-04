@@ -82,7 +82,7 @@ pub fn card_index(condition: &ConditionDef) -> Option<Expr> {
                 .unwrap_or(1);
             Some(lua_eq(
                 lua_path(&["context", "other_card"]),
-                lua_raw_expr(&format!("context.scoring_hand[{}]", index)),
+                lua_raw_expr(format!("context.scoring_hand[{}]", index)),
             ))
         }
         _ => Some(lua_eq(

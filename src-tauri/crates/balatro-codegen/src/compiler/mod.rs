@@ -203,10 +203,10 @@ fn compile_random_group(
         "SMODS.pseudorandom_probability",
         vec![
             lua_ident("card"),
-            lua_str(&format!("group_{}", rg.id)),
+            lua_str(format!("group_{}", rg.id)),
             lua_int(1),
             lua_field(lua_raw_expr(ctx.ability_path()), &odds_var),
-            lua_str(&ctx.smods_key()),
+            lua_str(ctx.smods_key()),
             lua_bool(false),
         ],
     );

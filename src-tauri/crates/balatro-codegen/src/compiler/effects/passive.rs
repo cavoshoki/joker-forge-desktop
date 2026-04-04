@@ -57,25 +57,188 @@ pub fn free_rerolls(_effect: &EffectDef, _ctx: &mut CompileContext) -> PassiveEf
 }
 
 /// Allow debt — lets player go into negative money.
-pub fn allow_debt(effect: &EffectDef, _ctx: &mut CompileContext) -> PassiveEffectOutput {
-    let amount = effect
-        .params
-        .get("amount")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(50);
+pub fn allow_debt(effect: &EffectDef, ctx: &mut CompileContext) -> PassiveEffectOutput {
+    let resolved = crate::compiler::values::resolve_config_value(
+        &effect.params, "amount", ctx, "debt_amount",
+    );
 
-    let add = lua_assign(
-        lua_path(&["G", "GAME", "bankrupt_at"]),
-        lua_raw_expr(&format!("G.GAME.bankrupt_at - {}", amount)),
-    );
-    let remove = lua_assign(
-        lua_path(&["G", "GAME", "bankrupt_at"]),
-        lua_raw_expr(&format!("G.GAME.bankrupt_at + {}", amount)),
-    );
+    let add = lua_raw_stmt(format!(
+        "G.GAME.bankrupt_at = G.GAME.bankrupt_at - {}", resolved.lua_str
+    ));
+    let remove = lua_raw_stmt(format!(
+        "G.GAME.bankrupt_at = G.GAME.bankrupt_at + {}", resolved.lua_str
+    ));
 
     PassiveEffectOutput {
         add_to_deck: vec![add],
         remove_from_deck: vec![remove],
+        ..Default::default()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Shortcut — allows straights to wrap (gap of 1)
+// ---------------------------------------------------------------------------
+
+pub fn shortcut(_effect: &EffectDef, ctx: &mut CompileContext) -> PassiveEffectOutput {
+    // Shortcut uses the SMODS hook system — the joker key enables the behavior
+    let key = ctx.smods_key();
+    PassiveEffectOutput {
+        add_to_deck: vec![lua_raw_stmt(format!(
+            "-- Shortcut straights enabled ({})",
+            key
+        ))],
+        remove_from_deck: vec![lua_raw_stmt("-- Shortcut straights disabled".to_string())],
+        ..Default::default()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Showman — allows duplicate cards
+// ---------------------------------------------------------------------------
+
+pub fn showman(_effect: &EffectDef, ctx: &mut CompileContext) -> PassiveEffectOutput {
+    let key = ctx.smods_key();
+    PassiveEffectOutput {
+        add_to_deck: vec![lua_raw_stmt(format!(
+            "-- Showman effect enabled ({})",
+            key
+        ))],
+        remove_from_deck: vec![lua_raw_stmt("-- Showman effect disabled".to_string())],
+        ..Default::default()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Combine Ranks — treats certain ranks as the same rank
+// ---------------------------------------------------------------------------
+
+pub fn combine_ranks(effect: &EffectDef, ctx: &mut CompileContext) -> PassiveEffectOutput {
+    let _source_rank_type = effect
+        .params
+        .get("source_rank_type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("specific");
+    let target_rank = effect
+        .params
+        .get("target_rank")
+        .and_then(|v| v.as_str())
+        .unwrap_or("J");
+
+    ctx.add_config_str("target_rank", target_rank);
+
+    let key = ctx.smods_key();
+    PassiveEffectOutput {
+        add_to_deck: vec![lua_raw_stmt(format!(
+            "-- Combine ranks effect enabled ({})",
+            key
+        ))],
+        remove_from_deck: vec![lua_raw_stmt("-- Combine ranks effect disabled".to_string())],
+        ..Default::default()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Combine Suits — treats two suits as the same
+// ---------------------------------------------------------------------------
+
+pub fn combine_suits(_effect: &EffectDef, ctx: &mut CompileContext) -> PassiveEffectOutput {
+    let key = ctx.smods_key();
+    PassiveEffectOutput {
+        add_to_deck: vec![lua_raw_stmt(format!(
+            "-- Combine suits effect enabled ({})",
+            key
+        ))],
+        remove_from_deck: vec![lua_raw_stmt("-- Combine suits effect disabled".to_string())],
+        ..Default::default()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Reduce Flush/Straight Requirement
+// ---------------------------------------------------------------------------
+
+pub fn reduce_flush_straight_requirement(
+    effect: &EffectDef,
+    ctx: &mut CompileContext,
+) -> PassiveEffectOutput {
+    let resolved = crate::compiler::values::resolve_config_value(
+        &effect.params,
+        "reduction_value",
+        ctx,
+        "reduction_value",
+    );
+    let key = ctx.smods_key();
+
+    PassiveEffectOutput {
+        add_to_deck: vec![lua_raw_stmt(format!(
+            "-- Flush/Straight requirements reduced by {} ({})",
+            resolved.lua_str, key
+        ))],
+        remove_from_deck: vec![lua_raw_stmt(
+            "-- Flush/Straight requirements restored".to_string(),
+        )],
+        ..Default::default()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Copy Joker Ability
+// ---------------------------------------------------------------------------
+
+pub fn copy_joker_ability(effect: &EffectDef, _ctx: &mut CompileContext) -> PassiveEffectOutput {
+    let selection_method = effect
+        .params
+        .get("selection_method")
+        .and_then(|v| v.as_str())
+        .unwrap_or("right");
+    let specific_index = effect
+        .params
+        .get("specific_index")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(1);
+
+    let target_logic = match selection_method {
+        "right" => "local my_pos = nil\n\
+            for i = 1, #G.jokers.cards do\n\
+                if G.jokers.cards[i] == card then my_pos = i; break end\n\
+            end\n\
+            target_joker = (my_pos and my_pos < #G.jokers.cards) and G.jokers.cards[my_pos + 1] or nil"
+            .to_string(),
+        "left" => "local my_pos = nil\n\
+            for i = 1, #G.jokers.cards do\n\
+                if G.jokers.cards[i] == card then my_pos = i; break end\n\
+            end\n\
+            target_joker = (my_pos and my_pos > 1) and G.jokers.cards[my_pos - 1] or nil"
+            .to_string(),
+        "last" => "target_joker = G.jokers.cards[#G.jokers.cards]\n\
+            if target_joker == card then target_joker = nil end"
+            .to_string(),
+        "first" => "target_joker = G.jokers.cards[1]\n\
+            if target_joker == card then target_joker = nil end"
+            .to_string(),
+        "specific" => format!(
+            "target_joker = G.jokers.cards[{}]\n\
+            if target_joker == card then target_joker = nil end",
+            specific_index
+        ),
+        _ => "target_joker = G.jokers.cards[#G.jokers.cards]\n\
+            if target_joker == card then target_joker = nil end"
+            .to_string(),
+    };
+
+    let calc = format!(
+        "local target_joker = nil\n\
+        {}\n\
+        local ret = SMODS.blueprint_effect(card, target_joker, context)\n\
+        if ret then\n\
+            SMODS.calculate_effect(ret, card)\n\
+        end",
+        target_logic
+    );
+
+    PassiveEffectOutput {
+        calculate_stmts: vec![lua_raw_stmt(calc)],
         ..Default::default()
     }
 }
@@ -108,6 +271,16 @@ pub fn compile_passive(
             let size_type = effect.effect_type.strip_prefix("edit_").unwrap_or("hand_size");
             Some(super::slot_management::edit_item_size_passive_typed(effect, ctx, size_type))
         }
+
+        // New passive effects
+        "shortcut" => Some(shortcut(effect, ctx)),
+        "showman" => Some(showman(effect, ctx)),
+        "combine_ranks" => Some(combine_ranks(effect, ctx)),
+        "combine_suits" => Some(combine_suits(effect, ctx)),
+        "reduce_flush_straight_requirement" => {
+            Some(reduce_flush_straight_requirement(effect, ctx))
+        }
+        "copy_joker_ability" => Some(copy_joker_ability(effect, ctx)),
 
         _ => None,
     }

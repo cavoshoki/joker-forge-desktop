@@ -296,7 +296,7 @@ pub fn edit_winner_ante(
     };
 
     let message_expr = custom_message
-        .map(|m| lua_str(m))
+        .map(lua_str)
         .unwrap_or_else(|| lua_raw_expr(default_msg));
 
     if scoring {
@@ -330,19 +330,19 @@ pub fn edit_winner_ante(
 // ---------------------------------------------------------------------------
 
 /// Edit End Round Hand Money — modifies G.GAME.modifiers.money_per_hand.
-pub fn edit_end_round_hand_money(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
+pub fn edit_end_round_hand_money(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let operation = get_str_default(effect, "operation", "add");
-    let value = effect.params.get("value").and_then(|v| v.as_i64()).unwrap_or(1);
+    let value_str = value_to_lua_str(effect, "value", ctx, "hand_money");
 
     let code = match operation.as_str() {
         "subtract" => format!(
             "G.GAME.modifiers.money_per_hand = (G.GAME.modifiers.money_per_hand or 1) - {}",
-            value
+            value_str
         ),
-        "set" => format!("G.GAME.modifiers.money_per_hand = {}", value),
+        "set" => format!("G.GAME.modifiers.money_per_hand = {}", value_str),
         _ => format!(
             "G.GAME.modifiers.money_per_hand = (G.GAME.modifiers.money_per_hand or 1) + {}",
-            value
+            value_str
         ),
     };
 
@@ -360,21 +360,20 @@ pub fn edit_end_round_hand_money(effect: &EffectDef, _ctx: &mut CompileContext) 
 // ---------------------------------------------------------------------------
 
 /// Edit End Round Discard Money — modifies G.GAME.modifiers.money_per_discard.
-pub fn edit_end_round_discard_money(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
+pub fn edit_end_round_discard_money(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let operation = get_str_default(effect, "operation", "set");
-    let value = effect.params.get("value").and_then(|v| v.as_i64()).unwrap_or(1);
+    let value_str = value_to_lua_str(effect, "value", ctx, "discard_money");
 
-    // Only "set" is supported in the reference implementation
     let code = match operation.as_str() {
         "subtract" => format!(
             "G.GAME.modifiers.money_per_discard = (G.GAME.modifiers.money_per_discard or 0) - {}",
-            value
+            value_str
         ),
         "add" => format!(
             "G.GAME.modifiers.money_per_discard = (G.GAME.modifiers.money_per_discard or 0) + {}",
-            value
+            value_str
         ),
-        _ => format!("G.GAME.modifiers.money_per_discard = {}", value),
+        _ => format!("G.GAME.modifiers.money_per_discard = {}", value_str),
     };
 
     EffectOutput {

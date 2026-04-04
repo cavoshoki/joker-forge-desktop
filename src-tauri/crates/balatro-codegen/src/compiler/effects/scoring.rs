@@ -67,7 +67,7 @@ fn scoring_effect(
         .params
         .get("customMessage")
         .and_then(|v| v.as_str())
-        .map(|s| lua_str(s));
+        .map(lua_str);
 
     EffectOutput {
         return_fields: vec![(lua_field_name.to_string(), value_expr)],
@@ -133,6 +133,44 @@ fn scoring_literal_config_value(value: &ParamValue) -> Option<ConfigValue> {
             None
         }
         _ => None,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Balance & Swap
+// ---------------------------------------------------------------------------
+
+/// Balance Chips and Mult — sets `balance = true` in the return table.
+pub fn balance_chips_and_mult(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
+    let message = effect
+        .params
+        .get("customMessage")
+        .and_then(|v| v.as_str())
+        .map(lua_str);
+
+    EffectOutput {
+        return_fields: vec![("balance".to_string(), lua_bool(true))],
+        pre_return: vec![],
+        config_vars: vec![],
+        message,
+        colour: Some(lua_raw_expr("G.C.PURPLE")),
+    }
+}
+
+/// Swap Chips and Mult — sets `swap = true` in the return table.
+pub fn swap_chips_and_mult(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
+    let message = effect
+        .params
+        .get("customMessage")
+        .and_then(|v| v.as_str())
+        .map(lua_str);
+
+    EffectOutput {
+        return_fields: vec![("swap".to_string(), lua_bool(true))],
+        pre_return: vec![],
+        config_vars: vec![],
+        message,
+        colour: Some(lua_raw_expr("G.C.CHIPS")),
     }
 }
 

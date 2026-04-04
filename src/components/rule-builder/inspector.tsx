@@ -9,7 +9,8 @@ import type {
   ShowWhenCondition,
   LoopGroup,
 } from "./types";
-import { getModPrefix, JokerData } from "@/lib/balatro-utils";
+import { getModPrefix } from "@/lib/balatro-utils";
+import type { JokerData } from "@/lib/types";
 import {
   addSuitVariablesToOptions,
   addRankVariablesToOptions,
@@ -19,7 +20,7 @@ import {
   getNumberVariables,
   addKeyVariablesToOptions,
   addTextVariablesToOptions,
-} from "@/lib/user-variable-utils";
+} from "@/lib/rules/user-variable-utils";
 
 import {
   getTriggerById,
@@ -27,8 +28,8 @@ import {
   getEffectTypeById,
 } from "./rule-catalog";
 
-import InputField from "../generic/InputField";
-import Button from "../generic/Button";
+import { Input as InputField } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -52,13 +53,13 @@ import {
 import {
   validateVariableName,
   validateCustomMessage,
-} from "../generic/validationUtils";
+} from "@/lib/validation-utils";
 import { GameVariable, getGameVariableById } from "@/lib/game-vars";
 import { Cube } from "@phosphor-icons/react";
 import { SelectedItem } from "./types";
-import Checkbox from "../generic/Checkbox";
+import { Checkbox } from "@/components/ui/checkbox";
 import ItemTypeBadge from "./item-type-badge";
-import IconButton from "./icon-button";
+import IconButton from "@/components/ui/icon-button";
 import {
   Tooltip,
   TooltipContent,
@@ -66,8 +67,6 @@ import {
 } from "@/components/ui/tooltip";
 import { Toggle } from "@/components/ui/toggle";
 import Panel from "./panel";
-
-const EMPTY_SELECT_SENTINEL = "__empty_select_value__";
 
 interface InspectorProps {
   position: { x: number; y: number };
@@ -279,17 +278,16 @@ const ChanceInput: React.FC<ChanceInputProps> = React.memo(
               <Brackets className="h-3 w-3" />
             </Toggle>
           )}
-          <button
-            onClick={onOpenGameVariablesPanel}
-            className={`p-1 rounded transition-colors cursor-pointer ${
-              typeof value === "string" && value.startsWith("GAMEVAR:")
-                ? "bg-jungle-green-500/20 text-jungle-green-400"
-                : "bg-zinc-700 text-zinc-400 hover:text-jungle-green-400"
-            }`}
+          <Toggle
+            pressed={typeof value === "string" && value.startsWith("GAMEVAR:")}
+            onPressedChange={() => onOpenGameVariablesPanel()}
+            variant="outline"
+            size="sm"
+            className="cursor-pointer data-[state=on]:bg-jungle-green-500/20 data-[state=on]:text-jungle-green-400"
             title="Use game variable"
           >
             <Cube className="h-3 w-3" />
-          </button>
+          </Toggle>
           <Toggle
             pressed={isRangeMode}
             onPressedChange={() =>
@@ -342,19 +340,15 @@ const ChanceInput: React.FC<ChanceInputProps> = React.memo(
               <Select
                 value={
                   ((actualValue as string) || "") === ""
-                    ? EMPTY_SELECT_SENTINEL
+                    ? undefined
                     : String(actualValue)
                 }
                 onValueChange={(selectedValue) => {
-                  const normalizedValue =
-                    selectedValue === EMPTY_SELECT_SENTINEL
-                      ? ""
-                      : selectedValue;
                   const selectedOption = availableVariables.find(
-                    (opt) => String(opt.value) === normalizedValue,
+                    (opt) => String(opt.value) === selectedValue,
                   ) ?? {
-                    value: normalizedValue,
-                    label: normalizedValue,
+                    value: selectedValue,
+                    label: selectedValue,
                     valueType: "user_var",
                   };
 
@@ -365,7 +359,6 @@ const ChanceInput: React.FC<ChanceInputProps> = React.memo(
                   <SelectValue placeholder="Select variable" />
                 </SelectTrigger>
                 <SelectContent className="z-120 bg-popover text-popover-foreground border-border shadow-2xl">
-                  <SelectItem value={EMPTY_SELECT_SENTINEL}>None</SelectItem>
                   {availableVariables.map((option) => (
                     <SelectItem
                       key={`chance-${option.value}-${option.label}`}
@@ -821,23 +814,17 @@ const ParameterField: React.FC<ParameterFieldProps> = ({
 
       return (
         <div className="space-y-1">
-          <label className="block text-zinc-200 text-sm text-center">
+          <label className="block text-zinc-200 text-sm">
             {String(param.label)}
           </label>
           <Select
-            value={
-              ((value as string) || "") === ""
-                ? EMPTY_SELECT_SENTINEL
-                : String(value)
-            }
+            value={((value as string) || "") === "" ? undefined : String(value)}
             onValueChange={(selectedValue) => {
-              const normalizedValue =
-                selectedValue === EMPTY_SELECT_SENTINEL ? "" : selectedValue;
               const selectedOption = options.find(
-                (opt) => String(opt.value) === normalizedValue,
+                (opt) => String(opt.value) === selectedValue,
               ) ?? {
-                value: normalizedValue,
-                label: normalizedValue,
+                value: selectedValue,
+                label: selectedValue,
                 valueType: "text",
               };
 
@@ -848,7 +835,6 @@ const ParameterField: React.FC<ParameterFieldProps> = ({
               <SelectValue placeholder="Select option" />
             </SelectTrigger>
             <SelectContent className="z-120 bg-popover text-popover-foreground border-border shadow-2xl">
-              <SelectItem value={EMPTY_SELECT_SENTINEL}>None</SelectItem>
               {options.map((option) => (
                 <SelectItem
                   key={`param-${param.id}-${option.value}-${option.label}`}
@@ -988,17 +974,16 @@ const ParameterField: React.FC<ParameterFieldProps> = ({
                 <Brackets className="h-4 w-4" />
               </Toggle>
             )}
-            <button
-              onClick={onOpenGameVariablesPanel}
-              className={`p-1 rounded transition-colors cursor-pointer ${
-                isGameVariable
-                  ? "bg-jungle-green-500/20 text-jungle-green-400"
-                  : "bg-zinc-700 text-zinc-400 hover:text-jungle-green-400"
-              }`}
+            <Toggle
+              pressed={isGameVariable}
+              onPressedChange={() => onOpenGameVariablesPanel?.()}
+              variant="outline"
+              size="sm"
+              className="cursor-pointer data-[state=on]:bg-jungle-green-500/20 data-[state=on]:text-jungle-green-400"
               title="Use game variable"
             >
               <Cube className="h-4 w-4" />
-            </button>
+            </Toggle>
             {isEffect && (
               <Toggle
                 pressed={isRangeMode}
@@ -1133,20 +1118,14 @@ const ParameterField: React.FC<ParameterFieldProps> = ({
               {availableVariables && availableVariables.length > 0 ? (
                 <Select
                   value={
-                    ((value as string) || "") === ""
-                      ? EMPTY_SELECT_SENTINEL
-                      : String(value)
+                    ((value as string) || "") === "" ? undefined : String(value)
                   }
                   onValueChange={(selectedValue) => {
-                    const normalizedValue =
-                      selectedValue === EMPTY_SELECT_SENTINEL
-                        ? ""
-                        : selectedValue;
                     const selectedOption = availableVariables.find(
-                      (opt) => String(opt.value) === normalizedValue,
+                      (opt) => String(opt.value) === selectedValue,
                     ) ?? {
-                      value: normalizedValue,
-                      label: normalizedValue,
+                      value: selectedValue,
+                      label: selectedValue,
                       valueType: "user_var",
                     };
 
@@ -1157,7 +1136,6 @@ const ParameterField: React.FC<ParameterFieldProps> = ({
                     <SelectValue placeholder="Select variable" />
                   </SelectTrigger>
                   <SelectContent className="z-120 bg-popover text-popover-foreground border-border shadow-2xl">
-                    <SelectItem value={EMPTY_SELECT_SENTINEL}>None</SelectItem>
                     {availableVariables.map((option) => (
                       <SelectItem
                         key={`num-${option.value}-${option.label}`}
@@ -1232,19 +1210,14 @@ const ParameterField: React.FC<ParameterFieldProps> = ({
       const boxes = param.checkboxOptions || [];
 
       return (
-        <div className="flex flex-col w-full select-none overflow-y-auto">
+        <div className="flex flex-col w-full select-none gap-1">
           {param.label && (
-            <div className={`flex justify-center`}>
-              <div className="bg-card border-2 border-border rounded-lg px-4 pb-2 -mb-2 relative">
-                <span className={`text-zinc-100 text-sm`}>{param.label}</span>
-              </div>
-            </div>
+            <label className="text-zinc-200 text-sm">{param.label}</label>
           )}
-          <div className="bg-background border-2 border-border rounded-lg pb-1 pt-1 -mb-2 relative">
+          <div className="space-y-2">
             {boxes?.map((checkbox) => (
-              <div className="px-4 pb-2 -mb-2 relative" key={checkbox.value}>
-                <input
-                  type="checkbox"
+              <div className="flex items-center gap-2" key={checkbox.value}>
+                <Checkbox
                   checked={checkbox.checked}
                   onChange={() => {
                     const index = boxes.indexOf(checkbox);
@@ -1257,9 +1230,8 @@ const ParameterField: React.FC<ParameterFieldProps> = ({
                       valueType: "checkbox",
                     });
                   }}
-                  className="w-4 h-4 text-jungle-green-400 bg-card border-border rounded focus:ring-jungle-green-400 focus:ring-2"
                 />
-                <label className="px-2 text-zinc-100 text-sm">
+                <label className="text-zinc-100 text-sm">
                   {checkbox.label}
                 </label>
               </div>

@@ -7,7 +7,7 @@ import {
   BracketsCurly,
   ClockCounterClockwise,
 } from "@phosphor-icons/react";
-import IconButton from "./icon-button";
+import IconButton from "@/components/ui/icon-button";
 
 interface PanelState {
   id: string;

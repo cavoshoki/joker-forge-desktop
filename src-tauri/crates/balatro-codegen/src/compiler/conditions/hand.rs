@@ -108,7 +108,7 @@ pub fn suit_count(condition: &ConditionDef) -> Option<Expr> {
     let value = condition.params.get("value")?.as_i64()?;
 
     // Count cards with matching suit in scoring hand
-    let count_expr = lua_raw_expr(&format!(
+    let count_expr = lua_raw_expr(format!(
         "(function() local c = 0; for _, v in ipairs(context.scoring_hand or {{}}) do \
          if v:is_suit('{}') then c = c + 1 end end return c end)()",
         suit
@@ -128,7 +128,7 @@ pub fn rank_count(condition: &ConditionDef) -> Option<Expr> {
     let value = condition.params.get("value")?.as_i64()?;
 
     let rank_id = rank_to_id(rank);
-    let count_expr = lua_raw_expr(&format!(
+    let count_expr = lua_raw_expr(format!(
         "(function() local c = 0; for _, v in ipairs(context.scoring_hand or {{}}) do \
          if v:get_id() == {} then c = c + 1 end end return c end)()",
         rank_id
@@ -183,7 +183,7 @@ pub fn discarded_suit_count(condition: &ConditionDef) -> Option<Expr> {
         .unwrap_or("at_least");
     let count = condition.params.get("count").and_then(|v| v.as_i64()).unwrap_or(1);
 
-    let count_expr = lua_raw_expr(&format!(
+    let count_expr = lua_raw_expr(format!(
         "(function() local c = 0; for _, v in ipairs(context.full_hand or {{}}) do \
          if v:is_suit('{}') then c = c + 1 end end return c end)()",
         suit
@@ -208,7 +208,7 @@ pub fn discarded_rank_count(condition: &ConditionDef) -> Option<Expr> {
     let count = condition.params.get("count").and_then(|v| v.as_i64()).unwrap_or(1);
 
     let rank_id = rank_to_id(rank);
-    let count_expr = lua_raw_expr(&format!(
+    let count_expr = lua_raw_expr(format!(
         "(function() local c = 0; for _, v in ipairs(context.full_hand or {{}}) do \
          if v:get_id() == {} then c = c + 1 end end return c end)()",
         rank_id
@@ -238,7 +238,7 @@ pub fn enhancement_count(condition: &ConditionDef) -> Option<Expr> {
         format!("v.config.center.key == '{}'", enhancement)
     };
 
-    let count_expr = lua_raw_expr(&format!(
+    let count_expr = lua_raw_expr(format!(
         "(function() local c = 0; for _, v in ipairs(context.scoring_hand or {{}}) do \
          if {} then c = c + 1 end end return c end)()",
         check
@@ -267,7 +267,7 @@ pub fn edition_count(condition: &ConditionDef) -> Option<Expr> {
         format!("v.edition and v.edition.key == '{}'", edition)
     };
 
-    let count_expr = lua_raw_expr(&format!(
+    let count_expr = lua_raw_expr(format!(
         "(function() local c = 0; for _, v in ipairs(context.scoring_hand or {{}}) do \
          if {} then c = c + 1 end end return c end)()",
         check
@@ -296,7 +296,7 @@ pub fn seal_count(condition: &ConditionDef) -> Option<Expr> {
         format!("v.seal == '{}'", seal)
     };
 
-    let count_expr = lua_raw_expr(&format!(
+    let count_expr = lua_raw_expr(format!(
         "(function() local c = 0; for _, v in ipairs(context.scoring_hand or {{}}) do \
          if {} then c = c + 1 end end return c end)()",
         check
@@ -351,7 +351,7 @@ pub fn first_last_scored(condition: &ConditionDef) -> Option<Expr> {
     match check_type {
         "any" => Some(lua_eq(
             lua_path(&["context", "other_card"]),
-            lua_raw_expr(&format!("context.scoring_hand[{}]", index_expr)),
+            lua_raw_expr(format!("context.scoring_hand[{}]", index_expr)),
         )),
         "rank" => {
             let rank = condition.params.get("specific_rank").and_then(|v| v.as_str()).unwrap_or("Ace");
@@ -359,7 +359,7 @@ pub fn first_last_scored(condition: &ConditionDef) -> Option<Expr> {
             Some(lua_and(
                 lua_eq(
                     lua_path(&["context", "other_card"]),
-                    lua_raw_expr(&format!("context.scoring_hand[{}]", index_expr)),
+                    lua_raw_expr(format!("context.scoring_hand[{}]", index_expr)),
                 ),
                 lua_eq(
                     lua_method(lua_path(&["context", "other_card"]), "get_id", vec![]),
@@ -372,14 +372,14 @@ pub fn first_last_scored(condition: &ConditionDef) -> Option<Expr> {
             Some(lua_and(
                 lua_eq(
                     lua_path(&["context", "other_card"]),
-                    lua_raw_expr(&format!("context.scoring_hand[{}]", index_expr)),
+                    lua_raw_expr(format!("context.scoring_hand[{}]", index_expr)),
                 ),
                 lua_method(lua_path(&["context", "other_card"]), "is_suit", vec![lua_str(suit)]),
             ))
         }
         _ => Some(lua_eq(
             lua_path(&["context", "other_card"]),
-            lua_raw_expr(&format!("context.scoring_hand[{}]", index_expr)),
+            lua_raw_expr(format!("context.scoring_hand[{}]", index_expr)),
         )),
     }
 }

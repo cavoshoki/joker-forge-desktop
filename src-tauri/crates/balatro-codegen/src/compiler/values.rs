@@ -172,7 +172,7 @@ fn resolve_string_value(s: &str, object_type: ObjectType, config_var_name: Optio
 /// Build the Lua expression for a game variable reference.
 fn build_game_var_expr(gv: &GameVarRef) -> Expr {
     let base_code = game_var_lua_code(&gv.var_id)
-        .map(|c| lua_raw_expr(c))
+        .map(lua_raw_expr)
         .unwrap_or_else(|| lua_raw_expr(&gv.var_id));
 
     let with_start = if gv.starts_from != 0.0 {
@@ -202,6 +202,193 @@ fn build_game_var_expr(gv: &GameVarRef) -> Expr {
 pub fn ability_path_expr(object_type: ObjectType, var_name: &str) -> Expr {
     let base = object_type.ability_path();
     lua_field(lua_raw_expr(base), var_name)
+}
+
+// ---------------------------------------------------------------------------
+// Dynamic config-variable resolution
+// ---------------------------------------------------------------------------
+
+/// Result of resolving a parameter value with automatic config-var registration.
+pub struct ResolvedValue {
+    /// Lua expression to use in the generated code.
+    pub expr: Expr,
+    /// Lua expression as a raw string (for format! based code generation).
+    pub lua_str: String,
+}
+
+/// Resolve a value parameter, automatically registering a config variable
+/// for literal numeric values. This is the centralized helper that ensures
+/// every integer/float in an effect gets stored in `config.extra` and
+/// referenced via `card.ability.extra.<var>`, making `loc_vars` work
+/// automatically.
+///
+/// - `effect_params`: the effect's param map
+/// - `param_key`: which param to read (e.g. "value", "amount")
+/// - `ctx`: compile context for config-var registration
+/// - `var_base`: base name for the config variable (e.g. "dollars", "level")
+///
+/// Returns the resolved expression and its string form.
+pub fn resolve_config_value(
+    effect_params: &std::collections::HashMap<String, crate::types::ParamValue>,
+    param_key: &str,
+    ctx: &mut crate::compiler::context::CompileContext,
+    var_base: &str,
+) -> ResolvedValue {
+    use crate::types::ParamValue;
+
+    let count = ctx.next_effect_count(var_base);
+    let var_name = ctx.unique_var_name(var_base, count);
+
+    match effect_params.get(param_key) {
+        Some(ParamValue::Int(n)) => {
+            ctx.add_config_int(&var_name, *n);
+            let path = format!("{}.{}", ctx.ability_path(), var_name);
+            ResolvedValue {
+                expr: ability_path_expr(ctx.object_type, &var_name),
+                lua_str: path,
+            }
+        }
+        Some(ParamValue::Float(n)) => {
+            ctx.add_config_num(&var_name, *n);
+            let path = format!("{}.{}", ctx.ability_path(), var_name);
+            ResolvedValue {
+                expr: ability_path_expr(ctx.object_type, &var_name),
+                lua_str: path,
+            }
+        }
+        Some(ParamValue::Str(s)) => {
+            // Try numeric parse first
+            if let Ok(n) = s.parse::<f64>() {
+                if n.fract() == 0.0 {
+                    ctx.add_config_int(&var_name, n as i64);
+                } else {
+                    ctx.add_config_num(&var_name, n);
+                }
+                let path = format!("{}.{}", ctx.ability_path(), var_name);
+                return ResolvedValue {
+                    expr: ability_path_expr(ctx.object_type, &var_name),
+                    lua_str: path,
+                };
+            }
+            // Game variable reference
+            if let Some(gv) = parse_game_var(s) {
+                let expr = build_game_var_expr(&gv);
+                let code = game_var_lua_code(&gv.var_id)
+                    .unwrap_or(&gv.var_id)
+                    .to_string();
+                return ResolvedValue {
+                    expr,
+                    lua_str: code,
+                };
+            }
+            // Plain string
+            ResolvedValue {
+                expr: lua_str(s),
+                lua_str: format!("\"{}\"", s),
+            }
+        }
+        Some(ParamValue::Typed(t)) => match t.value_type.as_str() {
+            "gameVariable" => {
+                if let Some(s) = t.value.as_str() {
+                    if let Some(gv) = parse_game_var(s) {
+                        let expr = build_game_var_expr(&gv);
+                        let code = game_var_lua_code(&gv.var_id)
+                            .unwrap_or(&gv.var_id)
+                            .to_string();
+                        return ResolvedValue { expr, lua_str: code };
+                    }
+                }
+                ResolvedValue {
+                    expr: lua_int(0),
+                    lua_str: "0".to_string(),
+                }
+            }
+            "range" => {
+                if let Some(s) = t.value.as_str() {
+                    if let Some(rv) = parse_range_var(s) {
+                        let expr = lua_call(
+                            "pseudorandom",
+                            vec![lua_str(s), lua_num(rv.min), lua_num(rv.max)],
+                        );
+                        let code = format!(
+                            "pseudorandom(\"{}\", {}, {})",
+                            s, rv.min, rv.max
+                        );
+                        return ResolvedValue { expr, lua_str: code };
+                    }
+                }
+                ResolvedValue {
+                    expr: lua_int(0),
+                    lua_str: "0".to_string(),
+                }
+            }
+            "userVariable" => {
+                if let Some(name) = t.value.as_str() {
+                    let path = format!("{}.{}", ctx.ability_path(), name);
+                    return ResolvedValue {
+                        expr: ability_path_expr(ctx.object_type, name),
+                        lua_str: path,
+                    };
+                }
+                ResolvedValue {
+                    expr: lua_int(0),
+                    lua_str: "0".to_string(),
+                }
+            }
+            _ => {
+                // Try numeric
+                if let Some(n) = t.value.as_f64() {
+                    if n.fract() == 0.0 {
+                        ctx.add_config_int(&var_name, n as i64);
+                    } else {
+                        ctx.add_config_num(&var_name, n);
+                    }
+                    let path = format!("{}.{}", ctx.ability_path(), var_name);
+                    return ResolvedValue {
+                        expr: ability_path_expr(ctx.object_type, &var_name),
+                        lua_str: path,
+                    };
+                }
+                if let Some(s) = t.value.as_str() {
+                    if let Ok(n) = s.parse::<f64>() {
+                        if n.fract() == 0.0 {
+                            ctx.add_config_int(&var_name, n as i64);
+                        } else {
+                            ctx.add_config_num(&var_name, n);
+                        }
+                        let path = format!("{}.{}", ctx.ability_path(), var_name);
+                        return ResolvedValue {
+                            expr: ability_path_expr(ctx.object_type, &var_name),
+                            lua_str: path,
+                        };
+                    }
+                    // Try game var
+                    if let Some(code) = game_var_lua_code(s) {
+                        return ResolvedValue {
+                            expr: lua_raw_expr(code),
+                            lua_str: code.to_string(),
+                        };
+                    }
+                    return ResolvedValue {
+                        expr: lua_str(s),
+                        lua_str: format!("\"{}\"", s),
+                    };
+                }
+                ResolvedValue {
+                    expr: lua_int(1),
+                    lua_str: "1".to_string(),
+                }
+            }
+        },
+        Some(ParamValue::Bool(b)) => ResolvedValue {
+            expr: lua_bool(*b),
+            lua_str: if *b { "true" } else { "false" }.to_string(),
+        },
+        None => ResolvedValue {
+            expr: lua_int(1),
+            lua_str: "1".to_string(),
+        },
+    }
 }
 
 /// Convert a comparison operator string to the corresponding Lua binary op expression.

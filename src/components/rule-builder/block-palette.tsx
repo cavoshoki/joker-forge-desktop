@@ -18,7 +18,7 @@ import {
   PuzzlePiece,
   Flask,
 } from "@phosphor-icons/react";
-import IconButton from "./icon-button";
+import IconButton from "@/components/ui/icon-button";
 import ItemTypeBadge from "./item-type-badge";
 import Panel from "./panel";
 
@@ -480,7 +480,7 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({
             isActive={activeFilter === "triggers"}
             className={
               activeFilter === "triggers"
-                ? "bg-balatro-money text-black border-balatro-money"
+                ? "bg-balatro-money/22 text-balatro-money border-balatro-money/70"
                 : "bg-card text-balatro-money border-balatro-money/40 hover:bg-balatro-money/15"
             }
           />
@@ -494,7 +494,7 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({
               !selectedRule
                 ? "bg-card text-muted-foreground border-border"
                 : activeFilter === "conditions"
-                  ? "bg-balatro-blue text-white border-balatro-blue"
+                  ? "bg-balatro-blue/22 text-balatro-blue border-balatro-blue/70"
                   : "bg-card text-balatro-blue border-balatro-blue/40 hover:bg-balatro-blue/15"
             }
           />
@@ -508,7 +508,7 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({
               !selectedRule
                 ? "bg-card text-muted-foreground border-border"
                 : activeFilter === "effects"
-                  ? "bg-balatro-green text-black border-balatro-green"
+                  ? "bg-balatro-green/22 text-balatro-green border-balatro-green/70"
                   : "bg-card text-balatro-green border-balatro-green/40 hover:bg-balatro-green/15"
             }
           />

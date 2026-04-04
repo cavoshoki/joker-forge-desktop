@@ -22,7 +22,7 @@ pub fn internal_variable(condition: &ConditionDef) -> Option<Expr> {
         .and_then(|v| v.as_str())
         .unwrap_or("equals");
     let rhs = get_param(condition, &["value"])
-        .map(|v| lua_raw_expr(&v.to_string_lossy()))
+        .map(|v| lua_raw_expr(v.to_string_lossy()))
         .unwrap_or_else(|| lua_int(0));
 
     Some(comparison_op(

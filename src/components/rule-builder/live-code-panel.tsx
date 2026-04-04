@@ -107,6 +107,7 @@ const LiveCodePanel: React.FC<LiveCodePanelProps> = ({
 
   return (
     <aside
+      data-rb-live-code="true"
       className="relative h-full bg-card/40 backdrop-blur-sm border-l border-border"
       style={{ width: `${widthPercent}%` }}
     >

@@ -46,7 +46,8 @@ import {
   MagnifyingGlassPlus,
 } from "@phosphor-icons/react";
 import { applyAutoFormatting } from "@/lib/balatro-text-formatter";
-import { slugify, type UserVariable } from "@/lib/balatro-utils";
+import { slugify } from "@/lib/balatro-utils";
+import type { UserVariable } from "@/lib/types";
 import type { Rule } from "@/components/rule-builder/types";
 import { RaritySelect } from "@/components/balatro/rarity-select";
 import { ConsumableSetSelect } from "@/components/balatro/consumable-set-select";
@@ -57,7 +58,7 @@ import {
   getPlaceholderEntriesForCategory,
 } from "@/lib/placeholder-assets.ts";
 import { PlaceholderPickerDialog } from "@/components/pages/placeholder-picker-dialog";
-import { buildDescriptionVariableTokens } from "@/lib/description-variable-registry";
+import { buildDescriptionVariableTokens } from "@/lib/rules/description-variable-registry";
 
 export type FieldType =
   | "text"

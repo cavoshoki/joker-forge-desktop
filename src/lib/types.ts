@@ -5,10 +5,10 @@ import type { Rule } from "@/components/rule-builder/types";
 export interface UserVariable {
   id: string;
   name: string;
-  type: "number" | "suit" | "rank" | "pokerhand" | "key" | "text";
+  type?: "number" | "suit" | "rank" | "pokerhand" | "key" | "text";
   isGlobal?: boolean;
   description?: string;
-  initialValue?: number | string;
+  initialValue?: number;
   initialSuit?: "Spades" | "Hearts" | "Diamonds" | "Clubs";
   initialRank?:
     | "2"
@@ -24,7 +24,19 @@ export interface UserVariable {
     | "Queen"
     | "King"
     | "Ace";
-  initialPokerHand?: string;
+  initialPokerHand?:
+    | "High Card"
+    | "Pair"
+    | "Two Pair"
+    | "Three of a Kind"
+    | "Straight"
+    | "Flush"
+    | "Full House"
+    | "Four of a Kind"
+    | "Five of a Kind"
+    | "Straight Flush"
+    | "Flush House"
+    | "Flush Five";
   initialKey?: string;
   initialText?: string;
 }

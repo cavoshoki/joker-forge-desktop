@@ -1,7 +1,26 @@
 use crate::compiler::context::CompileContext;
 use crate::compiler::effects::EffectOutput;
+use crate::compiler::values::resolve_config_value;
 use crate::lua_ast::*;
 use crate::types::EffectDef;
+
+fn get_str_default(effect: &EffectDef, key: &str, default: &str) -> String {
+    match effect.params.get(key) {
+        Some(v) => {
+            let s = v.to_string_lossy();
+            if s.is_empty() {
+                default.to_string()
+            } else {
+                s
+            }
+        }
+        None => default.to_string(),
+    }
+}
+
+fn get_str_opt(effect: &EffectDef, key: &str) -> Option<String> {
+    effect.params.get(key).map(|v| v.to_string_lossy())
+}
 
 /// Show Message effect — displays a status message.
 pub fn show_message(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
@@ -141,33 +160,22 @@ pub fn retrigger(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
 }
 
 /// Level Up Hand effect.
-pub fn level_up_hand(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
-    let hand = effect
-        .params
-        .get("hand")
-        .and_then(|v| v.as_str());
-    let amount = effect
-        .params
-        .get("amount")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(1);
+pub fn level_up_hand(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
+    let hand = effect.params.get("hand").and_then(|v| v.as_str());
+    let resolved = crate::compiler::values::resolve_config_value(
+        &effect.params,
+        "amount",
+        ctx,
+        "level_amount",
+    );
+    let hand_expr = hand
+        .map(|h| format!("'{}'", h))
+        .unwrap_or_else(|| "context.scoring_name".to_string());
 
-    let level_call = if let Some(h) = hand {
-        lua_expr_stmt(lua_call("level_up_hand", vec![
-            lua_ident("card"),
-            lua_str(h),
-            lua_bool(false),
-            lua_int(amount),
-        ]))
-    } else {
-        // Level up the scoring hand
-        lua_expr_stmt(lua_call("level_up_hand", vec![
-            lua_ident("card"),
-            lua_path(&["context", "scoring_name"]),
-            lua_bool(false),
-            lua_int(amount),
-        ]))
-    };
+    let level_call = lua_raw_stmt(format!(
+        "level_up_hand(card, {}, false, {})",
+        hand_expr, resolved.lua_str
+    ));
 
     EffectOutput {
         return_fields: vec![],
@@ -179,32 +187,42 @@ pub fn level_up_hand(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOut
 }
 
 /// Edit Blind Size — modifies the blind's chip requirement.
-pub fn edit_blind_size(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
+pub fn edit_blind_size(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let operator = effect
         .params
         .get("operator")
         .and_then(|v| v.as_str())
         .unwrap_or("multiply");
-    let value = effect
-        .params
-        .get("value")
-        .and_then(|v| v.as_f64())
-        .unwrap_or(1.0);
+    let resolved =
+        crate::compiler::values::resolve_config_value(&effect.params, "value", ctx, "blind_size");
 
-    let new_val = match operator {
-        "multiply" => lua_mul(lua_path(&["G", "GAME", "blind", "chips"]), lua_num(value)),
-        "divide" => lua_div(lua_path(&["G", "GAME", "blind", "chips"]), lua_num(value)),
-        "add" => lua_add(lua_path(&["G", "GAME", "blind", "chips"]), lua_num(value)),
-        "subtract" => lua_sub(lua_path(&["G", "GAME", "blind", "chips"]), lua_num(value)),
-        "set" => lua_num(value),
-        _ => lua_mul(lua_path(&["G", "GAME", "blind", "chips"]), lua_num(value)),
+    let code = match operator {
+        "multiply" => format!(
+            "G.GAME.blind.chips = G.GAME.blind.chips * {}",
+            resolved.lua_str
+        ),
+        "divide" => format!(
+            "G.GAME.blind.chips = G.GAME.blind.chips / {}",
+            resolved.lua_str
+        ),
+        "add" => format!(
+            "G.GAME.blind.chips = G.GAME.blind.chips + {}",
+            resolved.lua_str
+        ),
+        "subtract" => format!(
+            "G.GAME.blind.chips = G.GAME.blind.chips - {}",
+            resolved.lua_str
+        ),
+        "set" => format!("G.GAME.blind.chips = {}", resolved.lua_str),
+        _ => format!(
+            "G.GAME.blind.chips = G.GAME.blind.chips * {}",
+            resolved.lua_str
+        ),
     };
-
-    let assign = lua_assign(lua_path(&["G", "GAME", "blind", "chips"]), new_val);
 
     EffectOutput {
         return_fields: vec![],
-        pre_return: vec![assign],
+        pre_return: vec![lua_raw_stmt(code)],
         config_vars: vec![],
         message: None,
         colour: None,
@@ -212,30 +230,27 @@ pub fn edit_blind_size(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectO
 }
 
 /// Set Sell Value effect — adjusts card sell value.
-pub fn set_sell_value(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
+pub fn set_sell_value(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let operation = effect
         .params
         .get("operation")
         .and_then(|v| v.as_str())
         .unwrap_or("add");
-    let value = effect
-        .params
-        .get("value")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(1);
+    let resolved =
+        crate::compiler::values::resolve_config_value(&effect.params, "value", ctx, "sell_value");
 
     let stmt = match operation {
         "set" => lua_raw_stmt(format!(
             "card.ability.extra_value = {}; if card.set_cost then card:set_cost() end",
-            value
+            resolved.lua_str
         )),
         "subtract" => lua_raw_stmt(format!(
             "card.ability.extra_value = math.max(0, (card.ability.extra_value or 0) - {}); if card.set_cost then card:set_cost() end",
-            value
+            resolved.lua_str
         )),
         _ => lua_raw_stmt(format!(
             "card.ability.extra_value = (card.ability.extra_value or 0) + {}; if card.set_cost then card:set_cost() end",
-            value
+            resolved.lua_str
         )),
     };
 
@@ -249,22 +264,19 @@ pub fn set_sell_value(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOu
 }
 
 /// Set Ante effect.
-pub fn set_ante(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
+pub fn set_ante(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let operation = effect
         .params
         .get("operation")
         .and_then(|v| v.as_str())
         .unwrap_or("set");
-    let value = effect
-        .params
-        .get("value")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(1);
+    let resolved =
+        crate::compiler::values::resolve_config_value(&effect.params, "value", ctx, "ante_value");
 
     let mod_expr = match operation {
-        "subtract" => format!("-{}", value),
-        "add" => format!("{}", value),
-        _ => format!("{} - (G.GAME.round_resets.ante or 0)", value),
+        "subtract" => format!("-{}", resolved.lua_str),
+        "add" => resolved.lua_str.to_string(),
+        _ => format!("{} - (G.GAME.round_resets.ante or 0)", resolved.lua_str),
     };
 
     let stmt = lua_raw_stmt(format!(
@@ -372,9 +384,21 @@ pub fn show_special_message(effect: &EffectDef, ctx: &mut CompileContext) -> Eff
         .unwrap_or("G.C.WHITE");
 
     // scale and hold can be parameterised; fall back to sensible defaults
-    let scale = effect.params.get("scale").and_then(|v| v.as_f64()).unwrap_or(1.0);
-    let hold = effect.params.get("hold").and_then(|v| v.as_f64()).unwrap_or(1.2);
-    let silent = effect.params.get("silent").and_then(|v| v.as_str()).unwrap_or("true");
+    let scale = effect
+        .params
+        .get("scale")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(1.0);
+    let hold = effect
+        .params
+        .get("hold")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(1.2);
+    let silent = effect
+        .params
+        .get("silent")
+        .and_then(|v| v.as_str())
+        .unwrap_or("true");
 
     let _ = ctx; // no config vars needed
 
@@ -467,7 +491,7 @@ pub fn shuffle_jokers(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOu
     end";
 
     let message = custom_message
-        .map(|m| lua_str(m))
+        .map(lua_str)
         .unwrap_or_else(|| lua_str("Shuffle!"));
 
     EffectOutput {
@@ -580,7 +604,7 @@ pub fn flip_joker(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput
     };
 
     let message = custom_message
-        .map(|m| lua_str(m))
+        .map(lua_str)
         .unwrap_or_else(|| lua_str("Flip!"));
 
     EffectOutput {
@@ -696,19 +720,33 @@ pub fn copy_joker(effect: &EffectDef, _ctx: &mut CompileContext, trigger: &str) 
     };
 
     let edition_code = if has_edition {
-        format!("\n            copied_joker:set_edition(\"{}\", true)", edition)
+        format!(
+            "\n            copied_joker:set_edition(\"{}\", true)",
+            edition
+        )
     } else {
         String::new()
     };
 
     let sticker_code = if has_sticker {
-        format!("\n            copied_joker:add_sticker('{}', true)", sticker)
+        format!(
+            "\n            copied_joker:add_sticker('{}', true)",
+            sticker
+        )
     } else {
         String::new()
     };
 
-    let buffer_code = if is_negative { String::new() } else { "\n            G.GAME.joker_buffer = G.GAME.joker_buffer + 1".to_string() };
-    let buffer_reset = if is_negative { String::new() } else { "\n            G.GAME.joker_buffer = 0".to_string() };
+    let buffer_code = if is_negative {
+        String::new()
+    } else {
+        "\n            G.GAME.joker_buffer = G.GAME.joker_buffer + 1".to_string()
+    };
+    let buffer_reset = if is_negative {
+        String::new()
+    } else {
+        "\n            G.GAME.joker_buffer = 0".to_string()
+    };
 
     let msg_lua = custom_message
         .map(|m| format!("\"{}\"", m))
@@ -763,7 +801,11 @@ pub fn copy_joker(effect: &EffectDef, _ctx: &mut CompileContext, trigger: &str) 
 }
 
 /// Copy Consumable — copies a consumable card from the consumables area.
-pub fn copy_consumable(effect: &EffectDef, _ctx: &mut CompileContext, trigger: &str) -> EffectOutput {
+pub fn copy_consumable(
+    effect: &EffectDef,
+    _ctx: &mut CompileContext,
+    trigger: &str,
+) -> EffectOutput {
     let consumable_type = effect
         .params
         .get("consumable_type")
@@ -788,32 +830,51 @@ pub fn copy_consumable(effect: &EffectDef, _ctx: &mut CompileContext, trigger: &
 
     let scoring = matches!(trigger, "hand_played" | "card_scored");
 
-    let slot_check = if is_negative { "" } else { "and #G.consumeables.cards + G.GAME.consumeable_buffer < G.consumeables.config.card_limit" };
-    let buffer_code = if is_negative { "" } else { "G.GAME.consumeable_buffer = G.GAME.consumeable_buffer + 1" };
-    let buffer_reset = if is_negative { "" } else { "G.GAME.consumeable_buffer = 0" };
-    let negative_set = if is_negative { "\n                        copied_card:set_edition(\"e_negative\", true)" } else { "" };
+    let slot_check = if is_negative {
+        ""
+    } else {
+        "and #G.consumeables.cards + G.GAME.consumeable_buffer < G.consumeables.config.card_limit"
+    };
+    let buffer_code = if is_negative {
+        ""
+    } else {
+        "G.GAME.consumeable_buffer = G.GAME.consumeable_buffer + 1"
+    };
+    let buffer_reset = if is_negative {
+        ""
+    } else {
+        "G.GAME.consumeable_buffer = 0"
+    };
+    let negative_set = if is_negative {
+        "\n                        copied_card:set_edition(\"e_negative\", true)"
+    } else {
+        ""
+    };
 
     let msg_lua = custom_message
         .map(|m| format!("\"{}\"", m))
         .unwrap_or_else(|| "\"Copied Consumable!\"".to_string());
 
-    let status_target = if scoring {
-        "context.blueprint_card or card"
-    } else {
-        "context.blueprint_card or card"
-    };
+    let status_target = "context.blueprint_card or card";
 
     let filter = if consumable_type == "random" {
         String::new()
     } else if specific_card == "random" {
-        format!("\n            if consumable.ability.set == \"{}\" then", consumable_type)
+        format!(
+            "\n            if consumable.ability.set == \"{}\" then",
+            consumable_type
+        )
     } else {
         format!(
             "\n            if consumable.ability.set == \"{}\" and consumable.config.center.key == \"{}\" then",
             consumable_type, specific_card
         )
     };
-    let filter_end = if consumable_type == "random" { "" } else { "\n            end" };
+    let filter_end = if consumable_type == "random" {
+        ""
+    } else {
+        "\n            end"
+    };
 
     let copy_code = format!(
         "local target_cards = {{}}\n\
@@ -903,7 +964,7 @@ pub fn draw_cards(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput 
     ));
 
     let message = custom_message
-        .map(|m| lua_str(m))
+        .map(lua_str)
         .unwrap_or_else(|| lua_raw_expr(format!("\"+\"..tostring({})..' Cards Drawn'", val_path)));
 
     EffectOutput {
@@ -937,7 +998,13 @@ pub fn emit_flag(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let safe_flag: String = flag_name
         .trim()
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
 
     let mod_prefix = ctx.mod_prefix.clone();
@@ -995,7 +1062,10 @@ pub fn add_booster_into_shop(effect: &EffectDef, _ctx: &mut CompileContext) -> E
         .unwrap_or("");
 
     let booster_code = match method {
-        "key_var" => format!("SMODS.add_booster_to_shop(card.ability.extra.{})", booster_variable),
+        "key_var" => format!(
+            "SMODS.add_booster_to_shop(card.ability.extra.{})",
+            booster_variable
+        ),
         "random" => "SMODS.add_booster_to_shop()".to_string(),
         _ => format!("SMODS.add_booster_to_shop('{}')", specific_booster),
     };
@@ -1071,9 +1141,15 @@ pub fn edit_card_appearance(effect: &EffectDef, _ctx: &mut CompileContext) -> Ef
     }
 
     let code = if appearance == "appear" {
-        format!("G.P_CENTERS[\"{}\"].in_pool = function() return true end", key)
+        format!(
+            "G.P_CENTERS[\"{}\"].in_pool = function() return true end",
+            key
+        )
     } else {
-        format!("G.P_CENTERS[\"{}\"].in_pool = function() return false end", key)
+        format!(
+            "G.P_CENTERS[\"{}\"].in_pool = function() return false end",
+            key
+        )
     };
 
     EffectOutput {
@@ -1082,5 +1158,746 @@ pub fn edit_card_appearance(effect: &EffectDef, _ctx: &mut CompileContext) -> Ef
         config_vars: vec![],
         message: None,
         colour: Some(lua_raw_expr("G.C.MONEY")),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// edit_game_speed
+// ---------------------------------------------------------------------------
+
+/// Edit Game Speed — changes G.SETTINGS.GAMESPEED.
+pub fn edit_game_speed(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
+    let speed = get_str_default(effect, "speed", "0.5");
+    let custom_message = get_str_opt(effect, "customMessage");
+
+    EffectOutput {
+        return_fields: vec![],
+        pre_return: vec![lua_raw_stmt(format!("G.SETTINGS.GAMESPEED = {}", speed))],
+        config_vars: vec![],
+        message: custom_message.map(lua_str),
+        colour: None,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// fix_probability
+// ---------------------------------------------------------------------------
+
+/// Fix Probability — sets probability numerator and/or denominator.
+pub fn fix_probability(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
+    let part = get_str_default(effect, "part", "numerator");
+    let resolved = resolve_config_value(&effect.params, "value", ctx, "set_probability");
+
+    let code = match part.as_str() {
+        "denominator" => format!("denominator = {}", resolved.lua_str),
+        "both" => format!(
+            "numerator = {val}\ndenominator = {val}",
+            val = resolved.lua_str
+        ),
+        _ => format!("numerator = {}", resolved.lua_str),
+    };
+
+    EffectOutput {
+        return_fields: vec![],
+        pre_return: vec![lua_raw_stmt(code)],
+        config_vars: vec![],
+        message: None,
+        colour: Some(lua_raw_expr("G.C.GREEN")),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// mod_probability
+// ---------------------------------------------------------------------------
+
+/// Mod Probability — modifies probability numerator or denominator.
+pub fn mod_probability(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
+    let chance_part = get_str_default(effect, "part", "numerator");
+    let operation = get_str_default(effect, "operation", "multiply");
+    let resolved = resolve_config_value(&effect.params, "value", ctx, "mod_probability");
+
+    let code = match operation.as_str() {
+        "increment" => format!(
+            "{p} = {p} + ({val})",
+            p = chance_part,
+            val = resolved.lua_str
+        ),
+        "decrement" => format!(
+            "{p} = {p} - ({val})",
+            p = chance_part,
+            val = resolved.lua_str
+        ),
+        "divide" => format!(
+            "{p} = {p} / ({val})",
+            p = chance_part,
+            val = resolved.lua_str
+        ),
+        _ => format!(
+            "{p} = {p} * ({val})",
+            p = chance_part,
+            val = resolved.lua_str
+        ),
+    };
+
+    EffectOutput {
+        return_fields: vec![],
+        pre_return: vec![lua_raw_stmt(code)],
+        config_vars: vec![],
+        message: None,
+        colour: Some(lua_raw_expr("G.C.GREEN")),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// modify_blind_requirement
+// ---------------------------------------------------------------------------
+
+/// Modify Blind Requirement — changes G.GAME.blind.chips with HUD update.
+pub fn modify_blind_requirement(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
+    let operation = get_str_default(effect, "operation", "multiply");
+    let custom_message = get_str_opt(effect, "customMessage");
+    let resolved = resolve_config_value(&effect.params, "value", ctx, "blind_size");
+
+    let (blind_code, default_msg) = match operation.as_str() {
+        "add" => (
+            format!(
+                "G.GAME.blind.chips = G.GAME.blind.chips + {val}",
+                val = resolved.lua_str
+            ),
+            format!("\"+\"..tostring({})..' Blind Size'", resolved.lua_str),
+        ),
+        "subtract" => (
+            format!(
+                "G.GAME.blind.chips = G.GAME.blind.chips - {val}",
+                val = resolved.lua_str
+            ),
+            format!("\"-\"..tostring({})..' Blind Size'", resolved.lua_str),
+        ),
+        "divide" => (
+            format!(
+                "G.GAME.blind.chips = G.GAME.blind.chips / {val}",
+                val = resolved.lua_str
+            ),
+            format!("\"/\"..tostring({})..' Blind Size'", resolved.lua_str),
+        ),
+        "set" => (
+            format!("G.GAME.blind.chips = {val}", val = resolved.lua_str),
+            format!("\"Set to \"..tostring({})..' Blind Size'", resolved.lua_str),
+        ),
+        _ => (
+            format!(
+                "G.GAME.blind.chips = G.GAME.blind.chips * {val}",
+                val = resolved.lua_str
+            ),
+            format!("\"X\"..tostring({})..' Blind Size'", resolved.lua_str),
+        ),
+    };
+
+    let msg_lua = custom_message
+        .map(|m| format!("\"{}\"", m))
+        .unwrap_or(default_msg);
+
+    let func_code = format!(
+        "func = function()\n\
+            if G.GAME.blind.in_blind then\n\
+                card_eval_status_text(context.blueprint_card or card, 'extra', nil, nil, nil, {{message = {msg}, colour = G.C.GREEN}})\n\
+                {blind}\n\
+                G.GAME.blind.chip_text = number_format(G.GAME.blind.chips)\n\
+                G.HUD_blind:recalculate()\n\
+                return true\n\
+            end\n\
+        end",
+        msg = msg_lua,
+        blind = blind_code
+    );
+
+    EffectOutput {
+        return_fields: vec![],
+        pre_return: vec![lua_raw_stmt(func_code)],
+        config_vars: vec![],
+        message: None,
+        colour: Some(lua_raw_expr("G.C.GREEN")),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// modify_all_blinds_requirement
+// ---------------------------------------------------------------------------
+
+/// Modify All Blinds Requirement — changes ante_scaling.
+pub fn modify_all_blinds_requirement(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
+    let operation = get_str_default(effect, "operation", "multiply");
+    let resolved = resolve_config_value(&effect.params, "value", ctx, "all_blinds_size");
+
+    let inner = match operation.as_str() {
+        "add" => format!(
+            "G.GAME.starting_params.ante_scaling = G.GAME.starting_params.ante_scaling + {}",
+            resolved.lua_str
+        ),
+        "subtract" => format!(
+            "G.GAME.starting_params.ante_scaling = G.GAME.starting_params.ante_scaling - {}",
+            resolved.lua_str
+        ),
+        "divide" => format!(
+            "G.GAME.starting_params.ante_scaling = G.GAME.starting_params.ante_scaling / {}",
+            resolved.lua_str
+        ),
+        "set" => format!("G.GAME.starting_params.ante_scaling = {}", resolved.lua_str),
+        _ => format!(
+            "G.GAME.starting_params.ante_scaling = G.GAME.starting_params.ante_scaling * {}",
+            resolved.lua_str
+        ),
+    };
+
+    let lua = format!(
+        "G.E_MANAGER:add_event(Event({{\n\
+            func = function()\n\
+                {}\n\
+                return true\n\
+            end\n\
+        }}))",
+        inner
+    );
+
+    EffectOutput {
+        return_fields: vec![],
+        pre_return: vec![lua_raw_stmt(lua)],
+        config_vars: vec![],
+        message: None,
+        colour: Some(lua_raw_expr("G.C.GREEN")),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// permanent_bonus
+// ---------------------------------------------------------------------------
+
+/// Permanent Bonus — adds a permanent bonus to scored cards.
+pub fn permanent_bonus(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
+    let bonus_type = get_str_default(effect, "bonus_type", "perma_bonus");
+    let custom_message = get_str_opt(effect, "customMessage");
+    let resolved = resolve_config_value(
+        &effect.params,
+        "value",
+        ctx,
+        &format!("pb_{}", bonus_type.replace("perma_", "")),
+    );
+
+    let code = format!(
+        "context.other_card.ability.{bt} = context.other_card.ability.{bt} or 0\n\
+        context.other_card.ability.{bt} = context.other_card.ability.{bt} + {val}",
+        bt = bonus_type,
+        val = resolved.lua_str
+    );
+
+    let colour = if bonus_type.contains("mult") {
+        "G.C.MULT"
+    } else if bonus_type.contains("dollars") {
+        "G.C.MONEY"
+    } else {
+        "G.C.CHIPS"
+    };
+
+    let message = custom_message
+        .map(lua_str)
+        .unwrap_or_else(|| lua_call("localize", vec![lua_str("k_upgrade_ex")]));
+
+    EffectOutput {
+        return_fields: vec![],
+        pre_return: vec![lua_raw_stmt(code)],
+        config_vars: vec![],
+        message: Some(message),
+        colour: Some(lua_raw_expr(colour)),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// redeem_voucher
+// ---------------------------------------------------------------------------
+
+/// Redeem Voucher — creates and redeems a voucher card.
+pub fn redeem_voucher(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
+    let voucher_type = get_str_default(effect, "voucher_type", "random");
+    let voucher_key = get_str_default(effect, "specific_voucher", "v_overstock_norm");
+    let key_var = get_str_default(effect, "variable", "keyVar");
+    let custom_message = get_str_opt(effect, "customMessage");
+    let effect_id = effect
+        .params
+        .get("id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("redeem");
+
+    let key_code = match voucher_type.as_str() {
+        "random" => format!(
+            "local voucher_key = pseudorandom_element(G.P_CENTER_POOLS.Voucher, '{}').key",
+            &effect_id[..8.min(effect_id.len())]
+        ),
+        "keyvar" => format!("local voucher_key = card.ability.extra.{}", key_var),
+        _ => format!("local voucher_key = '{}'", voucher_key),
+    };
+
+    let code = format!(
+        "{key_code}\n\
+        local voucher_card = SMODS.create_card{{area = G.play, key = voucher_key}}\n\
+        voucher_card:start_materialize()\n\
+        voucher_card.cost = 0\n\
+        G.play:emplace(voucher_card)\n\
+        delay(0.8)\n\
+        voucher_card:redeem()\n\
+        G.E_MANAGER:add_event(Event({{\n\
+            trigger = 'after',\n\
+            delay = 0.5,\n\
+            func = function()\n\
+                voucher_card:start_dissolve()\n\
+                return true\n\
+            end\n\
+        }}))",
+        key_code = key_code
+    );
+
+    EffectOutput {
+        return_fields: vec![],
+        pre_return: vec![lua_raw_stmt(code)],
+        config_vars: vec![],
+        message: custom_message.map(lua_str),
+        colour: Some(lua_raw_expr("G.C.RED")),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// unlock_joker
+// ---------------------------------------------------------------------------
+
+/// Unlock Joker — unlocks and optionally discovers a joker.
+pub fn unlock_joker(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
+    let selection_method = get_str_default(effect, "selection_method", "key");
+    let joker_key = get_str_default(effect, "joker_key", "j_joker");
+    let discover = get_str_default(effect, "discover", "false") == "true";
+    let custom_message = get_str_opt(effect, "customMessage");
+    let key_variable = get_str_default(effect, "key_variable", "none");
+
+    let normalized_key = if joker_key.starts_with("j_") {
+        joker_key.clone()
+    } else {
+        format!("j_{}", joker_key)
+    };
+
+    let discover_code = if discover {
+        "\n        discover_card(target_joker)"
+    } else {
+        ""
+    };
+
+    let msg_code = custom_message
+        .as_ref()
+        .map(|m| {
+            format!(
+                "\n        SMODS.calculate_effect({{message = \"{}\"}}, card)",
+                m
+            )
+        })
+        .unwrap_or_default();
+
+    let key_expr = if selection_method == "key" {
+        format!("G.P_CENTERS[\"{}\"]", normalized_key)
+    } else {
+        format!("G.P_CENTERS[card.ability.extra.{}]", key_variable)
+    };
+
+    let code = format!(
+        "func = function()\n\
+            local target_joker = {key}\n\
+            if target_joker then\n\
+                unlock_card(target_joker){discover}{msg}\n\
+            end\n\
+            return true\n\
+        end",
+        key = key_expr,
+        discover = discover_code,
+        msg = msg_code
+    );
+
+    EffectOutput {
+        return_fields: vec![],
+        pre_return: vec![lua_raw_stmt(code)],
+        config_vars: vec![],
+        message: None,
+        colour: Some(lua_raw_expr("G.C.BLUE")),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// saved_effect
+// ---------------------------------------------------------------------------
+
+/// Saved effect — returns `saved = true` to prevent destruction.
+pub fn saved_effect(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
+    let custom_message = get_str_opt(effect, "customMessage");
+
+    let message = custom_message
+        .map(lua_str)
+        .unwrap_or_else(|| lua_call("localize", vec![lua_str("k_saved_ex")]));
+
+    EffectOutput {
+        return_fields: vec![("saved".to_string(), lua_bool(true))],
+        pre_return: vec![],
+        config_vars: vec![],
+        message: Some(message),
+        colour: Some(lua_raw_expr("G.C.RED")),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// edit_joker
+// ---------------------------------------------------------------------------
+
+/// Edit Joker — modifies a joker's edition or sticker.
+pub fn edit_joker(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
+    let edition = get_str_default(effect, "edition", "none");
+    let sticker = get_str_default(effect, "sticker", "none");
+    let selection_method = get_str_default(effect, "selection_method", "self");
+    let custom_message = get_str_opt(effect, "customMessage");
+
+    let target = match selection_method.as_str() {
+        "self" => "card".to_string(),
+        "evaled_joker" => "context.other_joker".to_string(),
+        "selected_joker" => "G.jokers.highlighted[1]".to_string(),
+        "random" => "pseudorandom_element(G.jokers.cards, pseudoseed('edit_joker'))".to_string(),
+        _ => "card".to_string(),
+    };
+
+    let mut code_parts = Vec::new();
+
+    if edition != "none" && !edition.is_empty() {
+        if edition == "remove" {
+            code_parts.push(format!("{}.edition = nil", target));
+        } else {
+            let e = if edition.starts_with("e_") {
+                edition.clone()
+            } else {
+                format!("e_{}", edition)
+            };
+            code_parts.push(format!("{}:set_edition('{}', true)", target, e));
+        }
+    }
+
+    if sticker != "none" && !sticker.is_empty() {
+        if sticker == "remove" {
+            code_parts.push(format!(
+                "{t}.ability.eternal = false\n{t}.ability.perishable = false\n{t}.ability.rental = false",
+                t = target
+            ));
+        } else {
+            code_parts.push(format!("{}:add_sticker('{}', true)", target, sticker));
+        }
+    }
+
+    if code_parts.is_empty() {
+        return EffectOutput::default();
+    }
+
+    let message = custom_message.map(lua_str);
+
+    EffectOutput {
+        return_fields: vec![],
+        pre_return: vec![lua_raw_stmt(code_parts.join("\n"))],
+        config_vars: vec![],
+        message,
+        colour: Some(lua_raw_expr("G.C.DARK_EDITION")),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// edit_booster_packs
+// ---------------------------------------------------------------------------
+
+/// Edit Booster Packs — modifies booster pack size/choice.
+pub fn edit_booster_packs(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
+    let booster_key = get_str_default(effect, "booster_key", "");
+    let modify_type = get_str_default(effect, "modify_type", "size");
+    let resolved = resolve_config_value(&effect.params, "value", ctx, "booster_mod");
+
+    if booster_key.is_empty() {
+        return EffectOutput::default();
+    }
+
+    let field = if modify_type == "choice" {
+        "config.choose"
+    } else {
+        "config.extra"
+    };
+
+    let code = format!(
+        "if G.P_CENTERS['{key}'] then\n\
+            G.P_CENTERS['{key}'].{field} = (G.P_CENTERS['{key}'].{field} or 0) + {val}\n\
+        end",
+        key = booster_key,
+        field = field,
+        val = resolved.lua_str
+    );
+
+    EffectOutput {
+        return_fields: vec![],
+        pre_return: vec![lua_raw_stmt(code)],
+        config_vars: vec![],
+        message: Some(lua_str("Booster Updated!")),
+        colour: Some(lua_raw_expr("G.C.BLUE")),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// fool_effect
+// ---------------------------------------------------------------------------
+
+/// Fool Effect — recreates the last used Tarot/Planet card (consumable context).
+pub fn fool_effect(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
+    let custom_message = get_str_opt(effect, "customMessage");
+
+    let code = "G.E_MANAGER:add_event(Event({\n\
+            trigger = 'after',\n\
+            delay = 0.4,\n\
+            func = function()\n\
+                if G.consumeables.config.card_limit > #G.consumeables.cards then\n\
+                    play_sound('timpani')\n\
+                    SMODS.add_card({ key = G.GAME.last_tarot_planet })\n\
+                    used_card:juice_up(0.3, 0.5)\n\
+                end\n\
+                return true\n\
+            end\n\
+        }))\n\
+        delay(0.6)";
+
+    EffectOutput {
+        return_fields: vec![],
+        pre_return: vec![lua_raw_stmt(code)],
+        config_vars: vec![],
+        message: custom_message.map(lua_str),
+        colour: Some(lua_raw_expr("G.C.SECONDARY_SET.Tarot")),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// edit_cards (consumable context — batch card editing)
+// ---------------------------------------------------------------------------
+
+/// Edit Cards — applies modifications to selected/random cards in hand (consumable context).
+pub fn edit_cards(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
+    let enhancement = get_str_default(effect, "enhancement", "none");
+    let seal = get_str_default(effect, "seal", "none");
+    let edition = get_str_default(effect, "edition", "none");
+    let suit = get_str_default(effect, "suit", "none");
+    let rank = get_str_default(effect, "rank", "none");
+    let method = get_str_default(effect, "selection_method", "random");
+    let custom_message = get_str_opt(effect, "customMessage");
+
+    let has_mods = [&enhancement, &seal, &edition, &suit, &rank]
+        .iter()
+        .any(|p| p.as_str() != "none");
+
+    if !has_mods {
+        return EffectOutput::default();
+    }
+
+    let resolved = resolve_config_value(&effect.params, "count", ctx, "edit_count");
+    let target = if method == "random" {
+        "affected_cards"
+    } else {
+        "G.hand.highlighted"
+    };
+
+    let mut code = String::new();
+
+    if method == "random" {
+        code.push_str(&format!(
+            "local affected_cards = {{}}\n\
+            local temp_hand = {{}}\n\
+            for _, playing_card in ipairs(G.hand.cards) do temp_hand[#temp_hand + 1] = playing_card end\n\
+            pseudoshuffle(temp_hand, 12345)\n\
+            for i = 1, math.min({}, #temp_hand) do\n\
+                affected_cards[#affected_cards + 1] = temp_hand[i]\n\
+            end\n",
+            resolved.lua_str
+        ));
+    }
+
+    // Flip animation
+    code.push_str(&format!(
+        "G.E_MANAGER:add_event(Event({{\n\
+            trigger = 'after', delay = 0.4,\n\
+            func = function() play_sound('tarot1'); used_card:juice_up(0.3, 0.5); return true end\n\
+        }}))\n\
+        for i = 1, #{t} do\n\
+            local percent = 1.15 - (i - 0.999) / (#{t} - 0.998) * 0.3\n\
+            G.E_MANAGER:add_event(Event({{\n\
+                trigger = 'after', delay = 0.15,\n\
+                func = function() {t}[i]:flip(); play_sound('card1', percent); {t}[i]:juice_up(0.3, 0.3); return true end\n\
+            }}))\n\
+        end\n\
+        delay(0.2)\n",
+        t = target
+    ));
+
+    // Enhancement
+    if enhancement != "none" {
+        let enh_code = if enhancement == "remove" {
+            format!("{t}[i]:set_ability(G.P_CENTERS.c_base)", t = target)
+        } else if enhancement == "random" {
+            format!(
+                "local cen_pool = {{}}\n\
+                for _, ec in pairs(G.P_CENTER_POOLS['Enhanced']) do\n\
+                    if ec.key ~= 'm_stone' then cen_pool[#cen_pool + 1] = ec end\n\
+                end\n\
+                {t}[i]:set_ability(pseudorandom_element(cen_pool, 'random_enhance'))",
+                t = target
+            )
+        } else {
+            format!(
+                "{t}[i]:set_ability(G.P_CENTERS['{e}'])",
+                t = target,
+                e = enhancement
+            )
+        };
+        code.push_str(&format!(
+            "for i = 1, #{t} do\n\
+                G.E_MANAGER:add_event(Event({{trigger = 'after', delay = 0.1, func = function()\n\
+                    {c}\n\
+                    return true\n\
+                end}}))\n\
+            end\n",
+            t = target,
+            c = enh_code
+        ));
+    }
+
+    // Seal
+    if seal != "none" {
+        let seal_code = if seal == "remove" {
+            format!("{t}[i]:set_seal(nil, nil, true)", t = target)
+        } else if seal == "random" {
+            format!(
+                "local seal_pool = {{'Gold', 'Red', 'Blue', 'Purple'}}\n\
+                {t}[i]:set_seal(pseudorandom_element(seal_pool, 'random_seal'), nil, true)",
+                t = target
+            )
+        } else {
+            format!("{t}[i]:set_seal('{s}', nil, true)", t = target, s = seal)
+        };
+        code.push_str(&format!(
+            "for i = 1, #{t} do\n\
+                G.E_MANAGER:add_event(Event({{trigger = 'after', delay = 0.1, func = function()\n\
+                    {c}\n\
+                    return true\n\
+                end}}))\n\
+            end\n",
+            t = target,
+            c = seal_code
+        ));
+    }
+
+    // Edition
+    if edition != "none" {
+        let ed_code = if edition == "remove" {
+            format!("{t}[i]:set_edition(nil, true)", t = target)
+        } else if edition == "random" {
+            format!(
+                "local edition = pseudorandom_element({{'e_foil', 'e_holo', 'e_polychrome'}}, 'random edition')\n\
+                {t}[i]:set_edition(edition, true)",
+                t = target
+            )
+        } else {
+            let e = if edition.starts_with("e_") {
+                edition.clone()
+            } else {
+                format!("e_{}", edition)
+            };
+            format!("{t}[i]:set_edition('{e}', true)", t = target, e = e)
+        };
+        code.push_str(&format!(
+            "for i = 1, #{t} do\n\
+                G.E_MANAGER:add_event(Event({{trigger = 'after', delay = 0.1, func = function()\n\
+                    {c}\n\
+                    return true\n\
+                end}}))\n\
+            end\n",
+            t = target,
+            c = ed_code
+        ));
+    }
+
+    // Suit
+    if suit != "none" {
+        let suit_code = if suit == "random" {
+            format!(
+                "local _suit = pseudorandom_element(SMODS.Suits, 'random_suit')\n\
+                assert(SMODS.change_base({t}[i], _suit.key))",
+                t = target
+            )
+        } else {
+            format!(
+                "assert(SMODS.change_base({t}[i], '{s}'))",
+                t = target,
+                s = suit
+            )
+        };
+        code.push_str(&format!(
+            "for i = 1, #{t} do\n\
+                G.E_MANAGER:add_event(Event({{trigger = 'after', delay = 0.1, func = function()\n\
+                    {c}\n\
+                    return true\n\
+                end}}))\n\
+            end\n",
+            t = target,
+            c = suit_code
+        ));
+    }
+
+    // Rank
+    if rank != "none" {
+        let rank_code = if rank == "random" {
+            format!(
+                "local _rank = pseudorandom_element(SMODS.Ranks, 'random_rank')\n\
+                assert(SMODS.change_base({t}[i], nil, _rank.key))",
+                t = target
+            )
+        } else {
+            format!(
+                "assert(SMODS.change_base({t}[i], nil, '{r}'))",
+                t = target,
+                r = rank
+            )
+        };
+        code.push_str(&format!(
+            "for i = 1, #{t} do\n\
+                G.E_MANAGER:add_event(Event({{trigger = 'after', delay = 0.1, func = function()\n\
+                    {c}\n\
+                    return true\n\
+                end}}))\n\
+            end\n",
+            t = target,
+            c = rank_code
+        ));
+    }
+
+    // Unflip animation
+    code.push_str(&format!(
+        "for i = 1, #{t} do\n\
+            local percent = 0.85 + (i - 0.999) / (#{t} - 0.998) * 0.3\n\
+            G.E_MANAGER:add_event(Event({{trigger = 'after', delay = 0.15,\n\
+                func = function() {t}[i]:flip(); play_sound('tarot2', percent, 0.6); {t}[i]:juice_up(0.3, 0.3); return true end\n\
+            }}))\n\
+        end\n\
+        G.E_MANAGER:add_event(Event({{trigger = 'after', delay = 0.2,\n\
+            func = function() G.hand:unhighlight_all(); return true end\n\
+        }}))\n\
+        delay(0.5)",
+        t = target
+    ));
+
+    EffectOutput {
+        return_fields: vec![],
+        pre_return: vec![lua_raw_stmt(code)],
+        config_vars: vec![],
+        message: custom_message.map(lua_str),
+        colour: Some(lua_raw_expr("G.C.SECONDARY_SET.Tarot")),
     }
 }

@@ -20,7 +20,7 @@ pub fn trigger_context(
 
     ctx.unwrap_or_else(|| {
         // Fallback: emit a raw context comment for unknown triggers
-        lua_raw_expr(&format!("--[[ unknown trigger: {} ]] false", trigger))
+        lua_raw_expr(format!("--[[ unknown trigger: {} ]] false", trigger))
     })
 }
 

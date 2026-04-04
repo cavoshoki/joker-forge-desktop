@@ -29,6 +29,7 @@ import { SOUNDS } from "@/lib/balatro-utils";
 import { getRandomPlaceholder } from "@/lib/placeholder-assets.ts";
 import { PlaceholderPickerDialog } from "@/components/pages/placeholder-picker-dialog";
 import { RuleBuilder } from "@/components/rule-builder";
+import { processBalatroCardImage } from "@/lib/media/image-processing-utils";
 
 export default function SealsPage() {
   const { data, updateSeals } = useProjectData();
@@ -40,34 +41,7 @@ export default function SealsPage() {
     null,
   );
 
-  const processSealImage = useCallback((file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          if (img.width === 71 && img.height === 95) {
-            const canvas = document.createElement("canvas");
-            const ctx = canvas.getContext("2d");
-            canvas.width = 142;
-            canvas.height = 190;
-            if (ctx) {
-              ctx.imageSmoothingEnabled = false;
-              ctx.drawImage(img, 0, 0, 142, 190);
-              resolve(canvas.toDataURL("image/png"));
-            } else {
-              reject(new Error("Canvas context failed"));
-            }
-          } else {
-            resolve(e.target?.result as string);
-          }
-        };
-        img.src = e.target?.result as string;
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }, []);
+  const processSealImage = processBalatroCardImage;
 
   const handleUpdate = useCallback(
     (id: string, updates: Partial<SealData>) => {

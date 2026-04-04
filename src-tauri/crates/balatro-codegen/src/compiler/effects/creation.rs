@@ -303,7 +303,7 @@ pub fn create_copy_triggered_card(
     );
 
     let message = custom_message
-        .map(|m| lua_str(m))
+        .map(lua_str)
         .unwrap_or_else(|| lua_str("Copied Card to Hand!"));
 
     if scoring {
@@ -389,7 +389,7 @@ pub fn create_copy_played_card(
     );
 
     let message = custom_message
-        .map(|m| lua_str(m))
+        .map(lua_str)
         .unwrap_or_else(|| lua_str("Copied Cards to Hand!"));
 
     if scoring {
@@ -472,7 +472,7 @@ pub fn create_last_played_planet(effect: &EffectDef, _ctx: &mut CompileContext) 
     );
 
     let message = custom_message
-        .map(|m| lua_str(m))
+        .map(lua_str)
         .unwrap_or_else(|| lua_raw_expr("localize('k_plus_planet')"));
 
     EffectOutput {
@@ -534,30 +534,28 @@ fn build_card_selection(card_index: &str, card_rank: &str, card_suit: &str) -> S
                 cond = conditions.join(" and ")
             )
         }
+    } else if conditions.is_empty() {
+        format!(
+            "local cards_to_copy = {{}}\n\
+            local target_index = {idx}\n\
+            if context.full_hand[target_index] then\n\
+                table.insert(cards_to_copy, context.full_hand[target_index])\n\
+            end",
+            idx = card_index
+        )
     } else {
-        if conditions.is_empty() {
-            format!(
-                "local cards_to_copy = {{}}\n\
-                local target_index = {idx}\n\
-                if context.full_hand[target_index] then\n\
-                    table.insert(cards_to_copy, context.full_hand[target_index])\n\
-                end",
-                idx = card_index
-            )
-        } else {
-            format!(
-                "local cards_to_copy = {{}}\n\
-                local target_index = {idx}\n\
-                if context.full_hand[target_index] then\n\
-                    local c = context.full_hand[target_index]\n\
-                    if {cond} then\n\
-                        table.insert(cards_to_copy, c)\n\
-                    end\n\
-                end",
-                idx = card_index,
-                cond = conditions.join(" and ")
-            )
-        }
+        format!(
+            "local cards_to_copy = {{}}\n\
+            local target_index = {idx}\n\
+            if context.full_hand[target_index] then\n\
+                local c = context.full_hand[target_index]\n\
+                if {cond} then\n\
+                    table.insert(cards_to_copy, c)\n\
+                end\n\
+            end",
+            idx = card_index,
+            cond = conditions.join(" and ")
+        )
     }
 }
 

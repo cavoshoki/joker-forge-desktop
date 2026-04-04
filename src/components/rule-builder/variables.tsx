@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
-import { ConsumableData, UserVariable } from "@/lib/balatro-utils";
-import { getVariableUsageDetails } from "@/lib/user-variable-utils";
+import type { ConsumableData, UserVariable } from "@/lib/types";
+import { getVariableUsageDetails } from "@/lib/rules/user-variable-utils";
 import {
   SUITS,
   RANKS,
@@ -23,11 +23,11 @@ import {
   PencilSimple,
   GlobeHemisphereWest,
 } from "@phosphor-icons/react";
-import InputField from "../generic/InputField";
-import Button from "../generic/Button";
-import { validateVariableName } from "../generic/validationUtils";
+import { Input as InputField } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { validateVariableName } from "@/lib/validation-utils";
 import Panel from "./panel";
-import IconButton from "./icon-button";
+import IconButton from "@/components/ui/icon-button";
 import {
   Select,
   SelectContent,
@@ -544,7 +544,7 @@ const Variables: React.FC<VariablesProps> = ({
 
                       <div className="flex gap-2">
                         <Button
-                          variant="primary"
+                          variant="default"
                           size="sm"
                           onClick={() => handleSaveEdit(variable.id)}
                           disabled={!!editValidationError}
@@ -739,7 +739,7 @@ const Variables: React.FC<VariablesProps> = ({
 
                 <div className="flex gap-2">
                   <Button
-                    variant="primary"
+                    variant="default"
                     size="sm"
                     onClick={handleAddVariable}
                     disabled={!newVariableName.trim() || !!nameValidationError}

@@ -25,7 +25,7 @@ pub fn specific_joker_owned(condition: &ConditionDef) -> Option<Expr> {
         format!("j_{}", joker_key)
     };
 
-    Some(lua_raw_expr(&format!(
+    Some(lua_raw_expr(format!(
         "(function() for _, v in ipairs(G.jokers.cards or {{}}) do if v.config and v.config.center and v.config.center.key == '{}' then return true end end return false end)()",
         normalized
     )))
@@ -48,7 +48,7 @@ pub fn joker_rarity_count(condition: &ConditionDef) -> Option<Expr> {
         format!("v.config and v.config.center and tostring(v.config.center.rarity) == '{}'", rarity)
     };
 
-    let count_expr = lua_raw_expr(&format!(
+    let count_expr = lua_raw_expr(format!(
         "(function() local c = 0; for _, v in ipairs(G.jokers.cards or {{}}) do if {} then c = c + 1 end end return c end)()",
         check
     ));
@@ -73,7 +73,7 @@ pub fn joker_position(condition: &ConditionDef) -> Option<Expr> {
                 .unwrap_or(1);
             Some(lua_eq(
                 lua_ident("card"),
-                lua_raw_expr(&format!("G.jokers.cards[{}]", idx)),
+                lua_raw_expr(format!("G.jokers.cards[{}]", idx)),
             ))
         }
     }
@@ -97,7 +97,7 @@ pub fn joker_selected(condition: &ConditionDef) -> Option<Expr> {
         } else {
             format!("j_{}", joker_key)
         };
-        return Some(lua_raw_expr(&format!(
+        return Some(lua_raw_expr(format!(
             "#G.jokers.highlighted > 0 and G.jokers.highlighted[1].config and G.jokers.highlighted[1].config.center and G.jokers.highlighted[1].config.center.key == '{}'",
             normalized
         )));
@@ -110,12 +110,12 @@ pub fn joker_sticker(condition: &ConditionDef) -> Option<Expr> {
     let sticker = get_param(condition, &["sticker"])
         .and_then(|v| v.as_str())
         .unwrap_or("eternal");
-    Some(lua_raw_expr(&format!("(card.ability and card.ability.{})", sticker)))
+    Some(lua_raw_expr(format!("(card.ability and card.ability.{})", sticker)))
 }
 
 pub fn joker_edition(condition: &ConditionDef) -> Option<Expr> {
     let edition = get_param(condition, &["edition"])
         .and_then(|v| v.as_str())
         .unwrap_or("foil");
-    Some(lua_raw_expr(&format!("(card.edition and card.edition.{})", edition)))
+    Some(lua_raw_expr(format!("(card.edition and card.edition.{})", edition)))
 }

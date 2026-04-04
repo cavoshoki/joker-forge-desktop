@@ -15,7 +15,11 @@ fn get_str_default<'a>(effect: &'a EffectDef, key: &str, default: &'a str) -> St
     match effect.params.get(key) {
         Some(v) => {
             let s = v.to_string_lossy();
-            if s.is_empty() { default.to_string() } else { s }
+            if s.is_empty() {
+                default.to_string()
+            } else {
+                s
+            }
         }
         None => default.to_string(),
     }
@@ -125,11 +129,7 @@ fn value_to_lua_str(
 /// `target` is the Lua expression for the card to modify (e.g. `"card"` or
 /// `"context.other_card"`).
 /// `ability_path` is for user_var lookups (e.g. `"card.ability.extra"`).
-fn build_card_modification_code(
-    effect: &EffectDef,
-    target: &str,
-    ability_path: &str,
-) -> String {
+fn build_card_modification_code(effect: &EffectDef, target: &str, ability_path: &str) -> String {
     let new_rank_val = get_typed_str(effect, "new_rank");
     let new_rank_type = get_typed_value_type(effect, "new_rank");
     let new_suit_val = get_typed_str(effect, "new_suit");
@@ -173,7 +173,10 @@ fn build_card_modification_code(
 
     // Enhancement
     if new_enhancement_val == "remove" {
-        code.push_str(&format!("\n        {}:set_ability(G.P_CENTERS.c_base)", target));
+        code.push_str(&format!(
+            "\n        {}:set_ability(G.P_CENTERS.c_base)",
+            target
+        ));
     } else if new_enhancement_val == "random" {
         code.push_str(&format!(
             "\n        local enhancement_pool = {{}}\
@@ -243,7 +246,10 @@ fn build_card_modification_code(
         } else {
             format!("e_{}", new_edition_val)
         };
-        code.push_str(&format!("\n        {}:set_edition(\"{}\", true)", target, key));
+        code.push_str(&format!(
+            "\n        {}:set_edition(\"{}\", true)",
+            target, key
+        ));
     }
 
     code
@@ -255,17 +261,13 @@ fn build_card_modification_code(
 /// For other joker triggers, returns `func = function() ... end` in the return table.
 /// For card context, applies modifications directly (pre_return for card_scored).
 pub fn edit_card(effect: &EffectDef, ctx: &mut CompileContext, trigger: &str) -> EffectOutput {
-    let custom_message = get_str(effect, "customMessage")
-        .unwrap_or_else(|| "Card Modified!".to_string());
+    let custom_message =
+        get_str(effect, "customMessage").unwrap_or_else(|| "Card Modified!".to_string());
     let ability_path = ctx.ability_path().to_string();
     let scoring = is_scoring_trigger(trigger);
 
     // For joker context
-    let target = if trigger == "card_scored" {
-        "context.other_card"
-    } else {
-        "context.other_card"
-    };
+    let target = "context.other_card";
 
     let mod_code = build_card_modification_code(effect, target, &ability_path);
 
@@ -290,9 +292,10 @@ pub fn edit_card(effect: &EffectDef, ctx: &mut CompileContext, trigger: &str) ->
         }
     } else {
         // func = function() ... end in return table
-        let func_body = vec![
-            lua_raw_stmt(format!("{}\n            return true", mod_code)),
-        ];
+        let func_body = vec![lua_raw_stmt(format!(
+            "{}\n            return true",
+            mod_code
+        ))];
         EffectOutput {
             return_fields: vec![(
                 "func".to_string(),
@@ -325,9 +328,7 @@ pub fn convert_all_cards_to_rank(effect: &EffectDef, _ctx: &mut CompileContext) 
         _ => vec![],
     };
     let rank_pool_values = [
-        "'A'", "'2'", "'3'", "'4'", "'5'",
-        "'6'", "'7'", "'8'", "'9'", "'10'",
-        "'J'", "'Q'", "'K'",
+        "'A'", "'2'", "'3'", "'4'", "'5'", "'6'", "'7'", "'8'", "'9'", "'10'", "'J'", "'Q'", "'K'",
     ];
 
     let rank_code = if rank_val == "random" {

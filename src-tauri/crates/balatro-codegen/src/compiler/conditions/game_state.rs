@@ -128,9 +128,7 @@ pub fn check_blind_requirements(condition: &ConditionDef) -> Option<Expr> {
         .unwrap_or(25);
 
     // Compare (G.GAME.chips / G.GAME.blind.chips * 100) against percentage
-    let ratio_expr = lua_raw_expr(&format!(
-        "((G.GAME.chips or 0) / (G.GAME.blind.chips or 1) * 100)"
-    ));
+    let ratio_expr = lua_raw_expr("((G.GAME.chips or 0) / (G.GAME.blind.chips or 1) * 100)".to_string());
 
     Some(comparison_op(operator, ratio_expr, lua_int(percentage)))
 }
@@ -210,7 +208,7 @@ pub fn deck_count(condition: &ConditionDef) -> Option<Expr> {
         _ => "true".to_string(),
     };
 
-    let count_expr = lua_raw_expr(&format!(
+    let count_expr = lua_raw_expr(format!(
         "(function() local c = 0; for _, v in ipairs(G.playing_cards or {{}}) do \
          if {} then c = c + 1 end end return c end)()",
         check

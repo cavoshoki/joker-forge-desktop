@@ -504,7 +504,7 @@ pub fn edit_item_size(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOut
 pub fn edit_item_size_typed(effect: &EffectDef, ctx: &mut CompileContext, size_type: &str) -> EffectOutput {
     let operation = get_str_default(effect, "operation", "add");
     let custom_message = get_str(effect, "customMessage");
-    let data = item_size_data(&size_type);
+    let data = item_size_data(size_type);
     let value_str = value_to_lua_str(effect, "value", ctx, data.var_name);
 
     let (value_arg, set_code) = match operation.as_str() {

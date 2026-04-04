@@ -1,5 +1,6 @@
 import React from "react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
@@ -30,22 +31,23 @@ const IconButton: React.FC<IconButtonProps> = ({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <button
+        <Button
           type="button"
           onClick={onClick}
           disabled={disabled}
           aria-label={tooltip}
+          size="icon"
+          variant="outline"
           className={cn(
-            "relative group h-9 w-9 flex items-center justify-center rounded-xl border-2 transition-all duration-200 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/50",
+            "relative group h-9 w-9 rounded-xl border-2 transition-all duration-200 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/50",
             "disabled:opacity-50 disabled:cursor-not-allowed",
             isActive
               ? "bg-primary/10 border-primary/45 text-primary shadow-sm"
               : "bg-card/90 border-border text-muted-foreground hover:border-primary/40 hover:text-primary",
             className,
           )}
-        >
-          <Icon className={cn("h-4 w-4", iconClassName)} />
-        </button>
+          icon={<Icon className={cn("h-4 w-4", iconClassName)} />}
+        />
       </TooltipTrigger>
       <TooltipContent
         side="bottom"

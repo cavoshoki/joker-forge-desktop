@@ -44,7 +44,7 @@ import Inspector from "./inspector";
 import LiveCodePanel from "./live-code-panel";
 import HistoryPanel from "./history-panel";
 import { compileSingleJokerLua } from "@/lib/rust-codegen-export";
-import Button from "../generic/Button";
+import { Button } from "@/components/ui/button";
 import {
   ArrowClockwise,
   ArrowCounterClockwise,
@@ -69,7 +69,7 @@ import GameVariables from "./game-variables";
 import { GameVariable } from "@/lib/game-vars";
 import { motion } from "framer-motion";
 import { UserConfigContext } from "@/components/Contexts";
-import { detectValueType } from "../generic/RuleBlockUpdater";
+import { detectValueType } from "@/lib/rules/value-type-utils";
 import { usePanelState } from "./panel-state";
 import {
   getSelectedCondition,
@@ -78,7 +78,7 @@ import {
   getSelectedRandomGroup,
   getSelectedRule,
 } from "./selection-utils";
-import IconButton from "./icon-button";
+import IconButton from "@/components/ui/icon-button";
 import ItemTypeBadge from "./item-type-badge";
 import {
   ContextMenu,
@@ -226,6 +226,7 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
   const [liveCodePreviewTarget, setLiveCodePreviewTarget] =
     useState<LiveCodeBlockPreviewTarget | null>(null);
   const [liveCodeWidthPercent, setLiveCodeWidthPercent] = useState<number>(50);
+  const [isLiveCodeContextMenu, setIsLiveCodeContextMenu] = useState(false);
   const [contextTarget, setContextTarget] = useState<RuleBuilderContextTarget>({
     type: "canvas",
   });
@@ -671,6 +672,51 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
     setSelectedGameVariable(null);
   }, [selectedItem]);
 
+  const getLiveCodeSelectedText = useCallback(() => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      return "";
+    }
+
+    const selectedText = selection.toString();
+    if (!selectedText.trim()) {
+      return "";
+    }
+
+    const liveCodeRoot = modalRef.current?.querySelector(
+      "[data-rb-live-code='true']",
+    );
+    if (!liveCodeRoot) {
+      return "";
+    }
+
+    const range = selection.getRangeAt(0);
+    const commonAncestor = range.commonAncestorContainer;
+    const commonElement =
+      commonAncestor.nodeType === Node.TEXT_NODE
+        ? commonAncestor.parentElement
+        : (commonAncestor as HTMLElement);
+
+    if (!commonElement || !liveCodeRoot.contains(commonElement)) {
+      return "";
+    }
+
+    return selectedText;
+  }, []);
+
+  const handleCopyLiveCodeSelection = useCallback(async () => {
+    const selectedText = getLiveCodeSelectedText();
+    if (!selectedText) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(selectedText);
+    } catch {
+      document.execCommand("copy");
+    }
+  }, [getLiveCodeSelectedText]);
+
   useEffect(() => {
     if (isOpen) {
       const handleKeyPress = (event: KeyboardEvent) => {
@@ -686,6 +732,10 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
 
         if ((event.ctrlKey || event.metaKey) && !event.altKey) {
           const key = event.key.toLowerCase();
+          if (key === "c" && getLiveCodeSelectedText()) {
+            // Allow native copy to handle selected live code text.
+            return;
+          }
           if (key === "l" && event.shiftKey) {
             event.preventDefault();
             handleAutoLayoutRules();
@@ -797,6 +847,7 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
       };
     }
   }, [
+    getLiveCodeSelectedText,
     handleRedo,
     handleSaveAndClose,
     handleAutoLayoutRules,
@@ -2322,6 +2373,17 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
       if (event.button !== 0) return;
 
       const target = event.target as HTMLElement;
+
+      // Ignore background selection while a popper-based menu is open.
+      // This prevents select item clicks from being interpreted as canvas clicks.
+      if (
+        document.querySelector(
+          "[data-slot='select-content'][data-state='open'], [data-radix-popper-content-wrapper] [role='listbox']",
+        )
+      ) {
+        return;
+      }
+
       if (target.closest("[data-rb-context], [data-rb-panel='true']")) {
         return;
       }
@@ -2510,6 +2572,16 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
 
   const handleRuleBuilderContextMenuCapture = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
+      const isLiveCodeTarget =
+        event.target instanceof HTMLElement &&
+        !!event.target.closest("[data-rb-live-code='true']");
+
+      setIsLiveCodeContextMenu(isLiveCodeTarget);
+
+      if (isLiveCodeTarget) {
+        return;
+      }
+
       const nextTarget = resolveContextTarget(event.target);
       setContextTarget(nextTarget);
 
@@ -2700,6 +2772,8 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
                 : contextTarget.type === "random-group"
                   ? "Random Group"
                   : "Loop Group";
+
+  const hasLiveCodeSelectedText = getLiveCodeSelectedText().trim().length > 0;
 
   const clampPanelIntoViewport = useCallback(
     (panelId: string, widthPx: number) => {
@@ -3079,7 +3153,7 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
                   </span>
                   <div className="w-px h-5 bg-border" />
                   <Button
-                    variant="primary"
+                    variant="default"
                     size="sm"
                     onClick={handleSaveAndClose}
                     icon={<CheckCircle className="h-4 w-4" />}
@@ -3426,6 +3500,21 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-62 border-border/95 bg-card/98 shadow-[0_24px_45px_-20px_rgba(0,0,0,0.78)] backdrop-blur-md">
+        {isLiveCodeContextMenu ? (
+          <>
+            <ContextMenuLabel>Live Code</ContextMenuLabel>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              onClick={() => void handleCopyLiveCodeSelection()}
+              disabled={!hasLiveCodeSelectedText}
+            >
+              <Copy className="h-4 w-4" />
+              Copy Selected Text
+              <ContextMenuShortcut>Ctrl+C</ContextMenuShortcut>
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+          </>
+        ) : null}
         {hasBulkSelection ? (
           <>
             <ContextMenuLabel>Selection Actions</ContextMenuLabel>

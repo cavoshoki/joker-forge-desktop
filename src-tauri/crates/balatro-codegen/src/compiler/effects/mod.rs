@@ -6,6 +6,7 @@ pub mod misc;
 pub mod passive;
 pub mod scoring;
 pub mod slot_management;
+pub mod variables;
 
 use crate::compiler::context::CompileContext;
 use crate::lua_ast::*;
@@ -51,6 +52,8 @@ pub fn compile_effect(
         "apply_exp_mult" => scoring::apply_exp_mult(effect, ctx),
         "apply_hyper_chips" => scoring::apply_hyper_chips(effect, ctx),
         "apply_hyper_mult" => scoring::apply_hyper_mult(effect, ctx),
+        "balance_chips_and_mult" | "balance" => scoring::balance_chips_and_mult(effect, ctx),
+        "swap_chips_and_mult" | "swap" => scoring::swap_chips_and_mult(effect, ctx),
 
         // --------------- Creation ---------------
         "create_joker" => creation::create_joker(effect, ctx),
@@ -131,6 +134,29 @@ pub fn compile_effect(
         "add_booster_into_shop" | "add_booster_to_shop" => misc::add_booster_into_shop(effect, ctx),
         "add_voucher_into_shop" | "add_voucher_to_shop" => misc::add_voucher_into_shop(effect, ctx),
         "edit_card_appearance" => misc::edit_card_appearance(effect, ctx),
+
+        // --------------- New game state effects ---------------
+        "edit_game_speed" => misc::edit_game_speed(effect, ctx),
+        "fix_probability" => misc::fix_probability(effect, ctx),
+        "mod_probability" => misc::mod_probability(effect, ctx),
+        "modify_blind_requirement" => misc::modify_blind_requirement(effect, ctx),
+        "modify_all_blinds_requirement" => misc::modify_all_blinds_requirement(effect, ctx),
+        "permanent_bonus" | "perma_bonus" => misc::permanent_bonus(effect, ctx),
+        "redeem_voucher" => misc::redeem_voucher(effect, ctx),
+        "unlock_joker" => misc::unlock_joker(effect, ctx),
+        "saved" | "saved_effect" => misc::saved_effect(effect, ctx),
+        "edit_joker" => misc::edit_joker(effect, ctx),
+        "edit_booster_packs" => misc::edit_booster_packs(effect, ctx),
+        "fool_effect" | "fool" => misc::fool_effect(effect, ctx),
+        "edit_cards" => misc::edit_cards(effect, ctx),
+
+        // --------------- Variable effects ---------------
+        "modify_internal_variable" => variables::modify_internal_variable(effect, ctx, trigger),
+        "change_key_variable" => variables::change_key_variable(effect, ctx),
+        "change_text_variable" => variables::change_text_variable(effect, ctx),
+        "change_rank_variable" => variables::change_rank_variable(effect, ctx),
+        "change_suit_variable" => variables::change_suit_variable(effect, ctx),
+        "change_poker_hand_variable" => variables::change_poker_hand_variable(effect, ctx),
 
         _ => {
             return None;

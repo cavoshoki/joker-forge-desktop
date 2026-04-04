@@ -5,9 +5,8 @@ import {
   RANKS,
   SUITS,
   SUIT_VALUES,
-  ConsumableData,
-  UserVariable,
 } from "@/lib/balatro-utils";
+import type { ConsumableData, UserVariable } from "@/lib/types";
 import {
   Cube,
   Hand,
@@ -18,8 +17,8 @@ import {
   TextB,
   Code as Brackets,
 } from "@phosphor-icons/react";
-import { validateVariableName } from "../generic/validationUtils";
-import { getVariableUsageDetails } from "@/lib/user-variable-utils";
+import { validateVariableName } from "@/lib/validation-utils";
+import { getVariableUsageDetails } from "@/lib/rules/user-variable-utils";
 import { ItemData } from "./rule-builder";
 
 export type VariableType =
