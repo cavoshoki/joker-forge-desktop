@@ -1,15 +1,15 @@
 import {
-  RectangleStackIcon,
-  CreditCardIcon,
-  SparklesIcon,
-  FaceSmileIcon,
-  PlayIcon,
-  BanknotesIcon,
-  ChartBarIcon,
-  HandRaisedIcon,
-  FireIcon,
-  PresentationChartBarIcon,
-} from "@heroicons/react/24/outline";
+  Stack,
+  CreditCard,
+  Sparkle,
+  Smiley,
+  Play,
+  CurrencyDollar,
+  ChartBar,
+  HandPalm,
+  Fire,
+  PresentationChart,
+} from "@phosphor-icons/react";
 
 export interface GameVariable {
   id: string;
@@ -38,7 +38,7 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
   {
     id: "deck",
     label: "Deck & Cards",
-    icon: RectangleStackIcon,
+    icon: Stack,
     variables: [
       {
         id: "cards_in_deck",
@@ -409,10 +409,11 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
         ],
       },
     ],
-  },{
+  },
+  {
     id: "scoring",
     label: "Scoring",
-    icon: FireIcon,
+    icon: Fire,
     variables: [],
     subcategories: [
       {
@@ -425,15 +426,16 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
             description: "The Chip Requirement for the current Blind",
             category: "scoring",
             subcategory: "chips",
-            code: "G.GAME.blind.chips"
+            code: "G.GAME.blind.chips",
           },
           {
             id: "current_chip_total",
             label: "Current Chip Total",
-            description: "Current Amount of Scored Chips towards the Blind Requirement",
+            description:
+              "Current Amount of Scored Chips towards the Blind Requirement",
             category: "scoring",
             subcategory: "chips",
-            code: "G.GAME.chips"
+            code: "G.GAME.chips",
           },
           {
             id: "initial_scoring_chips",
@@ -441,7 +443,7 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
             description: "The Initial Amount of Chips of the played Poker Hand",
             category: "scoring",
             subcategory: "chips",
-            code: "G.GAME.current_round.current_hand.chips"
+            code: "G.GAME.current_round.current_hand.chips",
           },
           {
             id: "current_scoring_chips",
@@ -449,7 +451,7 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
             description: "The Current Amount of Chips in scoring",
             category: "scoring",
             subcategory: "chips",
-            code: "hand_chips"
+            code: "hand_chips",
           },
           {
             id: "cumulative_chips",
@@ -457,7 +459,7 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
             description: "The Cumulative Chip Total of all scoring cards",
             category: "scoring",
             subcategory: "chips",
-            code: "(function() local chips_sum = 0; for _, playing_card in pairs(context.scoring_hand or {}) do chips_sum = chips_sum + playing_card.base.nominal end; return chips_sum end)"
+            code: "(function() local chips_sum = 0; for _, playing_card in pairs(context.scoring_hand or {}) do chips_sum = chips_sum + playing_card.base.nominal end; return chips_sum end)",
           },
         ],
       },
@@ -471,7 +473,7 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
             description: "The Initial Amount of Mult of the played Poker Hand",
             category: "scoring",
             subcategory: "mult",
-            code: "G.GAME.current_round.current_hand.mult"
+            code: "G.GAME.current_round.current_hand.mult",
           },
           {
             id: "current_scoring_mult",
@@ -479,7 +481,7 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
             description: "The Current Amount of Mult in scoring",
             category: "scoring",
             subcategory: "mult",
-            code: "mult"
+            code: "mult",
           },
           {
             id: "highest_card_mult",
@@ -504,7 +506,7 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
   {
     id: "hand",
     label: "Hand",
-    icon: HandRaisedIcon,
+    icon: HandPalm,
     variables: [],
     subcategories: [
       {
@@ -814,7 +816,7 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
   {
     id: "consumables",
     label: "Consumables",
-    icon: CreditCardIcon,
+    icon: CreditCard,
     variables: [
       {
         id: "consumables_held",
@@ -898,7 +900,7 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
   {
     id: "jokers",
     label: "Jokers",
-    icon: FaceSmileIcon,
+    icon: Smiley,
     variables: [],
     subcategories: [
       {
@@ -926,7 +928,7 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
             category: "jokers",
             code: "((G.jokers and G.jokers.config.card_limit or 0) - #(G.jokers and G.jokers.cards or {}))",
           },
-        ]
+        ],
       },
       {
         id: "joker_rarities",
@@ -1001,7 +1003,7 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
   {
     id: "poker_hands",
     label: "Poker Hands",
-    icon: PlayIcon,
+    icon: Play,
     variables: [
       {
         id: "current_hand_played_count",
@@ -1259,7 +1261,7 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
   {
     id: "game_state",
     label: "Game State",
-    icon: ChartBarIcon,
+    icon: ChartBar,
     variables: [
       {
         id: "current_ante",
@@ -1329,7 +1331,7 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
   {
     id: "global_statistics",
     label: "Global statistics",
-    icon: PresentationChartBarIcon,
+    icon: PresentationChart,
     variables: [
       {
         id: "best_hand",
@@ -1369,7 +1371,8 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
       {
         id: "best_win_streak",
         label: "Best Win Streak",
-        description: "The Highest amount of Wins the Player managed to get in a row",
+        description:
+          "The Highest amount of Wins the Player managed to get in a row",
         category: "global_statistics",
         code: "G.PROFILES[G.SETTINGS.profile].high_scores.win_streak.amt",
       },
@@ -1389,7 +1392,8 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
           {
             id: "collection_player_amount",
             label: "Player Amount",
-            description: "the Number of Items the Player has currently Discovered and Unlock",
+            description:
+              "the Number of Items the Player has currently Discovered and Unlock",
             category: "global_statistics",
             subcategory: "collection_stats",
             code: "G.PROFILES[G.SETTINGS.profile].high_scores.collection.amt",
@@ -1410,9 +1414,9 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
             subcategory: "collection_stats",
             code: "math.floor(0.01+100*G.PROFILES[G.SETTINGS.profile].progress.discovered.tally/G.PROFILES[G.SETTINGS.profile].progress.discovered.of)",
           },
-           ]
-         },
-         {
+        ],
+      },
+      {
         id: "challenges_stats",
         label: "Challenges Stats",
         variables: [
@@ -1440,9 +1444,9 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
             subcategory: "challenges_stats",
             code: "math.floor(0.01+100*G.PROFILES[G.SETTINGS.profile].progress.challenges.tally/G.PROFILES[G.SETTINGS.profile].progress.challenges.of)",
           },
-           ]
-         },
-         {
+        ],
+      },
+      {
         id: "joker_sticker_stats",
         label: "Joker Sticker Stats",
         variables: [
@@ -1457,7 +1461,8 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
           {
             id: "joker_sticker_total_amount",
             label: "Total Amount",
-            description: "Total Number of Sticker the Player can have on Jokers",
+            description:
+              "Total Number of Sticker the Player can have on Jokers",
             category: "global_statistics",
             subcategory: "joker_sticker_stats",
             code: "G.PROFILES[G.SETTINGS.profile].progress.joker_stickers.of",
@@ -1470,9 +1475,9 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
             subcategory: "joker_sticker_stats",
             code: "math.floor(0.01+100*G.PROFILES[G.SETTINGS.profile].progress.joker_stickers.tally/G.PROFILES[G.SETTINGS.profile].progress.joker_stickers.of)",
           },
-           ]
-         },
-         {
+        ],
+      },
+      {
         id: "deck_stake_wins_stats",
         label: "Deck Stake Wins Stats",
         variables: [
@@ -1487,7 +1492,8 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
           {
             id: "deck_stake_wins_total_amount",
             label: "Total Amount",
-            description: "Total Number of how may Stakes the Player can have on Decks",
+            description:
+              "Total Number of how may Stakes the Player can have on Decks",
             category: "global_statistics",
             subcategory: "deck_stake_wins_stats",
             code: "G.PROFILES[G.SETTINGS.profile].progress.deck_stakes.of",
@@ -1500,9 +1506,9 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
             subcategory: "deck_stake_wins_stats",
             code: "math.floor(0.01+100*G.PROFILES[G.SETTINGS.profile].progress.deck_stake_wins.tally/G.PROFILES[G.SETTINGS.profile].progress.deck_stake_wins.of)",
           },
-           ]
-         },
-         {
+        ],
+      },
+      {
         id: "card_stats",
         label: "Card Stats",
         variables: [
@@ -1541,7 +1547,8 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
           {
             id: "card_used_consumeable5",
             label: "Most Used Consumeable in the Middle",
-            description: "Number of Times the Consumeable in the Middle has been used",
+            description:
+              "Number of Times the Consumeable in the Middle has been used",
             category: "global_statistics",
             subcategory: "card_stats",
             code: "(function()local all_most_used_consumeables = {};for k, v in pairs(G.PROFILES[G.SETTINGS.profile].consumeable_usage) do if G.P_CENTERS[k] then all_most_used_consumeables[#all_most_used_consumeables + 1] ={count = v.count, key = k};end end;table.sort(all_most_used_consumeables, function(a, b) return a.count > b.count end); return all_most_used_consumeables[5].count end)()", // thank you so much Larswijn :)
@@ -1565,7 +1572,8 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
           {
             id: "card_redeemed_voucher5",
             label: "Most Redeemed Voucher in the Middle",
-            description: "Number of Times the Voucher in the Middle has been redeemed",
+            description:
+              "Number of Times the Voucher in the Middle has been redeemed",
             category: "global_statistics",
             subcategory: "card_stats",
             code: "(function()local all_most_used_vouchers = {};for k, v in pairs(G.PROFILES[G.SETTINGS.profile].voucher_usage) do if G.P_CENTERS[k] then all_most_used_vouchers[#all_most_used_vouchers + 1] ={count = v.count, key = k};end end;table.sort(all_most_used_vouchers, function(a, b) return a.count > b.count end); return all_most_used_vouchers[5].count end)()", // thank you so much Larswijn :)
@@ -1578,16 +1586,17 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
             subcategory: "card_stats",
             code: "(function()local all_most_used_vouchers = {};for k, v in pairs(G.PROFILES[G.SETTINGS.profile].voucher_usage) do if G.P_CENTERS[k] then all_most_used_vouchers[#all_most_used_vouchers + 1] ={count = v.count, key = k};end end;table.sort(all_most_used_vouchers, function(a, b) return a.count > b.count end); return all_most_used_vouchers[10].count end)()", // thank you so much Larswijn :)",
           },
-           ]
-         },
-         {
+        ],
+      },
+      {
         id: "career_stats",
         label: "Career Stats",
         variables: [
           {
             id: "max_round_interest_cap_streak",
             label: "Max Interst Cap in a row",
-            description: "The amount of Rounds in a row that you hit Interest Cap",
+            description:
+              "The amount of Rounds in a row that you hit Interest Cap",
             category: "global_statistics",
             subcategory: "career_stats",
             code: "(G.PROFILES[G.SETTINGS.profile].career_stats.c_round_interest_cap_streak or 2)",
@@ -1603,7 +1612,8 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
           {
             id: "total_shop_dollars_spent",
             label: "Total Dollars Spent on the Shop",
-            description: "Total Number of Dollars Spent on the Shop by the Player",
+            description:
+              "Total Number of Dollars Spent on the Shop by the Player",
             category: "global_statistics",
             subcategory: "career_stats",
             code: "(G.PROFILES[G.SETTINGS.profile].career_stats.c_shop_dollars_spent or 0)",
@@ -1611,7 +1621,8 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
           {
             id: "total_tarots_bought",
             label: "Total Tarot cards Bought",
-            description: "Total Number of Tarot cards the Player Bought on The Shop",
+            description:
+              "Total Number of Tarot cards the Player Bought on The Shop",
             category: "global_statistics",
             subcategory: "career_stats",
             code: "(G.PROFILES[G.SETTINGS.profile].career_stats.c_tarots_bought or 0)",
@@ -1619,7 +1630,8 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
           {
             id: "total_planets_bought",
             label: "Total Planet cards Bought",
-            description: "Total Number of Planet cards the Player Bought on The Shop",
+            description:
+              "Total Number of Planet cards the Player Bought on The Shop",
             category: "global_statistics",
             subcategory: "career_stats",
             code: "(G.PROFILES[G.SETTINGS.profile].career_stats.c_planets_bought or 0)",
@@ -1627,7 +1639,8 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
           {
             id: "total_playing_cards_bought",
             label: "Total Playing cards Bought",
-            description: "Total Number of Playing cards the Player Bought on The Shop",
+            description:
+              "Total Number of Playing cards the Player Bought on The Shop",
             category: "global_statistics",
             subcategory: "career_stats",
             code: "(G.PROFILES[G.SETTINGS.profile].career_stats.c_playing_cards_bought or 0)",
@@ -1635,7 +1648,8 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
           {
             id: "total_vouchers_bought",
             label: "Total Vouchers Bought",
-            description: "Total Number of Vouchers the Player Bought on The Shop",
+            description:
+              "Total Number of Vouchers the Player Bought on The Shop",
             category: "global_statistics",
             subcategory: "challenges_stats",
             code: "(G.PROFILES[G.SETTINGS.profile].career_stats.c_vouchers_bought or 0)",
@@ -1643,7 +1657,8 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
           {
             id: "total_arcana_used",
             label: "Total Used Arcana Packs",
-            description: "Total Number of how many Arcana Packs the Player has ever used",
+            description:
+              "Total Number of how many Arcana Packs the Player has ever used",
             category: "global_statistics",
             subcategory: "career_stats",
             code: "(G.PROFILES[G.SETTINGS.profile].career_stats.c_tarot_reading_used or 0)",
@@ -1651,7 +1666,8 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
           {
             id: "total_celestial_used",
             label: "Total Used Celestial Packs",
-            description: "Total Number of how many Celestial Packs the Player has ever used",
+            description:
+              "Total Number of how many Celestial Packs the Player has ever used",
             category: "global_statistics",
             subcategory: "career_stats",
             code: "(G.PROFILES[G.SETTINGS.profile].career_stats.c_planetarium_used or 0)",
@@ -1659,7 +1675,8 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
           {
             id: "total_shop_rerolls",
             label: "Total Shop Rellored",
-            description: "Total Number of Times the Player has Rellored the Shop",
+            description:
+              "Total Number of Times the Player has Rellored the Shop",
             category: "global_statistics",
             subcategory: "career_stats",
             code: "(G.PROFILES[G.SETTINGS.profile].career_stats.c_shop_rerolls or 0)",
@@ -1739,19 +1756,20 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
           {
             id: "single_hand_round_streak",
             label: "Total 1 Hand Round Wins",
-            description: "Total Number of Times the Player has Win a Round by Playing 1 Hand",
+            description:
+              "Total Number of Times the Player has Win a Round by Playing 1 Hand",
             category: "global_statistics",
             subcategory: "career_stats",
             code: "(G.PROFILES[G.SETTINGS.profile].career_stats.c_single_hand_round_streak or 0)",
           },
-           ]
-         },
-       ]
-     },
+        ],
+      },
+    ],
+  },
   {
     id: "money_thresholds",
     label: "Money Thresholds",
-    icon: BanknotesIcon,
+    icon: CurrencyDollar,
     variables: [],
     subcategories: [
       {
@@ -1829,7 +1847,7 @@ export const GAME_VARIABLE_CATEGORIES: GameVariableCategory[] = [
   {
     id: "special",
     label: "Special",
-    icon: SparklesIcon,
+    icon: Sparkle,
     variables: [],
     subcategories: [
       {
@@ -1948,25 +1966,25 @@ export const getGameVariableById = (id: string): GameVariable | undefined => {
 };
 
 export const getGameVariablesByCategory = (
-  categoryId: string
+  categoryId: string,
 ): GameVariable[] => {
   const category = GAME_VARIABLE_CATEGORIES.find(
-    (cat) => cat.id === categoryId
+    (cat) => cat.id === categoryId,
   );
   return category ? category.variables : [];
 };
 
 export const getGameVariablesBySubcategory = (
   categoryId: string,
-  subcategoryId: string
+  subcategoryId: string,
 ): GameVariable[] => {
   const category = GAME_VARIABLE_CATEGORIES.find(
-    (cat) => cat.id === categoryId
+    (cat) => cat.id === categoryId,
   );
   if (!category?.subcategories) return [];
 
   const subcategory = category.subcategories.find(
-    (sub) => sub.id === subcategoryId
+    (sub) => sub.id === subcategoryId,
   );
   return subcategory ? subcategory.variables : [];
 };
