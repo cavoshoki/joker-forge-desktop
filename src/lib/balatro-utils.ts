@@ -318,6 +318,7 @@ export interface DeckData extends GameObjectData {
 // =============================================================================
 
 interface RegistryState {
+  jokers: JokerData[];
   customRarities: RarityData[];
   consumableSets: ConsumableSetData[];
   sounds: SoundData[];
@@ -332,6 +333,7 @@ interface RegistryState {
 }
 
 let registryState: RegistryState = {
+  jokers: [],
   customRarities: [],
   consumableSets: [],
   sounds: [],
@@ -439,6 +441,7 @@ const VANILLA_SEALS = [
 
 export const DataRegistry = {
   update: (
+    jokers: JokerData[],
     customRarities: RarityData[],
     consumableSets: ConsumableSetData[],
     sounds: SoundData[],
@@ -452,6 +455,7 @@ export const DataRegistry = {
     modPrefix: string,
   ) => {
     registryState = {
+      jokers,
       customRarities,
       consumableSets,
       sounds,
@@ -493,6 +497,20 @@ export const DataRegistry = {
       label: sound.key,
     }));
     return [...VANILLA_SOUNDS, ...custom];
+  },
+
+  getJokers: (): Array<{ value: string; label: string }> => {
+    const vanilla = JOKERS.map((joker) => ({
+      value: joker.key,
+      label: joker.label,
+    }));
+
+    const custom = registryState.jokers.map((joker) => ({
+      value: `${registryState.modPrefix}_${joker.objectKey}`,
+      label: joker.name || "Unnamed Joker",
+    }));
+
+    return [...vanilla, ...custom];
   },
 
   getConsumables: (): Array<{ value: string; label: string; set: string }> => {
@@ -615,6 +633,7 @@ export const getModPrefix = () => {
 };
 
 export const updateDataRegistry = (
+  jokers: any[],
   customRarities: any[],
   consumableSets: any[],
   sounds: any[],
@@ -628,6 +647,7 @@ export const updateDataRegistry = (
   modPrefix: string,
 ) => {
   DataRegistry.update(
+    jokers as JokerData[],
     customRarities as RarityData[],
     consumableSets as ConsumableSetData[],
     sounds as SoundData[],
@@ -1556,6 +1576,10 @@ export const JOKERS = [
 
 export const JOKER_KEYS = JOKERS.map((joker) => joker.key);
 export const JOKER_LABELS = JOKERS.map((joker) => joker.label);
+
+export const CUSTOM_JOKERS = () =>
+  DataRegistry.getJokers().filter((joker) => !joker.value.startsWith("j_"));
+export const ALL_JOKERS = () => DataRegistry.getJokers();
 
 // Ranks
 export const RANKS = [

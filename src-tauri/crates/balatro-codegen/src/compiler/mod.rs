@@ -4,9 +4,29 @@ pub mod effects;
 pub mod triggers;
 pub mod values;
 
+// Game object compiler modules
+pub mod consumable;
+pub mod enhancement;
+pub mod seal;
+pub mod edition;
+pub mod voucher;
+pub mod deck;
+pub mod rarity;
+pub mod booster;
+
 use crate::lua_ast::*;
 use crate::types::*;
 use context::CompileContext;
+
+// Re-export compile functions for each game object type
+pub use consumable::{compile_consumable, compile_consumable_type};
+pub use enhancement::compile_enhancement;
+pub use seal::compile_seal;
+pub use edition::compile_edition;
+pub use voucher::compile_voucher;
+pub use deck::compile_deck;
+pub use rarity::compile_rarity;
+pub use booster::compile_booster;
 
 /// Compile a complete joker definition into a Lua chunk.
 pub fn compile_joker(joker: &JokerDef, mod_prefix: &str) -> Chunk {
@@ -116,25 +136,25 @@ pub fn compile_node_snippet(
 // Internal compilation
 // ---------------------------------------------------------------------------
 
-struct RuleOutput {
-    trigger: String,
-    condition_expr: Option<Expr>,
-    effect_stmts: Vec<Stmt>,
-    is_passive: bool,
-    passive_outputs: Vec<effects::passive::PassiveEffectOutput>,
-    passive_hooks: Vec<PassiveHookSpec>,
-    has_retrigger: bool,
-    has_destroy: bool,
-    blind_rewards: Vec<BlindRewardOutput>,
+pub(crate) struct RuleOutput {
+    pub(crate) trigger: String,
+    pub(crate) condition_expr: Option<Expr>,
+    pub(crate) effect_stmts: Vec<Stmt>,
+    pub(crate) is_passive: bool,
+    pub(crate) passive_outputs: Vec<effects::passive::PassiveEffectOutput>,
+    pub(crate) passive_hooks: Vec<PassiveHookSpec>,
+    pub(crate) has_retrigger: bool,
+    pub(crate) has_destroy: bool,
+    pub(crate) blind_rewards: Vec<BlindRewardOutput>,
 }
 
-struct BlindRewardOutput {
-    condition_expr: Option<Expr>,
-    amount_expr: Expr,
-    boss_only: bool,
+pub(crate) struct BlindRewardOutput {
+    pub(crate) condition_expr: Option<Expr>,
+    pub(crate) amount_expr: Expr,
+    pub(crate) boss_only: bool,
 }
 
-enum PassiveHookSpec {
+pub(crate) enum PassiveHookSpec {
     DiscountItems {
         joker_key: String,
         discount_type: String,
@@ -153,7 +173,7 @@ enum PassiveHookSpec {
     },
 }
 
-fn compile_rules(rules: &[RuleDef], ctx: &mut CompileContext) -> Vec<RuleOutput> {
+pub(crate) fn compile_rules(rules: &[RuleDef], ctx: &mut CompileContext) -> Vec<RuleOutput> {
     rules
         .iter()
         .map(|rule| compile_single_rule(rule, ctx))
@@ -1161,6 +1181,170 @@ fn build_in_pool(appearance: &AppearanceDef, _ctx: &CompileContext) -> Option<Ex
 
     Some(Expr::Function {
         params: vec!["self".into(), "args".into()],
+        body,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Shared helpers for non-joker game objects
+// ---------------------------------------------------------------------------
+
+/// Build a generic `calculate` function for consumables, vouchers, decks, etc.
+/// Filters out "card_used" triggers (handled by use/redeem/apply hooks).
+pub(crate) fn build_shared_calculate_function(
+    rule_outputs: &[RuleOutput],
+    ctx: &CompileContext,
+) -> Option<Expr> {
+    let non_passive: Vec<&RuleOutput> = rule_outputs
+        .iter()
+        .filter(|r| !r.is_passive && r.trigger != "card_used" && !r.effect_stmts.is_empty())
+        .collect();
+
+    if non_passive.is_empty() {
+        return None;
+    }
+
+    let mut body: Vec<Stmt> = Vec::new();
+
+    let mut triggers_seen: Vec<String> = Vec::new();
+    for ro in &non_passive {
+        if !triggers_seen.contains(&ro.trigger) {
+            triggers_seen.push(ro.trigger.clone());
+        }
+    }
+
+    for trigger in &triggers_seen {
+        let rules_for_trigger: Vec<&&RuleOutput> = non_passive
+            .iter()
+            .filter(|r| r.trigger == *trigger)
+            .collect();
+
+        let trigger_ctx = triggers::trigger_context(ctx.object_type, trigger, false);
+
+        let mut trigger_body: Vec<Stmt> = Vec::new();
+        for ro in &rules_for_trigger {
+            let stmts = ro.effect_stmts.clone();
+            if let Some(cond) = &ro.condition_expr {
+                trigger_body.push(lua_if(cond.clone(), stmts));
+            } else {
+                trigger_body.extend(stmts);
+            }
+        }
+
+        if !trigger_body.is_empty() {
+            body.push(lua_if(trigger_ctx, trigger_body));
+        }
+    }
+
+    if body.is_empty() {
+        return None;
+    }
+
+    Some(Expr::Function {
+        params: vec!["self".into(), "card".into(), "context".into()],
+        body,
+    })
+}
+
+/// Build a shared `loc_vars` function suitable for consumables, vouchers, decks, etc.
+/// Uses the same pattern as the joker loc_vars but without joker-specific features.
+pub(crate) fn build_shared_loc_vars(
+    ctx: &CompileContext,
+    _rule_outputs: &[RuleOutput],
+) -> Option<Expr> {
+    let vars = ctx.config_vars();
+    let has_user_vars = !ctx.user_vars().is_empty();
+
+    if vars.is_empty() && !has_user_vars {
+        return None;
+    }
+
+    let mut body: Vec<Stmt> = Vec::new();
+
+    let mut var_refs: Vec<TableEntry> = vars
+        .iter()
+        .filter(|v| !v.name.starts_with("odds_") && !v.name.starts_with("numerator_"))
+        .map(|v| TableEntry::Value(lua_field(lua_raw_expr("self.config.extra"), &v.name)))
+        .collect();
+
+    // User variables
+    for uv in ctx.user_vars() {
+        match uv.var_type {
+            crate::types::UserVarType::Suit => {
+                let default_suit = uv.initial_value.to_string_lossy();
+                var_refs.push(TableEntry::Value(lua_raw_expr(format!(
+                    "localize((G.GAME.current_round.{}_card or {{}}).suit or '{}', 'suits_singular')",
+                    uv.name, default_suit
+                ))));
+            }
+            crate::types::UserVarType::Rank => {
+                let default_rank = uv.initial_value.to_string_lossy();
+                var_refs.push(TableEntry::Value(lua_raw_expr(format!(
+                    "localize((G.GAME.current_round.{}_card or {{}}).rank or '{}', 'ranks')",
+                    uv.name, default_rank
+                ))));
+            }
+            crate::types::UserVarType::PokerHand => {
+                let default_hand = uv.initial_value.to_string_lossy();
+                var_refs.push(TableEntry::Value(lua_raw_expr(format!(
+                    "localize((G.GAME.current_round.{}_hand or '{}'), 'poker_hands')",
+                    uv.name, default_hand
+                ))));
+            }
+            _ => {
+                var_refs.push(TableEntry::Value(lua_field(
+                    lua_raw_expr("self.config.extra"),
+                    &uv.name,
+                )));
+            }
+        }
+    }
+
+    // Probability variables
+    let mut probability_pairs: Vec<(String, String)> = vars
+        .iter()
+        .filter_map(|v| {
+            if !v.name.starts_with("odds_") {
+                return None;
+            }
+            let suffix = v.name.trim_start_matches("odds_");
+            Some((format!("numerator_{}", suffix), v.name.clone()))
+        })
+        .collect();
+    probability_pairs.sort();
+    probability_pairs.dedup();
+
+    for (index, (num, den)) in probability_pairs.into_iter().enumerate() {
+        let suffix = if index == 0 {
+            String::new()
+        } else {
+            (index + 1).to_string()
+        };
+        body.push(lua_raw_stmt(format!(
+            "local new_numerator{suffix}, new_denominator{suffix} = SMODS.get_probability_vars(card, self.config.extra.{num}, self.config.extra.{den}, '{key}')",
+            suffix = suffix,
+            num = num,
+            den = den,
+            key = ctx.smods_key(),
+        )));
+        var_refs.push(TableEntry::Value(lua_ident(format!(
+            "new_numerator{}",
+            suffix
+        ))));
+        var_refs.push(TableEntry::Value(lua_ident(format!(
+            "new_denominator{}",
+            suffix
+        ))));
+    }
+
+    let return_entries = vec![TableEntry::KeyValue(
+        "vars".to_string(),
+        lua_table_raw(var_refs),
+    )];
+    body.push(lua_return(lua_table_raw(return_entries)));
+
+    Some(Expr::Function {
+        params: vec!["self".into(), "info_queue".into(), "card".into()],
         body,
     })
 }

@@ -275,6 +275,7 @@ export const useProjectData = () => {
 
   useEffect(() => {
     updateDataRegistry(
+      currentProject.jokers,
       currentProject.rarities,
       currentProject.consumableSets,
       currentProject.sounds,

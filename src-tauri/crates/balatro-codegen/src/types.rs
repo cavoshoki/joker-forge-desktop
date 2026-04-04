@@ -24,9 +24,14 @@ pub struct ModConfig {
 pub enum ObjectType {
     Joker,
     Consumable,
-    Card,
+    ConsumableType,
+    Enhancement,
+    Seal,
+    Edition,
+    Rarity,
     Voucher,
     Deck,
+    Booster,
 }
 
 impl ObjectType {
@@ -34,9 +39,14 @@ impl ObjectType {
         match self {
             ObjectType::Joker => "joker",
             ObjectType::Consumable => "consumable",
-            ObjectType::Card => "card",
+            ObjectType::ConsumableType => "consumable_type",
+            ObjectType::Enhancement => "enhancement",
+            ObjectType::Seal => "seal",
+            ObjectType::Edition => "edition",
+            ObjectType::Rarity => "rarity",
             ObjectType::Voucher => "voucher",
             ObjectType::Deck => "deck",
+            ObjectType::Booster => "booster",
         }
     }
 
@@ -44,7 +54,24 @@ impl ObjectType {
     pub fn ability_path(&self) -> &'static str {
         match self {
             ObjectType::Deck => "back.ability.extra",
+            ObjectType::Seal => "card.ability.seal.extra",
             _ => "card.ability.extra",
+        }
+    }
+
+    /// The SMODS API name used for table-call generation.
+    pub fn smods_type(&self) -> &'static str {
+        match self {
+            ObjectType::Joker => "SMODS.Joker",
+            ObjectType::Consumable => "SMODS.Consumable",
+            ObjectType::ConsumableType => "SMODS.ConsumableType",
+            ObjectType::Enhancement => "SMODS.Enhancement",
+            ObjectType::Seal => "SMODS.Seal",
+            ObjectType::Edition => "SMODS.Edition",
+            ObjectType::Rarity => "SMODS.Rarity",
+            ObjectType::Voucher => "SMODS.Voucher",
+            ObjectType::Deck => "SMODS.Back",
+            ObjectType::Booster => "SMODS.Booster",
         }
     }
 }
@@ -124,6 +151,275 @@ pub struct AppearanceDef {
 pub struct UnlockDef {
     pub condition: String,
     pub description: Vec<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Consumable definition
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConsumableDef {
+    pub key: String,
+    pub name: String,
+    pub description: Vec<String>,
+    pub set: String,
+    #[serde(default)]
+    pub cost: Option<i32>,
+    #[serde(default)]
+    pub unlocked: Option<bool>,
+    #[serde(default)]
+    pub discovered: Option<bool>,
+    #[serde(default)]
+    pub hidden: Option<bool>,
+    #[serde(default)]
+    pub can_repeat_soul: Option<bool>,
+    pub atlas: String,
+    pub pos: AtlasPos,
+    #[serde(default)]
+    pub soul_pos: Option<AtlasPos>,
+    pub rules: Vec<RuleDef>,
+    #[serde(default)]
+    pub user_variables: Vec<UserVariableDef>,
+}
+
+// ---------------------------------------------------------------------------
+// ConsumableType definition (custom consumable sets)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConsumableTypeDef {
+    pub key: String,
+    pub name: String,
+    #[serde(default)]
+    pub collection_name: Option<String>,
+    pub primary_colour: String,
+    pub secondary_colour: String,
+    pub collection_rows: (i32, i32),
+    #[serde(default)]
+    pub default_card: Option<String>,
+    #[serde(default)]
+    pub shop_rate: Option<f64>,
+}
+
+// ---------------------------------------------------------------------------
+// Enhancement definition
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnhancementDef {
+    pub key: String,
+    pub name: String,
+    pub description: Vec<String>,
+    pub atlas: String,
+    pub pos: AtlasPos,
+    pub rules: Vec<RuleDef>,
+    #[serde(default)]
+    pub user_variables: Vec<UserVariableDef>,
+    #[serde(default)]
+    pub any_suit: Option<bool>,
+    #[serde(default)]
+    pub replace_base_card: Option<bool>,
+    #[serde(default)]
+    pub no_rank: Option<bool>,
+    #[serde(default)]
+    pub no_suit: Option<bool>,
+    #[serde(default)]
+    pub always_scores: Option<bool>,
+    #[serde(default)]
+    pub unlocked: Option<bool>,
+    #[serde(default)]
+    pub discovered: Option<bool>,
+    #[serde(default)]
+    pub no_collection: Option<bool>,
+    #[serde(default)]
+    pub weight: Option<f64>,
+}
+
+// ---------------------------------------------------------------------------
+// Seal definition
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SealDef {
+    pub key: String,
+    pub name: String,
+    pub description: Vec<String>,
+    pub atlas: String,
+    pub pos: AtlasPos,
+    pub rules: Vec<RuleDef>,
+    #[serde(default)]
+    pub user_variables: Vec<UserVariableDef>,
+    #[serde(default)]
+    pub badge_colour: Option<String>,
+    #[serde(default)]
+    pub unlocked: Option<bool>,
+    #[serde(default)]
+    pub discovered: Option<bool>,
+    #[serde(default)]
+    pub no_collection: Option<bool>,
+    #[serde(default = "default_seal_sound")]
+    pub sound: String,
+    #[serde(default)]
+    pub pitch: Option<f64>,
+    #[serde(default)]
+    pub volume: Option<f64>,
+}
+
+fn default_seal_sound() -> String {
+    "gold_seal".to_string()
+}
+
+// ---------------------------------------------------------------------------
+// Edition definition
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EditionDef {
+    pub key: String,
+    pub name: String,
+    pub description: Vec<String>,
+    pub rules: Vec<RuleDef>,
+    #[serde(default)]
+    pub user_variables: Vec<UserVariableDef>,
+    #[serde(default)]
+    pub shader: Option<String>,
+    #[serde(default)]
+    pub in_shop: Option<bool>,
+    #[serde(default)]
+    pub weight: Option<f64>,
+    #[serde(default)]
+    pub extra_cost: Option<i32>,
+    #[serde(default)]
+    pub apply_to_float: Option<bool>,
+    #[serde(default)]
+    pub badge_colour: Option<String>,
+    #[serde(default)]
+    pub sound: Option<String>,
+    #[serde(default)]
+    pub pitch: Option<f64>,
+    #[serde(default)]
+    pub volume: Option<f64>,
+    #[serde(default)]
+    pub disable_shadow: Option<bool>,
+    #[serde(default)]
+    pub disable_base_shader: Option<bool>,
+    #[serde(default)]
+    pub unlocked: Option<bool>,
+    #[serde(default)]
+    pub discovered: Option<bool>,
+    #[serde(default)]
+    pub no_collection: Option<bool>,
+}
+
+// ---------------------------------------------------------------------------
+// Rarity definition
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RarityDef {
+    pub key: String,
+    pub name: String,
+    pub badge_colour: String,
+    #[serde(default = "default_rarity_weight")]
+    pub default_weight: f64,
+}
+
+fn default_rarity_weight() -> f64 {
+    1.0
+}
+
+// ---------------------------------------------------------------------------
+// Voucher definition
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VoucherDef {
+    pub key: String,
+    pub name: String,
+    pub description: Vec<String>,
+    #[serde(default)]
+    pub unlock_description: Vec<String>,
+    #[serde(default)]
+    pub cost: Option<i32>,
+    #[serde(default)]
+    pub unlocked: Option<bool>,
+    #[serde(default)]
+    pub discovered: Option<bool>,
+    #[serde(default)]
+    pub no_collection: Option<bool>,
+    #[serde(default)]
+    pub can_repeat_soul: Option<bool>,
+    #[serde(default)]
+    pub requires: Option<String>,
+    pub atlas: String,
+    pub pos: AtlasPos,
+    #[serde(default)]
+    pub soul_pos: Option<AtlasPos>,
+    pub rules: Vec<RuleDef>,
+    #[serde(default)]
+    pub user_variables: Vec<UserVariableDef>,
+    #[serde(default)]
+    pub draw_shader_sprite: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Deck definition
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeckDef {
+    pub key: String,
+    pub name: String,
+    pub description: Vec<String>,
+    pub atlas: String,
+    pub pos: AtlasPos,
+    pub rules: Vec<RuleDef>,
+    #[serde(default)]
+    pub user_variables: Vec<UserVariableDef>,
+    #[serde(default)]
+    pub unlocked: Option<bool>,
+    #[serde(default)]
+    pub discovered: Option<bool>,
+    #[serde(default)]
+    pub no_collection: Option<bool>,
+    /// Voucher keys to include with this deck (e.g., "v_seed_money").
+    #[serde(default)]
+    pub config_vouchers: Vec<String>,
+    /// Consumable keys to include with this deck (e.g., "c_fool").
+    #[serde(default)]
+    pub config_consumables: Vec<String>,
+    #[serde(default)]
+    pub no_interest: bool,
+    #[serde(default)]
+    pub no_faces: bool,
+    #[serde(default)]
+    pub erratic_deck: bool,
+}
+
+// ---------------------------------------------------------------------------
+// Booster definition
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BoosterDef {
+    pub key: String,
+    pub name: String,
+    pub description: Vec<String>,
+    pub atlas: String,
+    pub pos: AtlasPos,
+    #[serde(default)]
+    pub cost: Option<i32>,
+    #[serde(default)]
+    pub weight: Option<f64>,
+    #[serde(default)]
+    pub kind: Option<String>,
+    #[serde(default)]
+    pub draw: Option<i32>,
+    #[serde(default)]
+    pub extra: Option<i32>,
+    #[serde(default)]
+    pub discovered: Option<bool>,
+    pub rules: Vec<RuleDef>,
 }
 
 // ---------------------------------------------------------------------------

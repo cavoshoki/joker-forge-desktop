@@ -1175,12 +1175,33 @@ const ParameterField: React.FC<ParameterFieldProps> = ({
 
     case "text": {
       const isVariableName = param.id === "variable_name";
+      let textSuggestions: Array<{ value: string; label: string }> = [];
+
+      if (typeof param.options === "function") {
+        textSuggestions = (param.options(parentValues || {}) || []).map(
+          (option) => ({
+            value: String(option.value),
+            label: String(option.label),
+          }),
+        );
+      } else if (Array.isArray(param.options)) {
+        textSuggestions = param.options.map((option) => ({
+          value: String(option.value),
+          label: String(option.label),
+        }));
+      }
+
+      const suggestionListId =
+        textSuggestions.length > 0
+          ? `rb-text-suggestions-${selectedRule.id}-${param.id}`
+          : undefined;
 
       return (
         <div>
           <InputField
             label={String(param.label)}
             value={(value as string) || ""}
+            list={suggestionListId}
             onChange={(e) => {
               const newValue = e.target.value;
               onChange({ value: newValue, valueType: "text" });
@@ -1196,6 +1217,15 @@ const ParameterField: React.FC<ParameterFieldProps> = ({
             size="sm"
             error={isVariableName ? inputError : undefined}
           />
+          {suggestionListId && (
+            <datalist id={suggestionListId}>
+              {textSuggestions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </datalist>
+          )}
           {isVariableName && inputError && (
             <div className="flex items-center gap-2 mt-1 text-balatro-red text-sm">
               <Warning className="h-4 w-4" />

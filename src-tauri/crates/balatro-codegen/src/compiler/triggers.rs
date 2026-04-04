@@ -29,9 +29,18 @@ pub fn trigger_context_for_rule(
     let ctx = match object_type {
         ObjectType::Joker => joker_trigger_context(trigger, blueprint_compat),
         ObjectType::Consumable => consumable_trigger_context(trigger),
-        ObjectType::Card => card_trigger_context(trigger),
+        ObjectType::Enhancement | ObjectType::Seal | ObjectType::Edition => {
+            card_trigger_context(trigger, object_type)
+        }
         ObjectType::Voucher => voucher_trigger_context(trigger),
         ObjectType::Deck => deck_trigger_context(trigger),
+        // These types don't use calculate hooks with trigger contexts
+        ObjectType::ConsumableType | ObjectType::Rarity | ObjectType::Booster => {
+            return lua_raw_expr(format!(
+                "--[[ {} has no trigger context ]] false",
+                object_type.as_str()
+            ))
+        }
     };
 
     ctx.unwrap_or_else(|| {
@@ -63,15 +72,17 @@ pub fn retrigger_trigger_context(
                     lua_eq(ctx("cardarea"), lua_path(&["G", "hand"])),
                     lua_and(
                         ctx("end_of_round"),
-                        lua_raw_expr("(next(context.card_effects[1]) or #context.card_effects > 1)"),
+                        lua_raw_expr(
+                            "(next(context.card_effects[1]) or #context.card_effects > 1)",
+                        ),
                     ),
                 ),
             );
             Some(maybe_blueprint(base, blueprint_compat))
         }
-        (ObjectType::Card, "card_scored") => {
-            Some(lua_and(ctx("repetition"), lua_eq(ctx("cardarea"), lua_path(&["G", "play"]))))
-        }
+        (ObjectType::Enhancement | ObjectType::Seal | ObjectType::Edition, "card_scored") => Some(
+            lua_and(ctx("repetition"), lua_eq(ctx("cardarea"), lua_path(&["G", "play"]))),
+        ),
         _ => None,
     }
 }
@@ -84,53 +95,57 @@ fn joker_trigger_context(trigger: &str, bp: bool) -> Option<Expr> {
     let expr = match trigger {
         // Hand scoring
         "hand_played" => bp_check(
-            lua_and(lua_eq(ctx("cardarea"), lua_path(&["G", "jokers"])), ctx("joker_main")),
+            lua_and(
+                lua_eq(ctx("cardarea"), lua_path(&["G", "jokers"])),
+                ctx("joker_main"),
+            ),
             bp,
         ),
         "before_hand_played" => bp_check(
-            lua_and(ctx("before"), lua_eq(ctx("cardarea"), lua_path(&["G", "jokers"]))),
+            lua_and(
+                ctx("before"),
+                lua_eq(ctx("cardarea"), lua_path(&["G", "jokers"])),
+            ),
             bp,
         ),
         "after_hand_played" => bp_check(
-            lua_and(ctx("after"), lua_eq(ctx("cardarea"), lua_path(&["G", "jokers"]))),
+            lua_and(
+                ctx("after"),
+                lua_eq(ctx("cardarea"), lua_path(&["G", "jokers"])),
+            ),
             bp,
         ),
         "card_scored" => bp_check(
-            lua_and(ctx("individual"), lua_eq(ctx("cardarea"), lua_path(&["G", "play"]))),
+            lua_and(
+                ctx("individual"),
+                lua_eq(ctx("cardarea"), lua_path(&["G", "play"])),
+            ),
             bp,
         ),
-        "joker_evaluated" => bp_check(
-            ctx("other_joker"),
-            bp,
-        ),
-        "joker_triggered" => bp_check(
-            ctx("post_trigger"),
-            bp,
-        ),
+        "joker_evaluated" => bp_check(ctx("other_joker"), bp),
+        "joker_triggered" => bp_check(ctx("post_trigger"), bp),
 
         // In blind events
-        "hand_drawn" => bp_check(
-            ctx("hand_drawn"),
-            bp,
-        ),
-        "first_hand_drawn" => bp_check(
-            ctx("first_hand_drawn"),
-            bp,
-        ),
-        "hand_discarded" => bp_check(
-            ctx("pre_discard"),
-            bp,
-        ),
-        "card_discarded" => bp_check(
-            ctx("discard"),
-            bp,
-        ),
+        "hand_drawn" => bp_check(ctx("hand_drawn"), bp),
+        "first_hand_drawn" => bp_check(ctx("first_hand_drawn"), bp),
+        "hand_discarded" => bp_check(ctx("pre_discard"), bp),
+        "card_discarded" => bp_check(ctx("discard"), bp),
         "card_held_in_hand" => bp_check(
             lua_and(
                 ctx("individual"),
                 lua_and(
                     lua_eq(ctx("cardarea"), lua_path(&["G", "hand"])),
                     lua_not(ctx("end_of_round")),
+                ),
+            ),
+            bp,
+        ),
+        "card_held_in_hand_end_of_round" => bp_check(
+            lua_and(
+                ctx("individual"),
+                lua_and(
+                    lua_eq(ctx("cardarea"), lua_path(&["G", "hand"])),
+                    ctx("end_of_round"),
                 ),
             ),
             bp,
@@ -155,10 +170,7 @@ fn joker_trigger_context(trigger: &str, bp: bool) -> Option<Expr> {
             lua_and(ctx("skip_blind"), ctx("joker_main")),
             bp,
         ),
-        "blind_disabled" => bp_check(
-            ctx("blind_disabled"),
-            bp,
-        ),
+        "blind_disabled" => bp_check(ctx("blind_disabled"), bp),
         "boss_defeated" => bp_check(
             lua_and(
                 ctx("end_of_round"),
@@ -166,10 +178,7 @@ fn joker_trigger_context(trigger: &str, bp: bool) -> Option<Expr> {
             ),
             bp,
         ),
-        "ante_start" => bp_check(
-            ctx("ante_change"),
-            bp,
-        ),
+        "ante_start" => bp_check(ctx("ante_change"), bp),
 
         // Economy
         "card_bought" => bp_check(
@@ -185,27 +194,24 @@ fn joker_trigger_context(trigger: &str, bp: bool) -> Option<Expr> {
             bp,
         ),
         "buying_self" => bp_check(
-            lua_and(ctx("buying_card"), ctx("joker_main")),
+            lua_and(
+                ctx("buying_card"),
+                lua_and(
+                    lua_raw_expr("context.card.config.center.key == self.key"),
+                    lua_eq(ctx("cardarea"), lua_path(&["G", "jokers"])),
+                ),
+            ),
             bp,
         ),
-        "shop_entered" => bp_check(
-            ctx("starting_shop"),
-            bp,
-        ),
-        "shop_exited" => bp_check(
-            ctx("ending_shop"),
-            bp,
-        ),
+        "shop_entered" => bp_check(ctx("starting_shop"), bp),
+        "shop_exited" => bp_check(ctx("ending_shop"), bp),
         "shop_reroll" => bp_check(
             lua_and(ctx("reroll_shop"), ctx("joker_main")),
             bp,
         ),
 
         // Packs & consumables
-        "consumable_used" => bp_check(
-            ctx("using_consumeable"),
-            bp,
-        ),
+        "consumable_used" => bp_check(ctx("using_consumeable"), bp),
         "playing_card_added" => bp_check(
             lua_and(ctx("playing_card_added"), ctx("joker_main")),
             bp,
@@ -214,18 +220,30 @@ fn joker_trigger_context(trigger: &str, bp: bool) -> Option<Expr> {
             lua_and(ctx("open_booster"), ctx("joker_main")),
             bp,
         ),
+        "booster_skipped" => bp_check(ctx("skipping_booster"), bp),
+        "booster_exited" => bp_check(ctx("ending_booster"), bp),
+
+        // Tags
+        "tag_added" => bp_check(ctx("tag_added"), bp),
 
         // Special
-        "card_destroyed" => bp_check(
-            ctx("remove_playing_cards"),
-            bp,
-        ),
+        "card_destroyed" => bp_check(ctx("remove_playing_cards"), bp),
         "game_over" => bp_check(
-            lua_and(ctx("game_over"), ctx("joker_main")),
+            lua_and(
+                ctx("end_of_round"),
+                lua_and(ctx("game_over"), ctx("main_eval")),
+            ),
             bp,
         ),
-        "change_probability" => bp_check(
-            ctx("pseudorandom_result"),
+        "change_probability" | "probability_result" => {
+            bp_check(ctx("pseudorandom_result"), bp)
+        }
+
+        // Composite: fires on many player actions
+        "player_action" => bp_check(
+            lua_raw_expr(
+                "(context.end_of_round or context.reroll_shop or context.buying_card or context.selling_card or context.ending_shop or context.starting_shop or context.ending_booster or context.skipping_booster or context.open_booster or context.skip_blind or context.before or context.pre_discard or context.setting_blind or context.using_consumeable)",
+            ),
             bp,
         ),
 
@@ -245,37 +263,51 @@ fn joker_trigger_context(trigger: &str, bp: bool) -> Option<Expr> {
 // ---------------------------------------------------------------------------
 
 fn consumable_trigger_context(trigger: &str) -> Option<Expr> {
-    let expr = match trigger {
-        "card_used" => ctx("using_consumeable"),
-        "hand_played" => lua_and(
-            lua_eq(ctx("cardarea"), lua_path(&["G", "jokers"])),
-            ctx("joker_main"),
-        ),
-        _ => return None,
-    };
-    Some(expr)
+    // Consumables share many non-joker-main triggers
+    shared_trigger_context(trigger)
 }
 
 // ---------------------------------------------------------------------------
 // Card triggers (enhancement / seal / edition)
 // ---------------------------------------------------------------------------
 
-fn card_trigger_context(trigger: &str) -> Option<Expr> {
+fn card_trigger_context(trigger: &str, object_type: ObjectType) -> Option<Expr> {
     let expr = match trigger {
-        "card_scored" => lua_and(
-            ctx("individual"),
-            lua_eq(ctx("cardarea"), lua_path(&["G", "play"])),
-        ),
+        "card_scored" => {
+            if object_type == ObjectType::Edition {
+                // Editions trigger on pre_joker or main_scoring contexts
+                lua_or(
+                    ctx("pre_joker"),
+                    lua_and(
+                        ctx("main_scoring"),
+                        lua_eq(ctx("cardarea"), lua_path(&["G", "play"])),
+                    ),
+                )
+            } else {
+                // Enhancements and seals: main_scoring context
+                lua_and(
+                    ctx("main_scoring"),
+                    lua_eq(ctx("cardarea"), lua_path(&["G", "play"])),
+                )
+            }
+        }
         "card_held_in_hand" => lua_and(
-            ctx("individual"),
+            lua_eq(ctx("cardarea"), lua_path(&["G", "hand"])),
+            ctx("main_scoring"),
+        ),
+        "card_held_in_hand_end_of_round" => lua_and(
+            ctx("end_of_round"),
             lua_and(
                 lua_eq(ctx("cardarea"), lua_path(&["G", "hand"])),
-                lua_not(ctx("end_of_round")),
+                lua_and(
+                    lua_eq(ctx("other_card"), lua_ident("card")),
+                    ctx("individual"),
+                ),
             ),
         ),
         "card_discarded" => lua_and(
-            ctx("individual"),
-            lua_eq(ctx("cardarea"), lua_path(&["G", "play"])),
+            ctx("discard"),
+            lua_eq(ctx("other_card"), lua_ident("card")),
         ),
         _ => return None,
     };
@@ -287,11 +319,8 @@ fn card_trigger_context(trigger: &str) -> Option<Expr> {
 // ---------------------------------------------------------------------------
 
 fn voucher_trigger_context(trigger: &str) -> Option<Expr> {
-    let expr = match trigger {
-        "card_used" => ctx("using_consumeable"),
-        _ => return None,
-    };
-    Some(expr)
+    // Vouchers share the same non-joker triggers
+    shared_trigger_context(trigger)
 }
 
 // ---------------------------------------------------------------------------
@@ -299,21 +328,51 @@ fn voucher_trigger_context(trigger: &str) -> Option<Expr> {
 // ---------------------------------------------------------------------------
 
 fn deck_trigger_context(trigger: &str) -> Option<Expr> {
-    let expr = match trigger {
-        "hand_played" => lua_and(
-            lua_eq(ctx("cardarea"), lua_path(&["G", "jokers"])),
-            ctx("joker_main"),
-        ),
-        "card_scored" => lua_and(
+    // Decks share the same non-joker triggers, plus card scoring
+    match trigger {
+        "card_scored" => Some(lua_and(
             ctx("individual"),
             lua_eq(ctx("cardarea"), lua_path(&["G", "play"])),
-        ),
+        )),
+        "hand_played" => Some(lua_and(
+            lua_eq(ctx("cardarea"), lua_path(&["G", "jokers"])),
+            ctx("joker_main"),
+        )),
+        _ => shared_trigger_context(trigger),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Shared triggers for non-joker objects (consumables, vouchers, decks)
+// ---------------------------------------------------------------------------
+
+/// Trigger contexts shared across consumables, vouchers, and decks.
+/// These are the same expressions as joker triggers but without blueprint checks
+/// and without joker_main guards.
+fn shared_trigger_context(trigger: &str) -> Option<Expr> {
+    let expr = match trigger {
         "round_end" => lua_and(
             ctx("end_of_round"),
             lua_and(
                 lua_eq(ctx("game_over"), lua_bool(false)),
                 ctx("main_eval"),
             ),
+        ),
+        "blind_selected" => ctx("setting_blind"),
+        "blind_skipped" => ctx("skip_blind"),
+        "blind_disabled" => ctx("blind_disabled"),
+        "boss_defeated" => lua_and(
+            ctx("end_of_round"),
+            lua_and(ctx("main_eval"), lua_raw_expr("G.GAME.blind.boss")),
+        ),
+        "booster_opened" => ctx("open_booster"),
+        "booster_skipped" => ctx("skipping_booster"),
+        "booster_exited" => ctx("ending_booster"),
+        "shop_entered" => ctx("starting_shop"),
+        "shop_exited" => ctx("ending_shop"),
+        "hand_played" => lua_and(
+            lua_eq(ctx("cardarea"), lua_path(&["G", "jokers"])),
+            ctx("joker_main"),
         ),
         _ => return None,
     };

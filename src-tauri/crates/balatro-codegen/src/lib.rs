@@ -5,9 +5,16 @@ pub mod types;
 
 // Re-export key types for convenience
 pub use compiler::{compile_joker, compile_joker_with_options, compile_node_snippet};
+pub use compiler::{
+    compile_consumable, compile_consumable_type, compile_enhancement, compile_seal,
+    compile_edition, compile_voucher, compile_deck, compile_rarity, compile_booster,
+};
 pub use lua_ast::{format_lua_source, Chunk, Emitter, Expr, Stmt};
 pub use objects::GameObject;
-pub use types::{JokerDef, ModConfig, ObjectType};
+pub use types::{
+    JokerDef, ConsumableDef, ConsumableTypeDef, EnhancementDef, SealDef, EditionDef,
+    RarityDef, VoucherDef, DeckDef, BoosterDef, ModConfig, ObjectType,
+};
 
 #[cfg(test)]
 mod integration_tests {

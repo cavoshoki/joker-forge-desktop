@@ -1855,6 +1855,7 @@
         "type": "text",
         "label": "Joker Key ( [modprefix]_joker )",
         "default": "joker",
+        "optionSource": "jokers",
         "showWhen": {
           "parameter": "joker_type",
           "values": ["specific"]
@@ -2235,6 +2236,7 @@
         "type": "text",
         "label": "Joker Key (e.g., j_joker, j_greedy_joker)",
         "default": "j_joker",
+        "optionSource": "jokers",
         "showWhen": {
           "parameter": "selection_method",
           "values": ["specific"]
@@ -2468,6 +2470,7 @@
         "type": "text",
         "label": "Joker Key ( [modprefix]_joker )",
         "default": "joker",
+        "optionSource": "jokers",
         "showWhen": {
           "parameter": "selection_method",
           "values": ["key"]
@@ -5713,6 +5716,7 @@
         "type": "text",
         "label": "Joker Key ( [modprefix]_joker )",
         "default": "j_joker",
+        "optionSource": "jokers",
         "showWhen": {
           "parameter": "index_method",
           "values": ["key"]
@@ -6383,6 +6387,7 @@
         "id": "specific_joker",
         "type": "text",
         "label": "Joker Key",
+        "optionSource": "jokers",
         "showWhen": {
           "parameter": "joker_change_type",
           "values": ["specific"]
@@ -6463,6 +6468,7 @@
         "id": "specific_consumable",
         "type": "text",
         "label": "Consumable Key",
+        "optionSource": "allConsumables",
         "showWhen": {
           "parameter": "consumable_change_type",
           "values": ["specific"]

@@ -190,7 +190,9 @@
     ]
   },
   "optionSources": {
+    "jokers": "src/lib/balatro-utils.ts::ALL_JOKERS",
     "rarities": "src/lib/balatro-utils.ts::RARITIES",
+    "consumables": "src/lib/balatro-utils.ts::CUSTOM_CONSUMABLES",
     "consumableSets": "src/lib/balatro-utils.ts::CONSUMABLE_SETS",
     "enhancements": "src/lib/balatro-utils.ts::ENHANCEMENTS",
     "editions": "src/lib/balatro-utils.ts::EDITIONS",

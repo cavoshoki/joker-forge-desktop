@@ -122,9 +122,14 @@ impl CompileContext {
         let prefix = match self.object_type {
             ObjectType::Joker => "j",
             ObjectType::Consumable => "c",
-            ObjectType::Card => "m",
+            ObjectType::ConsumableType => "ct",
+            ObjectType::Enhancement => "m",
+            ObjectType::Seal => "s",
+            ObjectType::Edition => "e",
+            ObjectType::Rarity => "r",
             ObjectType::Voucher => "v",
             ObjectType::Deck => "b",
+            ObjectType::Booster => "p",
         };
         format!("{}_{}", prefix, self.full_key())
     }

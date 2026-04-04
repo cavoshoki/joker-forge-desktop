@@ -282,9 +282,14 @@ pub fn compile_rulebuilder_node_snippet(
     let object_type = match item_type.as_str() {
         "joker" => ObjectType::Joker,
         "consumable" => ObjectType::Consumable,
-        "card" => ObjectType::Card,
+        "consumable_type" => ObjectType::ConsumableType,
+        "enhancement" | "card" => ObjectType::Enhancement,
+        "seal" => ObjectType::Seal,
+        "edition" => ObjectType::Edition,
+        "rarity" => ObjectType::Rarity,
         "voucher" => ObjectType::Voucher,
         "deck" => ObjectType::Deck,
+        "booster" => ObjectType::Booster,
         _ => {
             return Err(format!("Unsupported item type: {}", item_type));
         }

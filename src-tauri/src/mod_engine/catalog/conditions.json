@@ -1629,6 +1629,7 @@
         "type": "text",
         "label": "Joker Key (e.g., joker, greedy_joker)",
         "default": "joker",
+        "optionSource": "jokers",
         "showWhen": {
           "parameter": "type",
           "values": ["key"]
@@ -2800,6 +2801,7 @@
         "type": "text",
         "label": "Joker Key ( [modprefix]_joker )",
         "default": "joker",
+        "optionSource": "jokers",
         "showWhen": {
           "parameter": "check_key",
           "values": ["key"]
@@ -3620,6 +3622,7 @@
         "type": "text",
         "label": "Joker Key ( [modprefix]_joker )",
         "default": "joker",
+        "optionSource": "jokers",
         "showWhen": {
           "parameter": "type",
           "values": ["key"]

@@ -28,8 +28,10 @@ import type {
 } from "./types";
 import { entityBridge } from "@/lib/entity-bridge";
 import {
+  ALL_JOKERS,
   ALL_CONSUMABLES,
   CONSUMABLE_SETS,
+  CUSTOM_CONSUMABLES,
   DECKS,
   EDITIONS,
   ENHANCEMENTS,
@@ -126,7 +128,9 @@ type CatalogOptionLike = {
 };
 
 const OPTION_SOURCES: Record<string, () => CatalogOption[]> = {
+  jokers: () => asOptionArray(ALL_JOKERS()),
   rarities: () => asOptionArray(RARITIES()),
+  consumables: () => asOptionArray(CUSTOM_CONSUMABLES()),
   consumableSets: () => asOptionArray(CONSUMABLE_SETS()),
   enhancements: () => asOptionArray(ENHANCEMENTS()),
   editions: () => asOptionArray(EDITIONS()),
@@ -140,7 +144,11 @@ const OPTION_SOURCES: Record<string, () => CatalogOption[]> = {
   tarotCards: () => asOptionArray(TAROT_CARDS),
   planetCards: () => asOptionArray(PLANET_CARDS),
   spectralCards: () => asOptionArray(SPECTRAL_CARDS),
-  allConsumables: () => asOptionArray(ALL_CONSUMABLES),
+  allConsumables: () =>
+    uniqueByValue([
+      ...asOptionArray(ALL_CONSUMABLES),
+      ...asOptionArray(CUSTOM_CONSUMABLES()),
+    ]),
 };
 
 function asOptionArray(source: unknown): CatalogOption[] {
@@ -237,14 +245,6 @@ function applyOptionSet(param: ConditionParameter | EffectParameter) {
   param.options = uniqueOptionObjectsByValue([...staticOptions, ...dynamic]);
 }
 
-function mergeWithDynamicOptions(
-  param: ConditionParameter | EffectParameter,
-  dynamic: CatalogOption[],
-) {
-  const staticOptions = asOptionArray(param.options);
-  param.options = uniqueByValue([...staticOptions, ...dynamic]);
-}
-
 function mergeWithDynamicCheckboxOptions(
   param: ConditionParameter | EffectParameter,
   dynamic: CatalogOption[],
@@ -271,13 +271,25 @@ function applyOptionSource(
     return;
   }
 
-  const dynamic = source();
   if (param.type === "checkbox") {
-    mergeWithDynamicCheckboxOptions(param, dynamic);
+    mergeWithDynamicCheckboxOptions(param, source());
     return;
   }
 
-  mergeWithDynamicOptions(param, dynamic);
+  const baseOptions = param.options;
+  param.options = (
+    parentValues?: Record<string, { value: unknown; valueType?: string }>,
+  ) => {
+    let staticOptions: CatalogOption[] = [];
+
+    if (typeof baseOptions === "function") {
+      staticOptions = asOptionArray(baseOptions(parentValues ?? {}));
+    } else {
+      staticOptions = asOptionArray(baseOptions);
+    }
+
+    return uniqueByValue([...staticOptions, ...source()]);
+  };
 }
 
 function applyDynamicParameterOptions(

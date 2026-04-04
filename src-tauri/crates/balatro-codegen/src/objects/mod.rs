@@ -1,4 +1,13 @@
 pub mod joker;
+pub mod consumable;
+pub mod consumable_type;
+pub mod enhancement;
+pub mod seal;
+pub mod edition;
+pub mod rarity;
+pub mod voucher;
+pub mod deck;
+pub mod booster;
 
 use crate::lua_ast::Chunk;
 use crate::types::ObjectType;

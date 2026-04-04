@@ -22,9 +22,14 @@ impl BalatroCompiler {
         match entity_type {
             "joker" => ObjectType::Joker,
             "consumable" => ObjectType::Consumable,
-            "card" => ObjectType::Card,
+            "consumable_type" => ObjectType::ConsumableType,
+            "enhancement" | "card" => ObjectType::Enhancement,
+            "seal" => ObjectType::Seal,
+            "edition" => ObjectType::Edition,
+            "rarity" => ObjectType::Rarity,
             "voucher" => ObjectType::Voucher,
             "deck" => ObjectType::Deck,
+            "booster" => ObjectType::Booster,
             _ => ObjectType::Joker,
         }
     }
