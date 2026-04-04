@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from "react";
 import {
   Smiley,
   Flask,
@@ -10,6 +16,7 @@ import {
   Ticket,
   Plus,
   DownloadSimple,
+  UploadSimple,
   CaretDown,
   Book,
   GithubLogo,
@@ -19,13 +26,19 @@ import {
   ArrowUUpLeft,
   Trash,
 } from "@phosphor-icons/react";
-import { useProjectData } from "@/lib/storage";
+import {
+  getJokerforgeExportAsJsonEnabled,
+  useProjectData,
+} from "@/lib/storage";
 import { motion, AnimatePresence } from "framer-motion";
 import { StatButton } from "@/components/ui/stat-button";
 import { ActionButton } from "@/components/ui/action-button";
 import { ResourceLink } from "@/components/ui/resource-link";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useConfirmDelete } from "@/hooks/use-confirm-delete";
+import { importJokerforgeFromText } from "@/lib/jokerforge/importer";
+import { downloadJokerforgeV2 } from "@/lib/jokerforge/exporter";
+import { pushGlobalAlert } from "@/lib/global-alerts-bus";
 
 export function OverviewPage() {
   const {
@@ -36,6 +49,17 @@ export function OverviewPage() {
     switchProject,
     createProject,
     deleteProject,
+    updateJokers,
+    updateConsumables,
+    updateRarities,
+    updateConsumableSets,
+    updateDecks,
+    updateVouchers,
+    updateBoosters,
+    updateSeals,
+    updateEditions,
+    updateEnhancements,
+    updateSounds,
   } = useProjectData();
   const { stats, metadata } = data;
 
@@ -45,6 +69,7 @@ export function OverviewPage() {
   const [tempValue, setTempValue] = useState("");
   const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const identifierRegex = /^[A-Za-z0-9_]+$/;
   const versionRegex = /^\d+\.\d+\.\d+$/;
 
@@ -73,6 +98,89 @@ export function OverviewPage() {
   const handleDeleteProject = (projectId: string) => {
     deleteProject(projectId);
     setIsProjectMenuOpen(false);
+  };
+
+  const applyImportedProject = (
+    project: ReturnType<typeof importJokerforgeFromText>["project"],
+  ) => {
+    const importedName = (project.metadata?.name || "").trim().toLowerCase();
+    const existingProject = projects.find(
+      (candidate) => candidate.name.trim().toLowerCase() === importedName,
+    );
+
+    if (existingProject) {
+      switchProject(existingProject.id);
+    } else {
+      createProject(project.metadata);
+    }
+
+    updateMetadata(project.metadata);
+    updateJokers(project.jokers);
+    updateConsumables(project.consumables);
+    updateRarities(project.rarities);
+    updateConsumableSets(project.consumableSets);
+    updateDecks(project.decks);
+    updateVouchers(project.vouchers);
+    updateBoosters(project.boosters);
+    updateSeals(project.seals);
+    updateEditions(project.editions);
+    updateEnhancements(project.enhancements);
+    updateSounds(project.sounds);
+  };
+
+  const handleImportClick = () => {
+    importInputRef.current?.click();
+  };
+
+  const handleImportFileChange = async (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const fileText = await file.text();
+      const result = importJokerforgeFromText(fileText);
+      applyImportedProject(result.project);
+      const sourceLabel = result.source === "legacy" ? "legacy" : "v2";
+      pushGlobalAlert({
+        type: "success",
+        title: "Import Complete",
+        message: `Imported ${file.name} (${sourceLabel} format).`,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unknown import error.";
+      pushGlobalAlert({
+        type: "danger",
+        title: "Import Failed",
+        message,
+      });
+    } finally {
+      event.target.value = "";
+    }
+  };
+
+  const handleExportClick = () => {
+    try {
+      const extension = getJokerforgeExportAsJsonEnabled()
+        ? "json"
+        : "jokerforge";
+      downloadJokerforgeV2(data, undefined, extension);
+      pushGlobalAlert({
+        type: "success",
+        title: "Export Complete",
+        message: `Downloaded .${extension} file.`,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unknown export error.";
+      pushGlobalAlert({
+        type: "danger",
+        title: "Export Failed",
+        message,
+      });
+    }
   };
 
   const {
@@ -262,19 +370,33 @@ export function OverviewPage() {
           <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
             Actions
           </h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <ActionButton
               label="New Project"
               icon={Plus}
               onClick={handleCreateProject}
             />
             <ActionButton
-              label="Import JSON / JokerForge"
+              label="Import"
+              icon={UploadSimple}
+              onClick={handleImportClick}
+            />
+            <ActionButton
+              label="Export"
               icon={DownloadSimple}
+              onClick={handleExportClick}
             />
           </div>
         </div>
       </div>
+
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".jokerforge,.json,application/json"
+        className="hidden"
+        onChange={handleImportFileChange}
+      />
 
       <div className="border-b border-border w-full" />
 

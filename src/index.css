@@ -312,6 +312,14 @@
     display: none;
   }
 
+  .sidebar-scroll {
+    scrollbar-width: none;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
   .sidebar-scroll [data-slot="scroll-area-viewport"] {
     scrollbar-width: none;
   }

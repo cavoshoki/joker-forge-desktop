@@ -10,10 +10,13 @@ import {
   getSplitLocalizationExportEnabled,
   useProjectData,
 } from "@/lib/storage";
+import { serializeJokerforgeV2 } from "@/lib/jokerforge/exporter";
 import {
   exportModRust,
   type ExportModRustResult,
 } from "@/lib/rust-codegen-export";
+import { join } from "@tauri-apps/api/path";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
 import {
   formatUnsupportedRulesError,
   getUnsupportedRuleParts,
@@ -106,6 +109,13 @@ export function Header({ title }: HeaderProps) {
           balatroModsPath: getBalatroInstallPath(),
         },
       );
+
+      const jokerforgeBundlePath = await join(
+        result.modFolderPath,
+        `${data.metadata.id || "jokerforge-export"}.jokerforge`,
+      );
+      await writeTextFile(jokerforgeBundlePath, serializeJokerforgeV2(data));
+
       setExportResult(result);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

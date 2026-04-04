@@ -1,6 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { CheckCircle, Copy, FolderOpen, Sparkle } from "@phosphor-icons/react";
+import {
+  CheckCircle,
+  Confetti,
+  Copy,
+  FolderOpen,
+  Sparkle,
+} from "@phosphor-icons/react";
 import { openPath } from "@tauri-apps/plugin-opener";
 import {
   Dialog,
@@ -26,30 +32,58 @@ export function ExportSuccessDialog({
   fileCount,
 }: ExportSuccessDialogProps) {
   const [copied, setCopied] = useState(false);
+  const [openFolderError, setOpenFolderError] = useState<string | null>(null);
 
   const sparkleDots = useMemo(
     () =>
-      Array.from({ length: 10 }, (_, i) => ({
+      Array.from({ length: 14 }, (_, i) => ({
         id: i,
-        left: 10 + i * 8,
+        left: 6 + i * 6.4,
         top: i % 2 === 0 ? 16 : 74,
         delay: i * 0.06,
       })),
     [],
   );
 
+  const confettiPieces = useMemo(
+    () =>
+      Array.from({ length: 16 }, (_, i) => ({
+        id: i,
+        left: 6 + i * 5.9,
+        delay: i * 0.035,
+        rotate: i % 2 === 0 ? -20 : 24,
+      })),
+    [],
+  );
+
+  useEffect(() => {
+    if (!open) {
+      setCopied(false);
+      setOpenFolderError(null);
+    }
+  }, [open]);
+
   const handleCopyPath = async () => {
     try {
+      if (!modFolderPath) return;
       await navigator.clipboard.writeText(modFolderPath);
       setCopied(true);
+      setOpenFolderError(null);
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
       setCopied(false);
+      setOpenFolderError("Could not copy path to clipboard.");
     }
   };
 
   const handleOpenFolder = async () => {
-    await openPath(modFolderPath);
+    try {
+      if (!modFolderPath) return;
+      await openPath(modFolderPath);
+      setOpenFolderError(null);
+    } catch {
+      setOpenFolderError("Could not open the folder. Try Copy Path instead.");
+    }
   };
 
   return (
@@ -60,14 +94,21 @@ export function ExportSuccessDialog({
             initial={{ opacity: 0.5, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.45 }}
-            className="absolute inset-0 bg-[radial-gradient(circle_at_10%_10%,hsl(var(--primary)/0.20),transparent_40%),radial-gradient(circle_at_85%_40%,hsl(var(--accent)/0.25),transparent_50%)]"
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_10%,hsl(var(--primary)/0.20),transparent_40%),radial-gradient(circle_at_85%_40%,hsl(var(--accent)/0.25),transparent_50%)]"
+          />
+
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0, 0.22, 0.08] }}
+            transition={{ duration: 1.2, times: [0, 0.45, 1] }}
+            className="pointer-events-none absolute inset-0 bg-[conic-gradient(from_180deg_at_50%_50%,hsl(var(--primary)/0.18),transparent_25%,hsl(var(--accent)/0.18),transparent_55%,hsl(var(--primary)/0.14))]"
           />
 
           <div className="relative border-b border-border/70 p-6">
             {sparkleDots.map((dot) => (
               <motion.div
                 key={dot.id}
-                className="absolute h-1.5 w-1.5 rounded-full bg-primary/70"
+                className="pointer-events-none absolute h-1.5 w-1.5 rounded-full bg-primary/70"
                 style={{ left: `${dot.left}%`, top: `${dot.top}%` }}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: [0, 1, 0.45], y: [8, -4, 2] }}
@@ -76,6 +117,26 @@ export function ExportSuccessDialog({
                   repeat: Number.POSITIVE_INFINITY,
                   repeatType: "mirror",
                   delay: dot.delay,
+                }}
+              />
+            ))}
+
+            {confettiPieces.map((piece) => (
+              <motion.div
+                key={`confetti-${piece.id}`}
+                className="pointer-events-none absolute top-1 h-2.5 w-1 rounded-full bg-linear-to-b from-primary to-accent/70"
+                style={{ left: `${piece.left}%` }}
+                initial={{ opacity: 0, y: -16, rotate: piece.rotate }}
+                animate={{
+                  opacity: [0, 1, 0],
+                  y: [-16, 4, 20],
+                  rotate: [piece.rotate, piece.rotate + 12, piece.rotate + 28],
+                }}
+                transition={{
+                  duration: 1.1,
+                  repeat: Number.POSITIVE_INFINITY,
+                  repeatDelay: 1.2,
+                  delay: piece.delay,
                 }}
               />
             ))}
@@ -95,9 +156,21 @@ export function ExportSuccessDialog({
                   />
                 </motion.div>
                 <div>
-                  <DialogTitle className="text-2xl font-black tracking-tight text-foreground">
-                    Mod Exported
-                  </DialogTitle>
+                  <div className="flex items-center gap-2">
+                    <DialogTitle className="text-2xl font-black tracking-tight text-foreground">
+                      Mod Exported
+                    </DialogTitle>
+                    <motion.div
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: [0.85, 1.05, 1], opacity: [0, 1, 1] }}
+                      transition={{ duration: 0.55, delay: 0.1 }}
+                    >
+                      <Confetti
+                        className="h-5 w-5 text-primary"
+                        weight="fill"
+                      />
+                    </motion.div>
+                  </div>
                   <DialogDescription className="text-sm text-muted-foreground">
                     Folder export complete. Your mod is ready to test.
                   </DialogDescription>
@@ -131,6 +204,7 @@ export function ExportSuccessDialog({
               <Button
                 variant="outline"
                 className="cursor-pointer"
+                type="button"
                 onClick={handleCopyPath}
               >
                 <Copy className="mr-2 h-4 w-4" />
@@ -139,6 +213,7 @@ export function ExportSuccessDialog({
               <Button
                 variant="secondary"
                 className="cursor-pointer"
+                type="button"
                 onClick={handleOpenFolder}
               >
                 <FolderOpen className="mr-2 h-4 w-4" />
@@ -147,11 +222,18 @@ export function ExportSuccessDialog({
             </div>
             <Button
               className="cursor-pointer"
+              type="button"
               onClick={() => onOpenChange(false)}
             >
               Nice
             </Button>
           </DialogFooter>
+
+          {openFolderError ? (
+            <div className="px-6 pb-5 text-xs text-destructive">
+              {openFolderError}
+            </div>
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>

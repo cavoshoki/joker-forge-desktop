@@ -22,7 +22,6 @@ import {
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 
 interface SidebarProps {
@@ -229,7 +228,7 @@ export function Sidebar({
         </Button>
       </div>
 
-      <ScrollArea className="flex-1 px-3 py-4 sidebar-scroll">
+      <div className="flex-1 px-3 py-4 overflow-y-auto sidebar-scroll">
         <motion.div variants={menuListVariants} className="space-y-6">
           <div>
             <div className="space-y-1">
@@ -327,7 +326,7 @@ export function Sidebar({
             </div>
           </div>
         </motion.div>
-      </ScrollArea>
+      </div>
     </motion.aside>
   );
 }

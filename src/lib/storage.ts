@@ -61,6 +61,7 @@ const BALATRO_AUTOFIND_KEY = "joker_forge_balatro_autofind";
 const BALATRO_AUTOFIND_ALERT_KEY = "joker_forge_balatro_autofind_alert";
 const SPLIT_LOCALIZATION_EXPORT_KEY = "joker_forge_split_localization_export";
 const EXPORT_DESTINATION_MODE_KEY = "joker_forge_export_destination_mode";
+const JOKERFORGE_EXPORT_AS_JSON_KEY = "joker_forge_export_as_json";
 
 export type ExportDestinationMode = "downloads" | "balatro-mods";
 
@@ -481,6 +482,7 @@ export const resetProjectData = () => {
   window.localStorage.removeItem(BALATRO_AUTOFIND_ALERT_KEY);
   window.localStorage.removeItem(SPLIT_LOCALIZATION_EXPORT_KEY);
   window.localStorage.removeItem(EXPORT_DESTINATION_MODE_KEY);
+  window.localStorage.removeItem(JOKERFORGE_EXPORT_AS_JSON_KEY);
   window.dispatchEvent(new Event(EVENT_KEY));
 };
 
@@ -557,6 +559,19 @@ export const getExportDestinationMode = (): ExportDestinationMode => {
 export const setExportDestinationMode = (mode: ExportDestinationMode) => {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(EXPORT_DESTINATION_MODE_KEY, mode);
+};
+
+export const getJokerforgeExportAsJsonEnabled = (): boolean => {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(JOKERFORGE_EXPORT_AS_JSON_KEY) === "true";
+};
+
+export const setJokerforgeExportAsJsonEnabled = (value: boolean) => {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(
+    JOKERFORGE_EXPORT_AS_JSON_KEY,
+    value ? "true" : "false",
+  );
 };
 
 export const useModName = () => {

@@ -21,11 +21,13 @@ import {
   getExportDestinationMode,
   getConfirmDeleteEnabled,
   getBalatroInstallPath,
+  getJokerforgeExportAsJsonEnabled,
   getSplitLocalizationExportEnabled,
   resetProjectData,
   setBalatroInstallPath,
   setConfirmDeleteEnabled,
   setExportDestinationMode,
+  setJokerforgeExportAsJsonEnabled,
   setSplitLocalizationExportEnabled,
 } from "@/lib/storage";
 import { Gear, Monitor, FolderOpen } from "@phosphor-icons/react";
@@ -37,6 +39,7 @@ export function SettingsPopover() {
   const [balatroPath, setBalatroPath] = useState("");
   const [splitLocalizationExport, setSplitLocalizationExport] = useState(false);
   const [exportToBalatroMods, setExportToBalatroMods] = useState(false);
+  const [exportJokerforgeAsJson, setExportJokerforgeAsJson] = useState(false);
 
   useEffect(() => {
     const storedScale = localStorage.getItem("app-ui-scale") || "1";
@@ -46,6 +49,7 @@ export function SettingsPopover() {
     setBalatroPath(getBalatroInstallPath());
     setSplitLocalizationExport(getSplitLocalizationExportEnabled());
     setExportToBalatroMods(getExportDestinationMode() === "balatro-mods");
+    setExportJokerforgeAsJson(getJokerforgeExportAsJsonEnabled());
   }, []);
 
   const applyScale = (value: string) => {
@@ -81,6 +85,11 @@ export function SettingsPopover() {
   const handleExportDestinationToggle = (value: boolean) => {
     setExportToBalatroMods(value);
     setExportDestinationMode(value ? "balatro-mods" : "downloads");
+  };
+
+  const handleExportJokerforgeAsJsonToggle = (value: boolean) => {
+    setExportJokerforgeAsJson(value);
+    setJokerforgeExportAsJsonEnabled(value);
   };
 
   const handleBrowseBalatroPath = async () => {
@@ -253,6 +262,42 @@ export function SettingsPopover() {
                   id="export-destination-toggle"
                   checked={exportToBalatroMods}
                   onCheckedChange={handleExportDestinationToggle}
+                  className="cursor-pointer"
+                  onClick={(event) => event.stopPropagation()}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Import / Export
+              </p>
+              <div
+                className="flex items-center justify-between cursor-pointer rounded-lg px-2 py-1 -mx-2"
+                role="button"
+                tabIndex={0}
+                onClick={() =>
+                  handleExportJokerforgeAsJsonToggle(!exportJokerforgeAsJson)
+                }
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    handleExportJokerforgeAsJsonToggle(!exportJokerforgeAsJson);
+                  }
+                }}
+              >
+                <div>
+                  <Label htmlFor="export-jokerforge-as-json">
+                    Export .jokerforge As .json
+                  </Label>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Off: .jokerforge (default). On: .json.
+                  </p>
+                </div>
+                <Switch
+                  id="export-jokerforge-as-json"
+                  checked={exportJokerforgeAsJson}
+                  onCheckedChange={handleExportJokerforgeAsJsonToggle}
                   className="cursor-pointer"
                   onClick={(event) => event.stopPropagation()}
                 />

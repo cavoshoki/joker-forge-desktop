@@ -6,6 +6,10 @@ import { motion } from "framer-motion";
 import { GlobalAlerts } from "./global-alerts";
 import { useAlertQueue } from "@/hooks/use-alert-queue";
 import { runBalatroAutofind } from "@/lib/balatro-autofind";
+import {
+  GLOBAL_ALERTS_EVENT,
+  type GlobalAlertsEventDetail,
+} from "@/lib/global-alerts-bus";
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -16,11 +20,13 @@ export function MainLayout({ children, pageTitle }: MainLayoutProps) {
   const [isPinned, setIsPinned] = useState(false);
   const [isHoverOpen, setIsHoverOpen] = useState(false);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isPointerOverSidebarRef = useRef(false);
   const { alerts, pushAlerts, dismissAlert } = useAlertQueue();
 
   const isVisible = isPinned || isHoverOpen;
 
   const handleMouseEnter = () => {
+    isPointerOverSidebarRef.current = true;
     if (isPinned) return;
     if (hoverTimeoutRef.current) {
       clearTimeout(hoverTimeoutRef.current);
@@ -30,11 +36,56 @@ export function MainLayout({ children, pageTitle }: MainLayoutProps) {
   };
 
   const handleMouseLeave = () => {
+    isPointerOverSidebarRef.current = false;
     if (isPinned) return;
     hoverTimeoutRef.current = setTimeout(() => {
       setIsHoverOpen(false);
     }, 150);
   };
+
+  useEffect(() => {
+    if (isPinned) return;
+
+    const EDGE_TRIGGER_WIDTH = 520;
+    const TITLEBAR_HEIGHT = 36;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const isInEdgeZone =
+        event.clientX <= EDGE_TRIGGER_WIDTH &&
+        event.clientY >= TITLEBAR_HEIGHT;
+
+      if (isInEdgeZone) {
+        if (hoverTimeoutRef.current) {
+          clearTimeout(hoverTimeoutRef.current);
+          hoverTimeoutRef.current = null;
+        }
+        if (!isHoverOpen) {
+          setIsHoverOpen(true);
+        }
+        return;
+      }
+
+      if (isPointerOverSidebarRef.current) {
+        return;
+      }
+
+      if (!hoverTimeoutRef.current) {
+        hoverTimeoutRef.current = setTimeout(() => {
+          setIsHoverOpen(false);
+          hoverTimeoutRef.current = null;
+        }, 150);
+      }
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+        hoverTimeoutRef.current = null;
+      }
+    };
+  }, [isHoverOpen, isPinned]);
 
   useEffect(() => {
     let isMounted = true;
@@ -49,17 +100,22 @@ export function MainLayout({ children, pageTitle }: MainLayoutProps) {
     };
   }, [pushAlerts]);
 
+  useEffect(() => {
+    const handleGlobalAlerts = (event: Event) => {
+      const customEvent = event as CustomEvent<GlobalAlertsEventDetail>;
+      const nextAlerts = customEvent.detail?.alerts ?? [];
+      pushAlerts(nextAlerts);
+    };
+
+    window.addEventListener(GLOBAL_ALERTS_EVENT, handleGlobalAlerts);
+    return () => {
+      window.removeEventListener(GLOBAL_ALERTS_EVENT, handleGlobalAlerts);
+    };
+  }, [pushAlerts]);
+
   return (
     <div className="flex h-screen w-full bg-background overflow-hidden font-lexend text-foreground transition-colors duration-300">
       <TitleBar />
-
-      {!isPinned && (
-        <div
-          className="fixed left-0 top-0 mt-9 z-40 h-[calc(100vh-2.25rem)] w-96"
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-        />
-      )}
 
       <div className="pt-9 z-50 relative">
         <Sidebar

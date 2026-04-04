@@ -222,6 +222,9 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
     string | undefined
   >();
   const [liveCodeIsError, setLiveCodeIsError] = useState(false);
+  const [liveCodeErrorDetails, setLiveCodeErrorDetails] = useState<
+    string | undefined
+  >();
   const [liveCodeIsLoading, setLiveCodeIsLoading] = useState(false);
   const [liveCodePreviewTarget, setLiveCodePreviewTarget] =
     useState<LiveCodeBlockPreviewTarget | null>(null);
@@ -254,6 +257,36 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
+
+  const formatLiveCodeErrorDetails = useCallback((error: unknown): string => {
+    if (error instanceof Error) {
+      const lines: string[] = [];
+      lines.push(`Name: ${error.name}`);
+      lines.push(`Message: ${error.message}`);
+      if (error.stack) {
+        const stackPreview = error.stack
+          .split("\n")
+          .slice(0, 8)
+          .join("\n")
+          .trim();
+        if (stackPreview) {
+          lines.push("Stack:");
+          lines.push(stackPreview);
+        }
+      }
+      return lines.join("\n");
+    }
+
+    if (typeof error === "string") {
+      return `Message: ${error}`;
+    }
+
+    try {
+      return `Message: ${JSON.stringify(error, null, 2)}`;
+    } catch {
+      return "Message: Unknown error (could not serialize error payload).";
+    }
+  }, []);
 
   const handleSaveAndClose = useCallback(() => {
     onSave(rules);
@@ -2868,23 +2901,13 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
       return;
     }
 
-    if (itemType !== "joker") {
-      setLiveCodeTitle("Unsupported Object Type");
-      setLiveCodeSnippet("-- live item preview unavailable");
-      setLiveCodeStatusMessage(
-        "Live code generation is currently coded only for Jokers. This item type has not been coded in yet.",
-      );
-      setLiveCodeIsError(false);
-      setLiveCodeIsLoading(false);
-      return;
-    }
-
     let cancelled = false;
 
     const run = async () => {
       setLiveCodeIsLoading(true);
       setLiveCodeIsError(false);
       setLiveCodeStatusMessage(undefined);
+      setLiveCodeErrorDetails(undefined);
 
       try {
         if (liveCodePreviewTarget) {
@@ -3008,7 +3031,7 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
           return;
         }
 
-        setLiveCodeTitle(`Item Preview: ${item.name || "Current Joker"}`);
+        setLiveCodeTitle(`Item Preview: ${item.name || "Current Item"}`);
 
         const code = await compileSingleJokerLua(
           { ...(item as any), rules },
@@ -3040,6 +3063,7 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
             ? error.message
             : "Failed to compile live snippet.",
         );
+        setLiveCodeErrorDetails(formatLiveCodeErrorDetails(error));
         setLiveCodeIsError(true);
       } finally {
         if (!cancelled) {
@@ -3057,6 +3081,7 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
     getConditionType,
     getEffectType,
     item,
+    formatLiveCodeErrorDetails,
     isOpen,
     itemType,
     liveCodeIsVisible,
@@ -3488,6 +3513,7 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
                     isLoading={liveCodeIsLoading}
                     statusMessage={liveCodeStatusMessage}
                     isError={liveCodeIsError}
+                    errorDetails={liveCodeErrorDetails}
                     widthPercent={liveCodeWidthPercent}
                     isBlockPreview={!!liveCodePreviewTarget}
                     onBackToItem={() => setLiveCodePreviewTarget(null)}

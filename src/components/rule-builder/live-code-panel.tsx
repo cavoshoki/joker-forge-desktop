@@ -14,6 +14,7 @@ interface LiveCodePanelProps {
   isLoading: boolean;
   statusMessage?: string;
   isError?: boolean;
+  errorDetails?: string;
   widthPercent: number;
   isBlockPreview: boolean;
   onBackToItem: () => void;
@@ -98,6 +99,7 @@ const LiveCodePanel: React.FC<LiveCodePanelProps> = ({
   isLoading,
   statusMessage,
   isError = false,
+  errorDetails,
   widthPercent,
   isBlockPreview,
   onBackToItem,
@@ -158,12 +160,19 @@ const LiveCodePanel: React.FC<LiveCodePanelProps> = ({
           <div
             className={`mx-4 mt-4 rounded-md border px-3 py-2 text-xs flex items-start gap-2 ${
               isError
-                ? "border-destructive/40 bg-destructive/10 text-destructive"
+                ? "border-transparent bg-transparent text-destructive"
                 : "border-amber-400/40 bg-amber-400/10 text-amber-200"
             }`}
           >
             <WarningCircle className="h-4 w-4 mt-0.5 shrink-0" />
-            <span>{statusMessage}</span>
+            <div className="min-w-0 w-full">
+              <div className="font-semibold">{statusMessage}</div>
+              {isError && errorDetails ? (
+                <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap wrap-break-word px-0 py-0 text-[11px] leading-relaxed text-destructive/90">
+                  {errorDetails}
+                </pre>
+              ) : null}
+            </div>
           </div>
         ) : null}
 
