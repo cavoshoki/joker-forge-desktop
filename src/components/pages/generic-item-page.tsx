@@ -50,6 +50,7 @@ interface GenericItemPageProps<T> {
   addNewLabel?: string;
   renderCard: (item: T) => ReactNode;
   headerContent?: ReactNode; // For extra custom stats/info if needed
+  reforged?: boolean;
 }
 
 function GenericItemPageInternal<T extends { id: string }>({
@@ -64,6 +65,7 @@ function GenericItemPageInternal<T extends { id: string }>({
   addNewLabel = "Add New Item",
   renderCard,
   headerContent,
+  reforged = false,
 }: GenericItemPageProps<T>) {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentSort, setCurrentSort] = useState(
@@ -120,7 +122,12 @@ function GenericItemPageInternal<T extends { id: string }>({
         <div className="space-y-2">
           <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
             <SquaresFour weight="fill" className="h-4 w-4 text-primary" />
-            Collection View
+            {reforged ? "Reference View" : "Collection View"}
+            {reforged && (
+              <Badge variant="secondary" className="text-[10px] uppercase">
+                Read Only
+              </Badge>
+            )}
           </h2>
           <div className="flex items-center gap-4">
             <h1 className="text-5xl font-bold tracking-tight text-foreground">
@@ -136,7 +143,7 @@ function GenericItemPageInternal<T extends { id: string }>({
           </div>
         </div>
 
-        {onAddNew && (
+        {onAddNew && !reforged && (
           <Button
             onClick={onAddNew}
             size="lg"
@@ -147,6 +154,13 @@ function GenericItemPageInternal<T extends { id: string }>({
           </Button>
         )}
       </div>
+
+      {reforged && (
+        <div className="rounded-2xl bg-card/60 px-4 py-3 text-sm text-muted-foreground">
+          Reference data only. Use the copy button on any card to add it to your
+          project.
+        </div>
+      )}
 
       <div className="border-b border-border w-full" />
 

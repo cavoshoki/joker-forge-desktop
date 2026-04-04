@@ -45,6 +45,7 @@ import LiveCodePanel from "./live-code-panel";
 import HistoryPanel from "./history-panel";
 import { compileSingleJokerLua } from "@/lib/rust-codegen-export";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   ArrowClockwise,
   ArrowCounterClockwise,
@@ -59,6 +60,7 @@ import {
   SquaresFour,
   Terminal,
   Trash,
+  X,
 } from "@phosphor-icons/react";
 import {
   getConditionTypeById,
@@ -175,6 +177,7 @@ interface RuleBuilderProps {
   item: ItemData;
   onUpdateItem: (updates: Partial<ItemData>) => void;
   itemType: ItemType;
+  reforged?: boolean;
 }
 
 const RuleBuilder: React.FC<RuleBuilderProps> = ({
@@ -185,7 +188,9 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
   item,
   onUpdateItem,
   itemType,
+  reforged = false,
 }) => {
+  const isReadOnly = reforged;
   const { userConfig, setUserConfig } = useContext(UserConfigContext);
 
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -289,9 +294,11 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
   }, []);
 
   const handleSaveAndClose = useCallback(() => {
-    onSave(rules);
+    if (!isReadOnly) {
+      onSave(rules);
+    }
     onClose();
-  }, [onSave, onClose, rules]);
+  }, [isReadOnly, onSave, onClose, rules]);
 
   const handleSelectItem = useCallback((item: NonNullable<SelectedItem>) => {
     setSelectedItem(item);
@@ -3127,6 +3134,14 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
                   <span className="text-xs font-bold tracking-widest text-muted-foreground uppercase shrink-0">
                     Rule Builder
                   </span>
+                  {isReadOnly && (
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] uppercase tracking-wider"
+                    >
+                      Read Only
+                    </Badge>
+                  )}
                   <span className="text-[11px] text-muted-foreground hidden xl:block truncate">
                     Pan: {Math.round(panState.x)}, {Math.round(panState.y)}
                   </span>
@@ -3178,13 +3193,19 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
                   </span>
                   <div className="w-px h-5 bg-border" />
                   <Button
-                    variant="default"
+                    variant={isReadOnly ? "outline" : "default"}
                     size="sm"
                     onClick={handleSaveAndClose}
-                    icon={<CheckCircle className="h-4 w-4" />}
+                    icon={
+                      isReadOnly ? (
+                        <X className="h-4 w-4" />
+                      ) : (
+                        <CheckCircle className="h-4 w-4" />
+                      )
+                    }
                     className="text-xs cursor-pointer"
                   >
-                    Save Changes
+                    {isReadOnly ? "Close" : "Save Changes"}
                   </Button>
                 </div>
 

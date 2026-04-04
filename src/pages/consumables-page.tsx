@@ -359,6 +359,7 @@ export default function ConsumablesPage() {
             id: "rules",
             label: "Rules",
             icon: <Sparkle className="h-4 w-4" />,
+            badgeCount: item.rules?.length ?? 0,
             onClick: () => {
               setEditingItem(null);
               setRuleEditingItem(item);

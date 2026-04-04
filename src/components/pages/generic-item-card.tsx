@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, ReactNode } from "react";
 import { CurrencyDollar, Image, Trash } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Tooltip,
   TooltipContent,
@@ -32,6 +33,7 @@ export interface ActionConfig {
   label: string;
   onClick: () => void;
   variant?: "default" | "destructive" | "secondary" | "outline" | "ghost";
+  badgeCount?: number;
 }
 
 interface GenericItemCardProps {
@@ -45,6 +47,7 @@ interface GenericItemCardProps {
   actions?: ActionConfig[];
   rarity?: number | string;
   consumableSet?: string;
+  reforged?: boolean;
   onUpdate: (updates: {
     name?: string;
     description?: string;
@@ -70,11 +73,13 @@ export function GenericItemCard({
   actions = [],
   rarity,
   consumableSet,
+  reforged = false,
   onUpdate,
   onDuplicate,
   showPlaceholderPickerButton = false,
   onOpenPlaceholderPicker,
 }: GenericItemCardProps) {
+  const isReadOnly = reforged;
   const [editingField, setEditingField] = useState<
     "none" | "name" | "desc" | "cost" | "id"
   >("none");
@@ -95,6 +100,7 @@ export function GenericItemCard({
     field: "name" | "desc" | "cost" | "id",
     currentValue: string | number,
   ) => {
+    if (isReadOnly) return;
     setTempValue(currentValue.toString());
     setEditingField(field);
   };
@@ -105,6 +111,10 @@ export function GenericItemCard({
   };
 
   const saveEdit = () => {
+    if (isReadOnly) {
+      setEditingField("none");
+      return;
+    }
     if (editingField === "name") {
       if (tempValue.trim()) {
         onUpdate({
@@ -138,8 +148,13 @@ export function GenericItemCard({
     (a) => a.id === "delete" || a.variant === "destructive",
   );
   const duplicateAction = actions.find((a) => a.id === "duplicate");
-  const otherActions = actions.filter(
-    (a) => a !== deleteAction && a !== duplicateAction,
+  const textActionIds = new Set(["edit", "rules"]);
+  const textActions = actions.filter(
+    (a) => a !== deleteAction && textActionIds.has(a.id),
+  );
+  const iconActions = actions.filter(
+    (a) =>
+      a !== deleteAction && a !== duplicateAction && !textActionIds.has(a.id),
   );
 
   const getPropertyStyles = (
@@ -171,7 +186,12 @@ export function GenericItemCard({
   };
 
   return (
-    <div className="group relative flex flex-col sm:flex-row gap-6 p-6 rounded-3xl bg-card transition-all duration-300 h-90">
+    <div
+      className={cn(
+        "group relative flex flex-col sm:flex-row gap-6 p-6 rounded-3xl bg-card transition-all duration-300 h-90",
+        isReadOnly && "bg-card/70",
+      )}
+    >
       {deleteAction && (
         <div className="absolute top-4 right-4 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
           <Tooltip>
@@ -201,9 +221,10 @@ export function GenericItemCard({
             <Tooltip>
               <TooltipTrigger asChild>
                 <div
-                  onClick={() =>
-                    editingField !== "cost" && startEdit("cost", cost)
-                  }
+                  onClick={() => {
+                    if (isReadOnly) return;
+                    if (editingField !== "cost") startEdit("cost", cost);
+                  }}
                   className="h-10 px-4 flex items-center justify-center gap-1.5 rounded-lg bg-card border-2 border-yellow-500/30 text-yellow-500 font-bold text-xl shadow-sm cursor-pointer hover:border-yellow-500 hover:bg-yellow-500 hover:text-white transition-all group/cost"
                 >
                   <CurrencyDollar className="h-5 w-5" weight="fill" />
@@ -234,23 +255,35 @@ export function GenericItemCard({
 
         <div className="relative z-10 -mt-20 w-full flex justify-center">
           {rarity !== undefined ? (
-            <RaritySelect
-              value={String(rarity)}
-              onChange={(val) =>
-                onUpdate({
-                  rarity: isNaN(Number(val)) ? val : Number(val),
-                })
-              }
-            />
+            isReadOnly ? (
+              <Badge variant="secondary" className="font-bold uppercase">
+                Rarity: {rarity}
+              </Badge>
+            ) : (
+              <RaritySelect
+                value={String(rarity)}
+                onChange={(val) =>
+                  onUpdate({
+                    rarity: isNaN(Number(val)) ? val : Number(val),
+                  })
+                }
+              />
+            )
           ) : consumableSet !== undefined ? (
-            <ConsumableSetSelect
-              value={consumableSet}
-              onChange={(val) =>
-                onUpdate({
-                  set: val,
-                })
-              }
-            />
+            isReadOnly ? (
+              <Badge variant="secondary" className="font-bold uppercase">
+                Set: {consumableSet}
+              </Badge>
+            ) : (
+              <ConsumableSetSelect
+                value={consumableSet}
+                onChange={(val) =>
+                  onUpdate({
+                    set: val,
+                  })
+                }
+              />
+            )
           ) : (
             badges
           )}
@@ -262,10 +295,17 @@ export function GenericItemCard({
           {idValue !== undefined && (
             <div className="shrink-0 self-center">
               <span
-                onClick={() =>
-                  editingField !== "id" && startEdit("id", idValue)
+                onClick={
+                  isReadOnly
+                    ? undefined
+                    : () => editingField !== "id" && startEdit("id", idValue)
                 }
-                className="text-muted-foreground/40 font-mono text-sm font-medium hover:text-primary cursor-pointer transition-colors select-none"
+                className={cn(
+                  "text-muted-foreground/40 font-mono text-sm font-medium transition-colors select-none",
+                  isReadOnly
+                    ? "cursor-default"
+                    : "hover:text-primary cursor-pointer",
+                )}
               >
                 #
                 {editingField === "id" ? (
@@ -299,8 +339,13 @@ export function GenericItemCard({
               />
             ) : (
               <h3
-                className="text-3xl font-bold tracking-tight text-foreground truncate cursor-pointer hover:opacity-70 transition-opacity select-none"
-                onClick={() => startEdit("name", name)}
+                className={cn(
+                  "text-3xl font-bold tracking-tight text-foreground truncate transition-opacity select-none",
+                  isReadOnly
+                    ? "cursor-default"
+                    : "cursor-pointer hover:opacity-70",
+                )}
+                onClick={isReadOnly ? undefined : () => startEdit("name", name)}
                 title={name}
               >
                 {name}
@@ -321,8 +366,15 @@ export function GenericItemCard({
             />
           ) : (
             <div
-              className="w-full h-full cursor-pointer text-[13px] leading-relaxed text-muted-foreground hover:text-foreground transition-colors wrap-break-word whitespace-pre-wrap overflow-y-auto pr-2"
-              onClick={() => startEdit("desc", description)}
+              className={cn(
+                "w-full h-full text-[13px] leading-relaxed text-muted-foreground transition-colors wrap-break-word whitespace-pre-wrap overflow-y-auto pr-2",
+                isReadOnly
+                  ? "cursor-default"
+                  : "cursor-pointer hover:text-foreground",
+              )}
+              onClick={
+                isReadOnly ? undefined : () => startEdit("desc", description)
+              }
               dangerouslySetInnerHTML={{
                 __html: description || "No description provided...",
               }}
@@ -345,6 +397,7 @@ export function GenericItemCard({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (isReadOnly) return;
                         prop.onClick();
                         setTooltipStates((prev) => ({
                           ...prev,
@@ -364,7 +417,12 @@ export function GenericItemCard({
                           [prop.id]: false,
                         }))
                       }
-                      className={getPropertyStyles(prop.isActive, prop.variant)}
+                      disabled={isReadOnly}
+                      aria-disabled={isReadOnly}
+                      className={cn(
+                        getPropertyStyles(prop.isActive, prop.variant),
+                        isReadOnly && "cursor-default opacity-70",
+                      )}
                     >
                       {prop.icon}
                     </button>
@@ -405,29 +463,31 @@ export function GenericItemCard({
             )}
 
             <div className="flex gap-2">
-              {showPlaceholderPickerButton && onOpenPlaceholderPicker && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenPlaceholderPicker();
-                      }}
-                      onPointerDown={(e) => e.preventDefault()}
-                      className="h-9 w-9 transition-all hover:scale-110 rounded-lg cursor-pointer"
-                    >
-                      <Image className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent className="font-bold">
-                    Choose Placeholder
-                  </TooltipContent>
-                </Tooltip>
-              )}
+              {showPlaceholderPickerButton &&
+                onOpenPlaceholderPicker &&
+                !isReadOnly && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenPlaceholderPicker();
+                        }}
+                        onPointerDown={(e) => e.preventDefault()}
+                        className="h-9 w-9 transition-all hover:scale-110 rounded-lg cursor-pointer"
+                      >
+                        <Image className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent className="font-bold">
+                      Choose Placeholder
+                    </TooltipContent>
+                  </Tooltip>
+                )}
 
-              {otherActions.map((action) => (
+              {iconActions.map((action) => (
                 <Tooltip key={action.id}>
                   <TooltipTrigger asChild>
                     <Button
@@ -451,6 +511,36 @@ export function GenericItemCard({
                 </Tooltip>
               ))}
             </div>
+
+            {textActions.length > 0 && (
+              <div className="ml-auto flex items-center gap-2">
+                {textActions.map((action) => (
+                  <Button
+                    key={action.id}
+                    variant={action.variant || "secondary"}
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      action.onClick();
+                    }}
+                    onPointerDown={(e) => e.preventDefault()}
+                    className="relative h-9 px-3 rounded-lg text-xs font-semibold uppercase tracking-wide cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="flex h-4 w-4 items-center justify-center">
+                        {action.icon}
+                      </span>
+                      {action.id === "edit" ? "Edit" : "Rules"}
+                    </span>
+                    {typeof action.badgeCount === "number" && (
+                      <span className="absolute -top-2 -right-2 h-5 min-w-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold leading-5 shadow-sm">
+                        {action.badgeCount}
+                      </span>
+                    )}
+                  </Button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

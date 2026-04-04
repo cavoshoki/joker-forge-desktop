@@ -77,6 +77,22 @@ export function Header({ title }: HeaderProps) {
         return "Boosters";
       case "/sounds":
         return "Sounds";
+      case "/vanilla-reforged/jokers":
+        return "Vanilla Jokers";
+      case "/vanilla-reforged/consumables":
+        return "Vanilla Consumables";
+      case "/vanilla-reforged/boosters":
+        return "Vanilla Boosters";
+      case "/vanilla-reforged/enhancements":
+        return "Vanilla Enhancements";
+      case "/vanilla-reforged/seals":
+        return "Vanilla Seals";
+      case "/vanilla-reforged/editions":
+        return "Vanilla Editions";
+      case "/vanilla-reforged/vouchers":
+        return "Vanilla Vouchers";
+      case "/vanilla-reforged/decks":
+        return "Vanilla Decks";
       default:
         return "Joker Forge";
     }

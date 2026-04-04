@@ -39,6 +39,7 @@ import { useConfirmDelete } from "@/hooks/use-confirm-delete";
 import { importJokerforgeFromText } from "@/lib/jokerforge/importer";
 import { downloadJokerforgeV2 } from "@/lib/jokerforge/exporter";
 import { pushGlobalAlert } from "@/lib/global-alerts-bus";
+import { useVanillaReforgedData } from "@/lib/vanilla-reforged";
 
 export function OverviewPage() {
   const {
@@ -61,7 +62,9 @@ export function OverviewPage() {
     updateEnhancements,
     updateSounds,
   } = useProjectData();
+  const vanillaReforged = useVanillaReforgedData();
   const { stats, metadata } = data;
+  const vanillaStats = vanillaReforged.data;
 
   const [editingField, setEditingField] = useState<
     "none" | "name" | "id" | "prefix" | "version" | "author" | "description"
@@ -600,6 +603,85 @@ export function OverviewPage() {
             icon={Package}
             href="/boosters"
             colorClass="text-booster-primary"
+          />
+        </div>
+      </div>
+
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold tracking-tight flex items-center gap-2 text-foreground/80">
+            <Book className="h-5 w-5 text-primary" />
+            Vanilla Reforged
+          </h2>
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Reference Only
+          </span>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <StatButton
+            title="Jokers"
+            count={vanillaStats?.jokers.length ?? 0}
+            icon={Smiley}
+            href="/vanilla-reforged/jokers"
+            colorClass="text-joker-primary"
+            reforged
+          />
+          <StatButton
+            title="Consumables"
+            count={vanillaStats?.consumables.length ?? 0}
+            icon={Flask}
+            href="/vanilla-reforged/consumables"
+            colorClass="text-consumable-primary"
+            reforged
+          />
+          <StatButton
+            title="Vouchers"
+            count={vanillaStats?.vouchers.length ?? 0}
+            icon={Ticket}
+            href="/vanilla-reforged/vouchers"
+            colorClass="text-voucher-primary"
+            reforged
+          />
+          <StatButton
+            title="Decks"
+            count={vanillaStats?.decks.length ?? 0}
+            icon={Cards}
+            href="/vanilla-reforged/decks"
+            colorClass="text-deck-primary"
+            reforged
+          />
+          <StatButton
+            title="Enhancements"
+            count={vanillaStats?.enhancements.length ?? 0}
+            icon={Star}
+            href="/vanilla-reforged/enhancements"
+            colorClass="text-enhancement-primary"
+            reforged
+          />
+          <StatButton
+            title="Seals"
+            count={vanillaStats?.seals.length ?? 0}
+            icon={Stamp}
+            href="/vanilla-reforged/seals"
+            colorClass="text-seal-primary"
+            reforged
+          />
+          <StatButton
+            title="Editions"
+            count={vanillaStats?.editions.length ?? 0}
+            icon={Palette}
+            href="/vanilla-reforged/editions"
+            colorClass="text-edition-primary"
+            reforged
+          />
+          <StatButton
+            title="Boosters"
+            count={vanillaStats?.boosters.length ?? 0}
+            icon={Package}
+            href="/vanilla-reforged/boosters"
+            colorClass="text-booster-primary"
+            reforged
           />
         </div>
       </div>

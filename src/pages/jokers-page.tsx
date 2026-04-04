@@ -874,6 +874,7 @@ export default function JokersPage() {
             id: "rules",
             label: "Edit Rules",
             icon: <Sparkle className="h-5 w-5" weight="bold" />,
+            badgeCount: joker.rules?.length ?? 0,
             onClick: () => {
               setEditingItem(null);
               setRuleEditingItem(joker);

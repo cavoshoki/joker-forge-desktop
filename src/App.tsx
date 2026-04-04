@@ -13,6 +13,14 @@ import BoostersPage from "@/pages/boosters-page";
 import VouchersPage from "@/pages/vouchers-page";
 import SoundsPage from "@/pages/sounds-page";
 import MetadataPage from "@/pages/metadata-page";
+import VanillaReforgedJokersPage from "@/pages/vanilla-reforged/vanilla-reforged-jokers-page";
+import VanillaReforgedConsumablesPage from "@/pages/vanilla-reforged/vanilla-reforged-consumables-page";
+import VanillaReforgedBoostersPage from "@/pages/vanilla-reforged/vanilla-reforged-boosters-page";
+import VanillaReforgedEnhancementsPage from "@/pages/vanilla-reforged/vanilla-reforged-enhancements-page";
+import VanillaReforgedSealsPage from "@/pages/vanilla-reforged/vanilla-reforged-seals-page";
+import VanillaReforgedEditionsPage from "@/pages/vanilla-reforged/vanilla-reforged-editions-page";
+import VanillaReforgedVouchersPage from "@/pages/vanilla-reforged/vanilla-reforged-vouchers-page";
+import VanillaReforgedDecksPage from "@/pages/vanilla-reforged/vanilla-reforged-decks-page";
 import { EntityBridgeListener } from "@/components/bridge/entity-bridge-listener";
 import {
   ContextMenu,
@@ -47,6 +55,38 @@ function App() {
                 <Route path="/vouchers" element={<VouchersPage />} />
                 <Route path="/sounds" element={<SoundsPage />} />
                 <Route path="/metadata" element={<MetadataPage />} />
+                <Route
+                  path="/vanilla-reforged/jokers"
+                  element={<VanillaReforgedJokersPage />}
+                />
+                <Route
+                  path="/vanilla-reforged/consumables"
+                  element={<VanillaReforgedConsumablesPage />}
+                />
+                <Route
+                  path="/vanilla-reforged/boosters"
+                  element={<VanillaReforgedBoostersPage />}
+                />
+                <Route
+                  path="/vanilla-reforged/enhancements"
+                  element={<VanillaReforgedEnhancementsPage />}
+                />
+                <Route
+                  path="/vanilla-reforged/seals"
+                  element={<VanillaReforgedSealsPage />}
+                />
+                <Route
+                  path="/vanilla-reforged/editions"
+                  element={<VanillaReforgedEditionsPage />}
+                />
+                <Route
+                  path="/vanilla-reforged/vouchers"
+                  element={<VanillaReforgedVouchersPage />}
+                />
+                <Route
+                  path="/vanilla-reforged/decks"
+                  element={<VanillaReforgedDecksPage />}
+                />
               </Routes>
             </MainLayout>
           </div>
