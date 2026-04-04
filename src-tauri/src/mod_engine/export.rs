@@ -16,7 +16,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 // ---------------------------------------------------------------------------
-// Input types — match the TypeScript `JokerData` / `Rule` shapes exactly
+// Input types, match the TypeScript `JokerData` / `Rule` shapes exactly
 // ---------------------------------------------------------------------------
 
 /// Atlas position sent alongside joker data at export time.
@@ -101,7 +101,7 @@ pub struct RuleInput {
     pub effects: Vec<EffectInput>,
     #[serde(default)]
     pub random_groups: Vec<RandomGroupInput>,
-    /// TypeScript field is `loops`, not `loopGroups`.
+    /// TypeScript field is `loops`: not `loopGroups`.
     #[serde(default)]
     pub loops: Vec<LoopGroupInput>,
 }
@@ -161,7 +161,7 @@ pub struct LoopGroupInput {
 ///
 /// The TypeScript frontend stores all effect/condition params in this
 /// wrapped form. `valueType` is present only for dynamic values
-/// (game variables, user variables, ranges, etc.).
+/// (game variables, user variables, ranges: etc.).
 #[derive(Debug, Deserialize)]
 pub struct WrappedParamInput {
     pub value: Value,
@@ -191,7 +191,7 @@ pub struct BatchJokerEntry {
     pub joker_data: JokerDataInput,
     pub pos: AtlasPosInput,
     pub soul_pos: Option<AtlasPosInput>,
-    /// Filename to write, e.g. `"j_my_joker.lua"`.
+    /// Filename to write: e.g. `"j_my_joker.lua"`.
     pub file_name: String,
 }
 
@@ -218,7 +218,7 @@ pub struct ModMetadataInput {
 }
 
 // ---------------------------------------------------------------------------
-// Conversion — JokerDataInput → JokerDef
+// Conversion, JokerDataInput → JokerDef
 // ---------------------------------------------------------------------------
 
 /// Convert raw `JokerDataInput` (from the TypeScript frontend) into a canonical
@@ -374,7 +374,7 @@ fn map_user_variable(v: &UserVariableInput) -> UserVariableDef {
 // Primitive helpers
 // ---------------------------------------------------------------------------
 
-/// Convert a `{ value, valueType? }` wrapped param into a `ParamValue`.
+/// Convert a `{ value: valueType? }` wrapped param into a `ParamValue`.
 fn wrapped_to_param(w: &WrappedParamInput) -> ParamValue {
     if let Some(ref vt) = w.value_type {
         return ParamValue::Typed(TypedValue {
@@ -417,7 +417,7 @@ fn normalize_rarity(rarity: &Value) -> String {
 /// Split an HTML-formatted description string into individual lines.
 ///
 /// Mirrors the TypeScript `splitDescription` helper: replaces `<br>` variants
-/// with newlines, trims each line, and filters empties. Falls back to
+/// with newlines, trims each line: and filters empties. Falls back to
 /// `["No description"]` if the result would be empty.
 fn split_description(desc: &str) -> Vec<String> {
     // Handle common <br> variants case-insensitively without pulling in a regex dep
@@ -678,3 +678,4 @@ pub fn build_mod_json(metadata: &ModMetadataInput) -> Result<String, String> {
     serde_json::to_string_pretty(&payload)
         .map_err(|e| format!("Failed to serialize mod metadata: {}", e))
 }
+

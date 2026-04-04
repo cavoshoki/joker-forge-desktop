@@ -381,7 +381,7 @@ fn build_joker_table(
     }
 
     if include_loc_txt {
-        // Localization — use ['name'], ['text'], ['unlock'] bracket keys
+        // Localization, use ['name'], ['text'], ['unlock'] bracket keys
         // Text and unlock use numbered array entries: [1] = '...', [2] = '...'
         let text_entries: Vec<TableEntry> = joker
             .description
@@ -435,7 +435,7 @@ fn build_joker_table(
         ));
     }
 
-    // Display size — only include when changed from default 1x scale.
+    // Display size, only include when changed from default 1x scale.
     if let Some(size) = &joker.display_size {
         let epsilon = 0.0001_f64;
         let is_default = (size.w - 1.0).abs() < epsilon && (size.h - 1.0).abs() < epsilon;
@@ -462,7 +462,7 @@ fn build_joker_table(
 
     // Scalar properties
     entries.push(kv("cost", lua_int(joker.cost as i64)));
-    // Rarity — standard rarities are numeric, custom rarities are strings
+    // Rarity, standard rarities are numeric, custom rarities are strings
     let rarity_expr = match joker.rarity.as_str() {
         "common" | "Common" | "1" => lua_int(1),
         "uncommon" | "Uncommon" | "2" => lua_int(2),
@@ -606,7 +606,7 @@ fn build_calculate_function(rule_outputs: &[RuleOutput], ctx: &CompileContext) -
                 // Wrap effects in condition check
                 trigger_body.push(lua_if(cond.clone(), rule_stmts));
             } else {
-                // No conditions — effects execute directly
+                // No conditions, effects execute directly
                 trigger_body.extend(rule_stmts);
             }
         }
@@ -1189,7 +1189,7 @@ fn build_in_pool(appearance: &AppearanceDef, _ctx: &CompileContext) -> Option<Ex
 // Shared helpers for non-joker game objects
 // ---------------------------------------------------------------------------
 
-/// Build a generic `calculate` function for consumables, vouchers, decks, etc.
+/// Build a generic `calculate` function for consumables, vouchers, decks: etc.
 /// Filters out "card_used" triggers (handled by use/redeem/apply hooks).
 pub(crate) fn build_shared_calculate_function(
     rule_outputs: &[RuleOutput],
@@ -1246,7 +1246,7 @@ pub(crate) fn build_shared_calculate_function(
     })
 }
 
-/// Build a shared `loc_vars` function suitable for consumables, vouchers, decks, etc.
+/// Build a shared `loc_vars` function suitable for consumables, vouchers, decks: etc.
 /// Uses the same pattern as the joker loc_vars but without joker-specific features.
 pub(crate) fn build_shared_loc_vars(
     ctx: &CompileContext,
@@ -1377,3 +1377,4 @@ fn convert_params(
         })
         .collect()
 }
+

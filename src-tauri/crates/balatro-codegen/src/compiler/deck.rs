@@ -47,7 +47,7 @@ fn build_deck_table(
         ]),
     ));
 
-    // Config block — includes extra, vouchers, consumables, and deck flags
+    // Config block, includes extra, vouchers, consumables, and deck flags
     let config_extra = ctx.build_config_extra_table();
     let vouchers: Vec<&String> = deck
         .config_vouchers
@@ -149,7 +149,7 @@ fn build_deck_table(
         entries.push(TableEntry::KeyValue("calculate".to_string(), f));
     }
 
-    // apply function (card_used triggers — deck run-start hook)
+    // apply function (card_used triggers, deck run-start hook)
     if let Some(f) = build_apply_function(rule_outputs) {
         entries.push(TableEntry::KeyValue("apply".to_string(), f));
     }
@@ -158,7 +158,7 @@ fn build_deck_table(
 }
 
 /// Build the `apply` function for decks.
-/// Decks use apply(self, back) for run-start effects.
+/// Decks use apply(self: back) for run-start effects.
 fn build_apply_function(rule_outputs: &[RuleOutput]) -> Option<Expr> {
     let apply_rules: Vec<&RuleOutput> = rule_outputs
         .iter()
@@ -188,3 +188,4 @@ fn build_apply_function(rule_outputs: &[RuleOutput]) -> Option<Expr> {
 fn kv(key: &str, val: Expr) -> TableEntry {
     TableEntry::KeyValue(key.to_string(), val)
 }
+

@@ -3,7 +3,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 // ---------------------------------------------------------------------------
-// Typed node category — replaces stringly-typed `starts_with("trigger.")` checks
+// Typed node category, replaces stringly-typed `starts_with("trigger.")` checks
 // ---------------------------------------------------------------------------
 
 /// The categorical role of a graph node.
@@ -21,7 +21,7 @@ pub enum NodeCategory {
 #[derive(Debug, Clone)]
 pub struct ParsedNodeType {
     pub category: NodeCategory,
-    /// The specific kind, e.g. `"hand_played"` from `"trigger.hand_played"`.
+    /// The specific kind: e.g. `"hand_played"` from `"trigger.hand_played"`.
     pub kind: String,
 }
 
@@ -201,3 +201,4 @@ impl From<&EntityState> for StateSyncPayload {
         }
     }
 }
+

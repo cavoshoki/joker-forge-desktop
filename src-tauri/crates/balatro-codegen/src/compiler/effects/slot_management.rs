@@ -21,7 +21,7 @@ fn get_str(effect: &EffectDef, key: &str) -> Option<String> {
     effect.params.get(key).map(|v| v.to_string_lossy())
 }
 
-/// Resolve a value param to a Lua expression string, registering a config var
+/// Resolve a value param to a Lua expression string: registering a config var
 /// for literal numbers.
 fn value_to_lua_str(
     effect: &EffectDef,
@@ -86,7 +86,7 @@ fn value_to_lua_str(
 // edit_joker_slots  (modifies G.jokers.config.card_limit)
 // ---------------------------------------------------------------------------
 
-/// Edit Joker Slots effect — changes the joker card limit.
+/// Edit Joker Slots effect: changes the joker card limit.
 ///
 /// For joker context: returns `func = function() ... end` in the return table.
 pub fn edit_joker_slots(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
@@ -144,7 +144,7 @@ pub fn edit_joker_slots(effect: &EffectDef, ctx: &mut CompileContext) -> EffectO
     }
 }
 
-/// Edit Joker Slots passive — changes card_limit when joker is added/removed from deck.
+/// Edit Joker Slots passive: changes card_limit when joker is added/removed from deck.
 pub fn edit_joker_slots_passive(effect: &EffectDef, ctx: &mut CompileContext) -> PassiveEffectOutput {
     let operation = get_str_default(effect, "operation", "add");
     // We use the same value resolution but need raw strings for add/remove
@@ -196,7 +196,7 @@ pub fn edit_joker_slots_passive(effect: &EffectDef, ctx: &mut CompileContext) ->
 // edit_joker_size  (modifies G.jokers.config.highlighted_limit)
 // ---------------------------------------------------------------------------
 
-/// Edit Joker Size effect — changes how many jokers can be highlighted at once.
+/// Edit Joker Size effect: changes how many jokers can be highlighted at once.
 pub fn edit_joker_size(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let operation = get_str_default(effect, "operation", "add");
     let custom_message = get_str(effect, "customMessage");
@@ -249,7 +249,7 @@ pub fn edit_joker_size(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOu
     }
 }
 
-/// Edit Joker Size passive — changes highlighted_limit when joker is added/removed.
+/// Edit Joker Size passive: changes highlighted_limit when joker is added/removed.
 pub fn edit_joker_size_passive(effect: &EffectDef, ctx: &mut CompileContext) -> PassiveEffectOutput {
     let operation = get_str_default(effect, "operation", "add");
     let count = ctx.next_effect_count("joker_size");
@@ -300,7 +300,7 @@ pub fn edit_joker_size_passive(effect: &EffectDef, ctx: &mut CompileContext) -> 
 // edit_consumable_slots  (modifies G.consumeables.config.card_limit)
 // ---------------------------------------------------------------------------
 
-/// Edit Consumable Slots effect — changes the consumable card limit.
+/// Edit Consumable Slots effect: changes the consumable card limit.
 pub fn edit_consumable_slots(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let operation = get_str_default(effect, "operation", "add");
     let custom_message = get_str(effect, "customMessage");
@@ -361,7 +361,7 @@ pub fn edit_consumable_slots(effect: &EffectDef, ctx: &mut CompileContext) -> Ef
     }
 }
 
-/// Edit Consumable Slots passive — changes consumable card_limit when joker added/removed.
+/// Edit Consumable Slots passive: changes consumable card_limit when joker added/removed.
 pub fn edit_consumable_slots_passive(
     effect: &EffectDef,
     ctx: &mut CompileContext,
@@ -489,7 +489,7 @@ fn item_size_data(item_type: &str) -> ItemSizeData {
     }
 }
 
-/// Edit Item Size effect — changes hand size, play/discard limits, or shop/voucher slots.
+/// Edit Item Size effect: changes hand size, play/discard limits, or shop/voucher slots.
 ///
 /// The `item_size_type` param on the effect specifies which stat to modify:
 /// `"hand_size"` | `"play_size"` | `"discard_size"` | `"voucher_slots"` |
@@ -555,7 +555,7 @@ pub fn edit_item_size_typed(effect: &EffectDef, ctx: &mut CompileContext, size_t
     }
 }
 
-/// Edit Item Size passive — modifies item sizes when joker is added/removed.
+/// Edit Item Size passive: modifies item sizes when joker is added/removed.
 ///
 /// Reads `item_size_type` from effect params; use `edit_item_size_passive_typed` when
 /// the type is known from the effect ID.
@@ -625,3 +625,4 @@ pub fn edit_item_size_passive_typed(
         ..Default::default()
     }
 }
+

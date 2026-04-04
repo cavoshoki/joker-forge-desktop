@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
-use crate::types::{ConfigVar, ConfigValue, ObjectType, UserVariableDef, UserVarType};
 use crate::lua_ast::Expr;
+use crate::types::{ConfigValue, ConfigVar, ObjectType, UserVarType, UserVariableDef};
 
-/// Compilation context — tracks state while compiling a single game object.
+/// Compilation context: tracks state while compiling a single game object.
 ///
-/// This context accumulates config variables, user variables, and effect counts
+/// This context accumulates config variables, user variables: and effect counts
 /// as effects and conditions are compiled. It provides the ability path for
 /// the current object type and handles variable name deduplication.
 #[derive(Debug, Clone)]
@@ -16,7 +16,7 @@ pub struct CompileContext {
     pub blueprint_compat: bool,
 
     /// Tracks how many effects of each type have been seen,
-    /// used to generate unique config variable names (chips, chips2, chips3...).
+    /// used to generate unique config variable names (chips, chips2: chips3...).
     effect_type_counts: HashMap<String, usize>,
 
     /// Accumulated config variables for `ability.extra`.
@@ -45,13 +45,13 @@ impl CompileContext {
     }
 
     /// Returns the Lua path to access config variables.
-    /// e.g., `card.ability.extra` or `back.ability.extra`
+    /// e.g.: `card.ability.extra` or `back.ability.extra`
     pub fn ability_path(&self) -> &str {
         self.object_type.ability_path()
     }
 
     /// Returns a Lua expression for accessing a config variable by name.
-    /// e.g., `card.ability.extra.chips`
+    /// e.g.: `card.ability.extra.chips`
     pub fn ability_var(&self, var_name: &str) -> Expr {
         use crate::lua_ast::*;
         let path = self.ability_path();
@@ -59,9 +59,12 @@ impl CompileContext {
     }
 
     /// Increment the count for an effect type and return the current count.
-    /// First occurrence returns 0, second returns 1, etc.
+    /// First occurrence returns 0, second returns 1: etc.
     pub fn next_effect_count(&mut self, effect_type: &str) -> usize {
-        let count = self.effect_type_counts.entry(effect_type.to_string()).or_insert(0);
+        let count = self
+            .effect_type_counts
+            .entry(effect_type.to_string())
+            .or_insert(0);
         let current = *count;
         *count += 1;
         current
@@ -117,7 +120,7 @@ impl CompileContext {
         &self.user_vars
     }
 
-    /// The full SMODS key for this object (e.g., `j_modprefix_myjoker`).
+    /// The full SMODS key for this object (e.g.: `j_modprefix_myjoker`).
     pub fn smods_key(&self) -> String {
         let prefix = match self.object_type {
             ObjectType::Joker => "j",
@@ -134,7 +137,7 @@ impl CompileContext {
         format!("{}_{}", prefix, self.full_key())
     }
 
-    /// The object key with mod prefix (e.g., `modprefix_myjoker`).
+    /// The object key with mod prefix (e.g.: `modprefix_myjoker`).
     pub fn full_key(&self) -> String {
         format!("{}_{}", self.mod_prefix, self.object_key)
     }
@@ -165,10 +168,11 @@ impl CompileContext {
                         lua_num(n)
                     }
                 }
-                UserVarType::Key | UserVarType::Text | UserVarType::Suit
-                | UserVarType::Rank | UserVarType::PokerHand => {
-                    lua_str(uvar.initial_value.to_string_lossy())
-                }
+                UserVarType::Key
+                | UserVarType::Text
+                | UserVarType::Suit
+                | UserVarType::Rank
+                | UserVarType::PokerHand => lua_str(uvar.initial_value.to_string_lossy()),
             };
             entries.push(TableEntry::KeyValue(uvar.name.clone(), val));
         }

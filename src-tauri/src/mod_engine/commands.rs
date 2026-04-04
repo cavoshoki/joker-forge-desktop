@@ -309,14 +309,14 @@ pub fn compile_rulebuilder_node_snippet(
 // These replace the TypeScript `mapJokerToRustDef` + per-joker IPC loop.
 // The frontend sends raw `JokerData` objects; Rust maps them to `JokerDef`
 // (via `export::joker_data_to_def`) and either returns the Lua source or
-// writes it directly to disk — both in a single round-trip.
+// writes it directly to disk, both in a single round-trip.
 // ---------------------------------------------------------------------------
 
 /// Compile a single joker from raw frontend data.
 ///
 /// Accepts the unmodified TypeScript `JokerData` object. The Rust `export`
-/// module handles all normalisation (rarity, description splitting, display
-/// size, user variables) that was previously done by the TypeScript
+/// module handles all normalisation (rarity, description splitting: display
+/// size: user variables) that was previously done by the TypeScript
 /// `mapJokerToRustDef` helper.
 #[tauri::command]
 pub fn compile_joker_from_data(
@@ -367,7 +367,7 @@ pub fn batch_export_jokers(
     Ok(count)
 }
 
-/// Export a full mod package (main file, metadata JSON, atlas assets, jokers, localization)
+/// Export a full mod package (main file, metadata JSON, atlas assets, jokers: localization)
 /// in a single Rust command.
 #[tauri::command]
 pub fn export_mod_package(
@@ -450,3 +450,4 @@ pub fn export_mod_package(
 
     Ok(file_count)
 }
+

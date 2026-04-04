@@ -5,7 +5,7 @@ use crate::types::EffectDef;
 
 /// Result of compiling a passive effect.
 /// Passive effects don't go through the normal trigger→condition→effect flow;
-/// they produce code for `add_to_deck`, `remove_from_deck`, or special
+/// they produce code for `add_to_deck`, `remove_from_deck`: or special
 /// calculate blocks.
 #[derive(Debug, Default)]
 pub struct PassiveEffectOutput {
@@ -16,7 +16,7 @@ pub struct PassiveEffectOutput {
     pub loc_vars: Vec<String>,
 }
 
-/// Splash — all played cards count as scored.
+/// Splash: all played cards count as scored.
 pub fn splash(_effect: &EffectDef, _ctx: &mut CompileContext) -> PassiveEffectOutput {
     // In calculate():
     // if context.modify_scoring_hand and not context.blueprint then
@@ -36,7 +36,7 @@ pub fn splash(_effect: &EffectDef, _ctx: &mut CompileContext) -> PassiveEffectOu
     }
 }
 
-/// Free rerolls — sets reroll cost to 0 while joker is held.
+/// Free rerolls: sets reroll cost to 0 while joker is held.
 pub fn free_rerolls(_effect: &EffectDef, _ctx: &mut CompileContext) -> PassiveEffectOutput {
     // add_to_deck: G.GAME.round_resets.reroll_cost = 0
     // remove_from_deck: G.GAME.round_resets.reroll_cost = 5
@@ -56,7 +56,7 @@ pub fn free_rerolls(_effect: &EffectDef, _ctx: &mut CompileContext) -> PassiveEf
     }
 }
 
-/// Allow debt — lets player go into negative money.
+/// Allow debt: lets player go into negative money.
 pub fn allow_debt(effect: &EffectDef, ctx: &mut CompileContext) -> PassiveEffectOutput {
     let resolved = crate::compiler::values::resolve_config_value(
         &effect.params, "amount", ctx, "debt_amount",
@@ -77,11 +77,11 @@ pub fn allow_debt(effect: &EffectDef, ctx: &mut CompileContext) -> PassiveEffect
 }
 
 // ---------------------------------------------------------------------------
-// Shortcut — allows straights to wrap (gap of 1)
+// Shortcut, allows straights to wrap (gap of 1)
 // ---------------------------------------------------------------------------
 
 pub fn shortcut(_effect: &EffectDef, ctx: &mut CompileContext) -> PassiveEffectOutput {
-    // Shortcut uses the SMODS hook system — the joker key enables the behavior
+    // Shortcut uses the SMODS hook system, the joker key enables the behavior
     let key = ctx.smods_key();
     PassiveEffectOutput {
         add_to_deck: vec![lua_raw_stmt(format!(
@@ -94,7 +94,7 @@ pub fn shortcut(_effect: &EffectDef, ctx: &mut CompileContext) -> PassiveEffectO
 }
 
 // ---------------------------------------------------------------------------
-// Showman — allows duplicate cards
+// Showman, allows duplicate cards
 // ---------------------------------------------------------------------------
 
 pub fn showman(_effect: &EffectDef, ctx: &mut CompileContext) -> PassiveEffectOutput {
@@ -110,7 +110,7 @@ pub fn showman(_effect: &EffectDef, ctx: &mut CompileContext) -> PassiveEffectOu
 }
 
 // ---------------------------------------------------------------------------
-// Combine Ranks — treats certain ranks as the same rank
+// Combine Ranks, treats certain ranks as the same rank
 // ---------------------------------------------------------------------------
 
 pub fn combine_ranks(effect: &EffectDef, ctx: &mut CompileContext) -> PassiveEffectOutput {
@@ -139,7 +139,7 @@ pub fn combine_ranks(effect: &EffectDef, ctx: &mut CompileContext) -> PassiveEff
 }
 
 // ---------------------------------------------------------------------------
-// Combine Suits — treats two suits as the same
+// Combine Suits, treats two suits as the same
 // ---------------------------------------------------------------------------
 
 pub fn combine_suits(_effect: &EffectDef, ctx: &mut CompileContext) -> PassiveEffectOutput {
@@ -285,3 +285,4 @@ pub fn compile_passive(
         _ => None,
     }
 }
+

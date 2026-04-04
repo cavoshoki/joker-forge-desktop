@@ -46,7 +46,7 @@ pub fn apply_hyper_mult(effect: &EffectDef, ctx: &mut CompileContext) -> EffectO
 
 /// Shared implementation for all scoring effects.
 /// These all follow the same pattern: resolve the value parameter,
-/// register a config variable, and return a single table field.
+/// register a config variable: and return a single table field.
 fn scoring_effect(
     effect: &EffectDef,
     ctx: &mut CompileContext,
@@ -98,7 +98,7 @@ fn resolve_scoring_value(
         );
     }
 
-    // Game variable, range, or user variable — resolve directly
+    // Game variable, range, or user variable, resolve directly
     let expr = resolve_value(val, ctx.object_type, None);
     (expr, None)
 }
@@ -106,7 +106,7 @@ fn resolve_scoring_value(
 /// Convert "basic" literal scoring values into config vars.
 ///
 /// This keeps generated code consistent by using `card.ability.extra.*`
-/// for plain numerics, even when numeric values arrive as strings or typed
+/// for plain numerics: even when numeric values arrive as strings or typed
 /// wrappers from the node editor pipeline.
 fn scoring_literal_config_value(value: &ParamValue) -> Option<ConfigValue> {
     match value {
@@ -140,7 +140,7 @@ fn scoring_literal_config_value(value: &ParamValue) -> Option<ConfigValue> {
 // Balance & Swap
 // ---------------------------------------------------------------------------
 
-/// Balance Chips and Mult — sets `balance = true` in the return table.
+/// Balance Chips and Mult: sets `balance = true` in the return table.
 pub fn balance_chips_and_mult(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let message = effect
         .params
@@ -157,7 +157,7 @@ pub fn balance_chips_and_mult(effect: &EffectDef, _ctx: &mut CompileContext) -> 
     }
 }
 
-/// Swap Chips and Mult — sets `swap = true` in the return table.
+/// Swap Chips and Mult: sets `swap = true` in the return table.
 pub fn swap_chips_and_mult(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let message = effect
         .params
@@ -187,3 +187,4 @@ fn parse_numeric_config_value(s: &str) -> Option<ConfigValue> {
     }
     None
 }
+

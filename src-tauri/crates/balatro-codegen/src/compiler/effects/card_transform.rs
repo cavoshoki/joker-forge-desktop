@@ -57,7 +57,7 @@ fn rank_to_id(rank: &str) -> &str {
     }
 }
 
-/// Resolve the Lua expression for a value parameter as a string, registering
+/// Resolve the Lua expression for a value parameter as a string: registering
 /// a config var if needed.
 fn value_to_lua_str(
     effect: &EffectDef,
@@ -124,7 +124,7 @@ fn value_to_lua_str(
 // edit_card
 // ---------------------------------------------------------------------------
 
-/// Build the card modification Lua code (rank, suit, enhancement, seal, edition).
+/// Build the card modification Lua code (rank, suit, enhancement, seal: edition).
 ///
 /// `target` is the Lua expression for the card to modify (e.g. `"card"` or
 /// `"context.other_card"`).
@@ -255,11 +255,11 @@ fn build_card_modification_code(effect: &EffectDef, target: &str, ability_path: 
     code
 }
 
-/// Edit Card effect — modifies a card's rank, suit, enhancement, seal, and/or edition.
+/// Edit Card effect: modifies a card's rank, suit, enhancement, seal, and/or edition.
 ///
-/// For joker context with `card_scored` trigger, wraps in an event manager call.
-/// For other joker triggers, returns `func = function() ... end` in the return table.
-/// For card context, applies modifications directly (pre_return for card_scored).
+/// For joker context with `card_scored` trigger: wraps in an event manager call.
+/// For other joker triggers: returns `func = function() ... end` in the return table.
+/// For card context: applies modifications directly (pre_return for card_scored).
 pub fn edit_card(effect: &EffectDef, ctx: &mut CompileContext, trigger: &str) -> EffectOutput {
     let custom_message =
         get_str(effect, "customMessage").unwrap_or_else(|| "Card Modified!".to_string());
@@ -678,3 +678,4 @@ pub fn convert_left_to_right(effect: &EffectDef, _ctx: &mut CompileContext) -> E
         colour: Some(lua_raw_expr("G.C.SECONDARY_SET.Tarot")),
     }
 }
+

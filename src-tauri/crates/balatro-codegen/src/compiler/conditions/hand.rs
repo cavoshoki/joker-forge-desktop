@@ -2,7 +2,7 @@ use crate::compiler::values::comparison_op;
 use crate::lua_ast::*;
 use crate::types::ConditionDef;
 
-/// Hand Type condition — checks if the scoring hand matches a poker hand.
+/// Hand Type condition: checks whether the scoring hand matches a poker hand.
 pub fn hand_type(condition: &ConditionDef) -> Option<Expr> {
     let hand = condition.params.get("handType")?.as_str()?;
     let scope = condition
@@ -13,7 +13,7 @@ pub fn hand_type(condition: &ConditionDef) -> Option<Expr> {
 
     match hand {
         "most_played_hand" => {
-            // IIFE that checks if the scoring hand is the most played
+            // IIFE that checks whether the scoring hand is the most played
             Some(lua_raw_expr(
                 "(function() \
                     local current_played = G.GAME.hands[context.scoring_name].played or 0; \
@@ -65,7 +65,7 @@ pub fn hand_type(condition: &ConditionDef) -> Option<Expr> {
     }
 }
 
-/// Hand Count condition — checks the number of cards in the current hand.
+/// Hand Count condition: checks the number of cards in the current hand.
 pub fn hand_count(condition: &ConditionDef) -> Option<Expr> {
     let operator = condition
         .params
@@ -81,7 +81,7 @@ pub fn hand_count(condition: &ConditionDef) -> Option<Expr> {
     ))
 }
 
-/// Hand Size condition — checks the hand size limit.
+/// Hand Size condition: checks the hand size limit.
 pub fn hand_size(condition: &ConditionDef) -> Option<Expr> {
     let operator = condition
         .params
@@ -97,7 +97,7 @@ pub fn hand_size(condition: &ConditionDef) -> Option<Expr> {
     ))
 }
 
-/// Suit Count condition — number of cards of a specific suit in the scoring hand.
+/// Suit Count condition: number of cards of a specific suit in the scoring hand.
 pub fn suit_count(condition: &ConditionDef) -> Option<Expr> {
     let suit = condition.params.get("suit")?.as_str()?;
     let operator = condition
@@ -117,7 +117,7 @@ pub fn suit_count(condition: &ConditionDef) -> Option<Expr> {
     Some(comparison_op(operator, count_expr, lua_int(value)))
 }
 
-/// Rank Count condition — number of cards of a specific rank in the scoring hand.
+/// Rank Count condition: number of cards of a specific rank in the scoring hand.
 pub fn rank_count(condition: &ConditionDef) -> Option<Expr> {
     let rank = condition.params.get("rank")?.as_str()?;
     let operator = condition
@@ -137,7 +137,7 @@ pub fn rank_count(condition: &ConditionDef) -> Option<Expr> {
     Some(comparison_op(operator, count_expr, lua_int(value)))
 }
 
-/// Hand Level condition — checks the level of the scoring hand.
+/// Hand Level condition: checks the level of the scoring hand.
 pub fn hand_level(condition: &ConditionDef) -> Option<Expr> {
     let operator = condition
         .params
@@ -153,7 +153,7 @@ pub fn hand_level(condition: &ConditionDef) -> Option<Expr> {
     ))
 }
 
-/// Discarded Card Count — checks the number of discarded cards.
+/// Discarded Card Count: checks the number of discarded cards.
 pub fn discarded_card_count(condition: &ConditionDef) -> Option<Expr> {
     let operator = condition
         .params
@@ -169,7 +169,7 @@ pub fn discarded_card_count(condition: &ConditionDef) -> Option<Expr> {
     ))
 }
 
-/// Discarded Suit Count — count of discarded cards of a specific suit.
+/// Discarded Suit Count: count of discarded cards of a specific suit.
 pub fn discarded_suit_count(condition: &ConditionDef) -> Option<Expr> {
     let suit = condition
         .params
@@ -193,7 +193,7 @@ pub fn discarded_suit_count(condition: &ConditionDef) -> Option<Expr> {
     Some(comparison_op(op, count_expr, lua_int(count)))
 }
 
-/// Discarded Rank Count — count of discarded cards of a specific rank.
+/// Discarded Rank Count: count of discarded cards of a specific rank.
 pub fn discarded_rank_count(condition: &ConditionDef) -> Option<Expr> {
     let rank = condition
         .params
@@ -218,7 +218,7 @@ pub fn discarded_rank_count(condition: &ConditionDef) -> Option<Expr> {
     Some(comparison_op(op, count_expr, lua_int(count)))
 }
 
-/// Enhancement Count — count of cards with a specific enhancement in hand/play.
+/// Enhancement Count: count of cards with a specific enhancement in hand/play.
 pub fn enhancement_count(condition: &ConditionDef) -> Option<Expr> {
     let enhancement = condition
         .params
@@ -247,7 +247,7 @@ pub fn enhancement_count(condition: &ConditionDef) -> Option<Expr> {
     Some(comparison_op(operator, count_expr, lua_int(value)))
 }
 
-/// Edition Count — count of cards with a specific edition in hand/play.
+/// Edition Count: count of cards with a specific edition in hand/play.
 pub fn edition_count(condition: &ConditionDef) -> Option<Expr> {
     let edition = condition
         .params
@@ -276,7 +276,7 @@ pub fn edition_count(condition: &ConditionDef) -> Option<Expr> {
     Some(comparison_op(operator, count_expr, lua_int(value)))
 }
 
-/// Seal Count — count of cards with a specific seal in hand/play.
+/// Seal Count: count of cards with a specific seal in hand/play.
 pub fn seal_count(condition: &ConditionDef) -> Option<Expr> {
     let seal = condition
         .params
@@ -305,7 +305,7 @@ pub fn seal_count(condition: &ConditionDef) -> Option<Expr> {
     Some(comparison_op(operator, count_expr, lua_int(value)))
 }
 
-/// Poker Hand Been Played — check if the current poker hand has been played before.
+/// Poker Hand Been Played: check whether the current poker hand has been played before.
 pub fn poker_hand_been_played(_condition: &ConditionDef) -> Option<Expr> {
     Some(lua_gt(
         lua_raw_expr("(G.GAME.hands[context.scoring_name].played or 0)"),
@@ -313,7 +313,7 @@ pub fn poker_hand_been_played(_condition: &ConditionDef) -> Option<Expr> {
     ))
 }
 
-/// First Played Hand — check if this is the first hand played this round.
+/// First Played Hand: check whether this is the first hand played this round.
 pub fn first_played_hand(_condition: &ConditionDef) -> Option<Expr> {
     Some(lua_eq(
         lua_path(&["G", "GAME", "current_round", "hands_played"]),
@@ -321,7 +321,7 @@ pub fn first_played_hand(_condition: &ConditionDef) -> Option<Expr> {
     ))
 }
 
-/// First Discarded Hand — check if this is the first discard this round.
+/// First Discarded Hand: check whether this is the first discard this round.
 pub fn first_discarded_hand(_condition: &ConditionDef) -> Option<Expr> {
     Some(lua_eq(
         lua_path(&["G", "GAME", "current_round", "discards_used"]),
@@ -329,7 +329,7 @@ pub fn first_discarded_hand(_condition: &ConditionDef) -> Option<Expr> {
     ))
 }
 
-/// First/Last Scored — check if scored card is first or last.
+/// First/Last Scored: check whether scored card is first or last.
 pub fn first_last_scored(condition: &ConditionDef) -> Option<Expr> {
     let position = condition
         .params
@@ -384,7 +384,7 @@ pub fn first_last_scored(condition: &ConditionDef) -> Option<Expr> {
     }
 }
 
-/// Cards Selected — check count of selected/highlighted cards.
+/// Cards Selected: check count of selected/highlighted cards.
 pub fn cards_selected(condition: &ConditionDef) -> Option<Expr> {
     let operator = condition
         .params
@@ -400,7 +400,7 @@ pub fn cards_selected(condition: &ConditionDef) -> Option<Expr> {
     ))
 }
 
-/// Hand Drawn — check if hand has been drawn (context.first_hand_drawn).
+/// Hand Drawn: check whether hand has been drawn (context.first_hand_drawn).
 pub fn hand_drawn(_condition: &ConditionDef) -> Option<Expr> {
     Some(lua_path(&["context", "first_hand_drawn"]))
 }
@@ -440,3 +440,4 @@ fn quantifier_to_op(quantifier: &str) -> &str {
         _ => "greater_equals",
     }
 }
+

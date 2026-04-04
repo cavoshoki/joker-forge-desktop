@@ -1,7 +1,7 @@
+use super::context::CompileContext;
+use super::{build_shared_calculate_function, build_shared_loc_vars, compile_rules};
 use crate::lua_ast::*;
 use crate::types::*;
-use super::context::CompileContext;
-use super::{compile_rules, build_shared_calculate_function, build_shared_loc_vars};
 
 /// Compile a consumable definition into a Lua chunk.
 pub fn compile_consumable(consumable: &ConsumableDef, mod_prefix: &str) -> Chunk {
@@ -72,7 +72,7 @@ pub fn compile_consumable_type(ct: &ConsumableTypeDef, mod_prefix: &str) -> Chun
         ]),
     ));
 
-    // cards table — populated by consumables referencing this set
+    // cards table, populated by consumables referencing this set
     let cards_key = format!("c_{}_{}", mod_prefix, ct.key);
     let _ = cards_key; // Will be linked externally
     entries.push(kv("cards", lua_table_raw(vec![])));
@@ -83,7 +83,10 @@ pub fn compile_consumable_type(ct: &ConsumableTypeDef, mod_prefix: &str) -> Chun
     ));
 
     Chunk {
-        stmts: vec![lua_comment(format!(" Consumable Set: {}", ct.name)), smods_call],
+        stmts: vec![
+            lua_comment(format!(" Consumable Set: {}", ct.name)),
+            smods_call,
+        ],
     }
 }
 
@@ -197,12 +200,10 @@ fn build_use_function(rule_outputs: &[super::RuleOutput]) -> Option<Expr> {
         return None;
     }
 
-    let mut body: Vec<Stmt> = vec![
-        Stmt::Local(
-            "used_card".to_string(),
-            Some(lua_or(lua_ident("copier"), lua_ident("card"))),
-        ),
-    ];
+    let mut body: Vec<Stmt> = vec![Stmt::Local(
+        "used_card".to_string(),
+        Some(lua_or(lua_ident("copier"), lua_ident("card"))),
+    )];
 
     for ro in &use_rules {
         let stmts = ro.effect_stmts.clone();
@@ -214,12 +215,7 @@ fn build_use_function(rule_outputs: &[super::RuleOutput]) -> Option<Expr> {
     }
 
     Some(Expr::Function {
-        params: vec![
-            "self".into(),
-            "card".into(),
-            "area".into(),
-            "copier".into(),
-        ],
+        params: vec!["self".into(), "card".into(), "area".into(), "copier".into()],
         body,
     })
 }
@@ -253,3 +249,4 @@ fn build_can_use_function(rule_outputs: &[super::RuleOutput]) -> Expr {
 fn kv(key: &str, val: Expr) -> TableEntry {
     TableEntry::KeyValue(key.to_string(), val)
 }
+

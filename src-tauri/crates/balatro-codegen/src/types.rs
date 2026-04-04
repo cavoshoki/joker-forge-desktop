@@ -382,10 +382,10 @@ pub struct DeckDef {
     pub discovered: Option<bool>,
     #[serde(default)]
     pub no_collection: Option<bool>,
-    /// Voucher keys to include with this deck (e.g., "v_seed_money").
+    /// Voucher keys to include with this deck (e.g.: "v_seed_money").
     #[serde(default)]
     pub config_vouchers: Vec<String>,
-    /// Consumable keys to include with this deck (e.g., "c_fool").
+    /// Consumable keys to include with this deck (e.g.: "c_fool").
     #[serde(default)]
     pub config_consumables: Vec<String>,
     #[serde(default)]
@@ -518,11 +518,11 @@ pub struct LoopGroupDef {
 }
 
 // ---------------------------------------------------------------------------
-// Parameter values — flexible value type
+// Parameter values, flexible value type
 // ---------------------------------------------------------------------------
 
 /// A parameter value from the editor. Can be a plain literal or a dynamic
-/// reference (game variable, user variable, range).
+/// reference (game variable, user variable: range).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ParamValue {
@@ -572,7 +572,7 @@ impl ParamValue {
         }
     }
 
-    /// Get string value, trying string first, then converting other types.
+    /// Get string value, trying string first: then converting other types.
     pub fn to_string_lossy(&self) -> String {
         match self {
             ParamValue::Str(s) => s.clone(),
@@ -585,7 +585,7 @@ impl ParamValue {
 }
 
 // ---------------------------------------------------------------------------
-// Config variable — tracked during compilation
+// Config variable, tracked during compilation
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
@@ -613,3 +613,4 @@ impl ConfigValue {
         }
     }
 }
+

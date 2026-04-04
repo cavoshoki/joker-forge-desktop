@@ -10,7 +10,7 @@ pub fn ante_level(condition: &ConditionDef) -> Option<Expr> {
     )
 }
 
-/// Blind Type condition — boss, small, big.
+/// Blind Type condition: boss, small, big.
 pub fn blind_type(condition: &ConditionDef) -> Option<Expr> {
     let blind = condition.params.get("blindType")?.as_str()?;
     let lua_blind = match blind {
@@ -25,7 +25,7 @@ pub fn blind_type(condition: &ConditionDef) -> Option<Expr> {
     ))
 }
 
-/// Blind Name condition — checks the specific blind name.
+/// Blind Name condition: checks blind name.
 pub fn blind_name(condition: &ConditionDef) -> Option<Expr> {
     let name = condition.params.get("blindName")?.as_str()?;
     Some(lua_eq(
@@ -82,7 +82,7 @@ pub fn deck_size(condition: &ConditionDef) -> Option<Expr> {
     )
 }
 
-/// Generic Compare condition — arbitrary comparison between two values.
+/// Generic Compare condition: arbitrary comparison between two values.
 pub fn generic_compare(condition: &ConditionDef) -> Option<Expr> {
     let value1_str = condition.params.get("value1")?.to_string_lossy();
     let operator = condition
@@ -98,7 +98,7 @@ pub fn generic_compare(condition: &ConditionDef) -> Option<Expr> {
     Some(comparison_op(operator, value1, value2))
 }
 
-/// Boss Blind Type condition — checks the specific boss blind.
+/// Boss Blind Type condition: checks boss blind.
 pub fn boss_blind_type(condition: &ConditionDef) -> Option<Expr> {
     let operator = condition
         .params
@@ -114,7 +114,7 @@ pub fn boss_blind_type(condition: &ConditionDef) -> Option<Expr> {
     ))
 }
 
-/// Check Blind Requirements — checks if blind requirements percentage is met.
+/// Check Blind Requirements: checks whether blind requirements percentage is met.
 pub fn check_blind_requirements(condition: &ConditionDef) -> Option<Expr> {
     let operator = condition
         .params
@@ -133,7 +133,7 @@ pub fn check_blind_requirements(condition: &ConditionDef) -> Option<Expr> {
     Some(comparison_op(operator, ratio_expr, lua_int(percentage)))
 }
 
-/// Check Deck — checks what deck is being used.
+/// Check Deck: checks what deck is being used.
 pub fn check_deck(condition: &ConditionDef) -> Option<Expr> {
     let deck = condition.params.get("decks")?.as_str()?;
 
@@ -143,7 +143,7 @@ pub fn check_deck(condition: &ConditionDef) -> Option<Expr> {
     ))
 }
 
-/// Deck Count — total deck card count (#G.playing_cards).
+/// Deck Count: total deck card count (#G.playing_cards).
 pub fn deck_count(condition: &ConditionDef) -> Option<Expr> {
     let property_type = condition
         .params
@@ -217,12 +217,12 @@ pub fn deck_count(condition: &ConditionDef) -> Option<Expr> {
     Some(comparison_op(operator, count_expr, lua_int(value)))
 }
 
-/// In Blind — check if currently in a blind.
+/// In Blind: check whether currently in a blind.
 pub fn in_blind(_condition: &ConditionDef) -> Option<Expr> {
     Some(lua_raw_expr("G.GAME.blind and G.GAME.blind.in_blind"))
 }
 
-/// Game Speed — check game speed setting.
+/// Game Speed: check game speed setting.
 pub fn game_speed(condition: &ConditionDef) -> Option<Expr> {
     let operator = condition
         .params
@@ -242,19 +242,19 @@ pub fn game_speed(condition: &ConditionDef) -> Option<Expr> {
     ))
 }
 
-/// Triggered Boss Blind — check if boss blind effect was triggered.
+/// Triggered Boss Blind: check whether boss blind effect was triggered.
 pub fn triggered_boss_blind(_condition: &ConditionDef) -> Option<Expr> {
     Some(lua_path(&["G", "GAME", "blind", "triggered"]))
 }
 
-/// Check Flag — check a game flag.
+/// Check Flag: check a game flag.
 pub fn check_flag(condition: &ConditionDef) -> Option<Expr> {
     let flag_name = condition.params.get("flag_name")?.as_str()?;
 
     Some(lua_path(&["G", "GAME", "pool_flags", flag_name]))
 }
 
-/// Which Tag — check the tag type.
+/// Which Tag: check the tag type.
 pub fn which_tag(condition: &ConditionDef) -> Option<Expr> {
     let operator = condition
         .params
@@ -270,7 +270,7 @@ pub fn which_tag(condition: &ConditionDef) -> Option<Expr> {
     ))
 }
 
-/// Consumable Type — check the type of consumable being used/bought.
+/// Consumable Type: check the type of consumable being used/bought.
 pub fn consumable_type(condition: &ConditionDef) -> Option<Expr> {
     let consumable_type = condition
         .params
@@ -300,14 +300,14 @@ pub fn consumable_type(condition: &ConditionDef) -> Option<Expr> {
     Some(lua_bool(true))
 }
 
-/// Voucher Redeemed — check if a specific voucher was redeemed.
+/// Voucher Redeemed: check whether a specific voucher was redeemed.
 pub fn voucher_redeemed(condition: &ConditionDef) -> Option<Expr> {
     let voucher = condition.params.get("voucher")?.as_str()?;
 
     Some(lua_path(&["G", "GAME", "used_vouchers", voucher]))
 }
 
-/// System Condition — check what OS the player is on.
+/// System condition: check what OS the player is on.
 pub fn system_condition(condition: &ConditionDef) -> Option<Expr> {
     let system = condition
         .params
@@ -321,17 +321,17 @@ pub fn system_condition(condition: &ConditionDef) -> Option<Expr> {
     ))
 }
 
-/// Glass Card Destroyed — check glass card destroyed context.
+/// Glass Card Destroyed: check glass card destroyed context.
 pub fn glass_card_destroyed(_condition: &ConditionDef) -> Option<Expr> {
     Some(lua_path(&["context", "glass_shattered"]))
 }
 
-/// Lucky Card Triggered — check lucky card triggered context.
+/// Lucky Card Triggered: check lucky card triggered context.
 pub fn lucky_card_triggered(_condition: &ConditionDef) -> Option<Expr> {
     Some(lua_path(&["context", "lucky_trigger"]))
 }
 
-/// Probability Succeeded — check if probability succeeded or failed.
+/// Probability Succeeded: check whether probability succeeded or failed.
 pub fn probability_succeeded(condition: &ConditionDef) -> Option<Expr> {
     let status = condition
         .params
@@ -346,7 +346,7 @@ pub fn probability_succeeded(condition: &ConditionDef) -> Option<Expr> {
     }
 }
 
-/// Probability Identifier — identify probability group.
+/// Probability Identifier: identify probability group.
 pub fn probability_identifier(condition: &ConditionDef) -> Option<Expr> {
     let mode = condition
         .params
@@ -381,7 +381,7 @@ pub fn probability_identifier(condition: &ConditionDef) -> Option<Expr> {
     }
 }
 
-/// Probability Part Compare — compare probability parts.
+/// Probability Part Compare: compare probability parts.
 pub fn probability_part_compare(condition: &ConditionDef) -> Option<Expr> {
     let part = condition
         .params
@@ -404,7 +404,7 @@ pub fn probability_part_compare(condition: &ConditionDef) -> Option<Expr> {
     Some(comparison_op(operator, lhs, lua_int(value)))
 }
 
-/// Booster Type — check booster pack type.
+/// Booster Type: check booster pack type.
 pub fn booster_type(condition: &ConditionDef) -> Option<Expr> {
     let operator = condition
         .params
@@ -435,3 +435,4 @@ fn simple_compare(condition: &ConditionDef, game_expr: Expr) -> Option<Expr> {
 
     Some(comparison_op(operator, game_expr, lua_int(value)))
 }
+

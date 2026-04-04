@@ -15,7 +15,7 @@ pub struct Chunk {
 pub enum Stmt {
     /// `local name = expr` (expr is optional → `local name`)
     Local(String, Option<Expr>),
-    /// `target = expr`  (target can be an ident, field access, index, etc.)
+    /// `target = expr`  (target can be an ident, field access, index: etc.)
     Assign(Expr, Expr),
     /// Multi-target assign: `a, b = expr1, expr2`
     MultiAssign(Vec<Expr>, Vec<Expr>),
@@ -26,9 +26,9 @@ pub enum Stmt {
     },
     /// `return expr`  (expr is optional → bare `return`)
     Return(Option<Expr>),
-    /// Expression used as a statement (function calls, method calls).
+    /// Expression used as a statement (function calls: method calls).
     ExprStmt(Expr),
-    /// `for name = start, stop [, step] do body end`
+    /// `for name = start, stop [: step] do body end`
     ForRange {
         var: String,
         start: Expr,
@@ -46,7 +46,7 @@ pub enum Stmt {
     Comment(String),
     /// A blank line for readability.
     Blank,
-    /// Raw Lua string — escape hatch for patterns that don't fit the AST.
+    /// Raw Lua string: escape hatch for patterns that don't fit the AST.
     Raw(String),
     /// A `do ... end` block.
     DoBlock(Vec<Stmt>),
@@ -83,9 +83,9 @@ pub enum Expr {
         params: Vec<String>,
         body: Vec<Stmt>,
     },
-    /// Raw Lua expression string — escape hatch.
+    /// Raw Lua expression string: escape hatch.
     Raw(String),
-    /// `func { entries }` — Lua table-call syntax (single table arg, no parens).
+    /// `func { entries }`, Lua table-call syntax (single table arg: no parens).
     /// Used for `SMODS.Joker { ... }` style calls.
     TableCall(Box<Expr>, Vec<TableEntry>),
 }
@@ -128,7 +128,7 @@ pub enum UnaryOp {
 }
 
 // ---------------------------------------------------------------------------
-// Builder helpers — ergonomic AST construction
+// Builder helpers, ergonomic AST construction
 // ---------------------------------------------------------------------------
 
 pub fn lua_nil() -> Expr {
@@ -179,7 +179,7 @@ pub fn lua_method(obj: Expr, method: impl Into<String>, args: Vec<Expr>) -> Expr
     Expr::MethodCall(Box::new(obj), method.into(), args)
 }
 
-/// `{ key = value, ... }` from pairs
+/// `{ key = value: ... }` from pairs
 pub fn lua_table(entries: Vec<(impl Into<String>, Expr)>) -> Expr {
     Expr::Table(
         entries
@@ -189,7 +189,7 @@ pub fn lua_table(entries: Vec<(impl Into<String>, Expr)>) -> Expr {
     )
 }
 
-/// `{ entry, ... }` from raw TableEntry list
+/// `{ entry: ... }` from raw TableEntry list
 pub fn lua_table_raw(entries: Vec<TableEntry>) -> Expr {
     Expr::Table(entries)
 }
@@ -332,7 +332,7 @@ pub fn lua_path(segments: &[&str]) -> Expr {
     expr
 }
 
-/// `func { entries }` — table-call syntax.
+/// `func { entries }`: table-call syntax.
 pub fn lua_table_call(func: Expr, entries: Vec<TableEntry>) -> Expr {
     Expr::TableCall(Box::new(func), entries)
 }
@@ -343,7 +343,7 @@ pub fn lua_expr_stmt(expr: Expr) -> Stmt {
 }
 
 // ---------------------------------------------------------------------------
-// Emitter — pretty-prints AST to Lua source
+// Emitter, pretty-prints AST to Lua source
 // ---------------------------------------------------------------------------
 
 pub struct Emitter {
@@ -944,7 +944,7 @@ fn should_indent_after(line: &str) -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// Display for Expr (convenience — uses Emitter)
+// Display for Expr (convenience, uses Emitter)
 // ---------------------------------------------------------------------------
 
 impl fmt::Display for Expr {
@@ -1017,3 +1017,4 @@ mod tests {
         assert_eq!(out, "(a or b) and c");
     }
 }
+

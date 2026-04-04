@@ -25,7 +25,7 @@ export interface ExportModRustResult {
 }
 
 // ---------------------------------------------------------------------------
-// Atlas building (browser Canvas — stays in TypeScript)
+// Atlas building (browser Canvas , stays in TypeScript)
 // ---------------------------------------------------------------------------
 
 interface AtlasPos {

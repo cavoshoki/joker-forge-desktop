@@ -3,7 +3,7 @@ use crate::compiler::effects::EffectOutput;
 use crate::lua_ast::*;
 use crate::types::EffectDef;
 
-/// Destroy Card effect — marks a card for destruction.
+/// Destroy Card effect: marks a card for destruction.
 ///
 /// Behaviour varies by trigger:
 /// - `card_discarded`: uses `remove = true` return field
@@ -27,7 +27,7 @@ pub fn destroy_card(effect: &EffectDef, _ctx: &mut CompileContext, trigger: &str
         }
         _ => {
             let mut pre = vec![];
-            // Check if glass trigger flag is needed
+            // check whether glass trigger flag is needed
             let set_glass = effect
                 .params
                 .get("setGlassTrigger")
@@ -56,7 +56,7 @@ pub fn destroy_card(effect: &EffectDef, _ctx: &mut CompileContext, trigger: &str
     }
 }
 
-/// Destroy Joker effect — destroys a specific joker.
+/// Destroy Joker effect: destroys a specific joker.
 pub fn destroy_joker(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let target = effect
         .params
@@ -101,7 +101,7 @@ pub fn destroy_joker(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOut
     }
 }
 
-/// Destroy Consumable effect — destroys a consumable from the consumable area.
+/// Destroy Consumable effect: destroys a consumable from the consumable area.
 pub fn destroy_consumable(_effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let stmt = lua_raw_stmt(
         "if #G.consumeables.cards > 0 then local c = pseudorandom_element(G.consumeables.cards, pseudoseed('destroy_consumable')); if c then c:start_dissolve() end end",
@@ -116,7 +116,7 @@ pub fn destroy_consumable(_effect: &EffectDef, _ctx: &mut CompileContext) -> Eff
     }
 }
 
-/// Destroy Cards effect — destroys highlighted or random cards in hand.
+/// Destroy Cards effect: destroys highlighted or random cards in hand.
 pub fn destroy_cards(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let method = effect
         .params
@@ -147,3 +147,4 @@ pub fn destroy_cards(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOut
         colour: Some(lua_raw_expr("G.C.RED")),
     }
 }
+

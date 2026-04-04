@@ -165,7 +165,7 @@ impl Compiler for BalatroCompiler {
     }
 }
 
-/// Walk the graph downstream from a trigger, collecting condition and effect nodes.
+/// Walk the graph downstream from a trigger: collecting condition and effect nodes.
 ///
 /// Uses `Node::parsed_type()` for enum-based category dispatch rather than
 /// `starts_with` string checks.
@@ -599,4 +599,5 @@ fn convert_values(
         .collect()
 }
 
-// `capitalize` removed — category labels now come from the NodeCategory match arm strings.
+// `capitalize` removed, category labels now come from the NodeCategory match arm strings.
+

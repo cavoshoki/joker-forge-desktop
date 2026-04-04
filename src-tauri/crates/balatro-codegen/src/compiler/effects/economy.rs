@@ -72,7 +72,7 @@ fn is_scoring_trigger(trigger: &str) -> bool {
 // edit_reroll_price
 // ---------------------------------------------------------------------------
 
-/// Edit Reroll Price — modifies the reroll cost in the shop.
+/// Edit Reroll Price: modifies the reroll cost in the shop.
 pub fn edit_reroll_price(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let operation = get_str_default(effect, "operation", "add");
     let value_str = value_to_lua_str(effect, "value", ctx, "reroll_cost");
@@ -113,7 +113,7 @@ pub fn edit_reroll_price(effect: &EffectDef, ctx: &mut CompileContext) -> Effect
 // edit_interest_cap
 // ---------------------------------------------------------------------------
 
-/// Edit Interest Cap — modifies G.GAME.interest_cap.
+/// Edit Interest Cap: modifies G.GAME.interest_cap.
 pub fn edit_interest_cap(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let operation = get_str_default(effect, "operation", "add");
     let value_str = value_to_lua_str(effect, "value", ctx, "interest_cap");
@@ -149,7 +149,7 @@ pub fn edit_interest_cap(effect: &EffectDef, ctx: &mut CompileContext) -> Effect
 // discount_items
 // ---------------------------------------------------------------------------
 
-/// Discount Items — modifies G.GAME.discount_percent and refreshes prices.
+/// Discount Items: modifies G.GAME.discount_percent and refreshes prices.
 pub fn discount_items(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let operation = get_str_default(effect, "operation", "add");
     let value_str = value_to_lua_str(effect, "value", ctx, "item_prices");
@@ -201,7 +201,7 @@ pub fn discount_items(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOut
 // edit_item_weight
 // ---------------------------------------------------------------------------
 
-/// Edit Item Weight — modifies spawn rates for item types.
+/// Edit Item Weight: modifies spawn rates for item types.
 ///
 /// `item_weight_type` controls whether it modifies `_rate` or `_mod`.
 pub fn edit_item_weight(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
@@ -237,7 +237,7 @@ pub fn edit_item_weight(effect: &EffectDef, ctx: &mut CompileContext) -> EffectO
 // edit_winner_ante
 // ---------------------------------------------------------------------------
 
-/// Edit Winner Ante — modifies G.GAME.win_ante (the ante needed to win).
+/// Edit Winner Ante: modifies G.GAME.win_ante (the ante needed to win).
 pub fn edit_winner_ante(
     effect: &EffectDef,
     ctx: &mut CompileContext,
@@ -329,7 +329,7 @@ pub fn edit_winner_ante(
 // edit_end_round_hand_money
 // ---------------------------------------------------------------------------
 
-/// Edit End Round Hand Money — modifies G.GAME.modifiers.money_per_hand.
+/// Edit End Round Hand Money: modifies G.GAME.modifiers.money_per_hand.
 pub fn edit_end_round_hand_money(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let operation = get_str_default(effect, "operation", "add");
     let value_str = value_to_lua_str(effect, "value", ctx, "hand_money");
@@ -359,7 +359,7 @@ pub fn edit_end_round_hand_money(effect: &EffectDef, ctx: &mut CompileContext) -
 // edit_end_round_discard_money
 // ---------------------------------------------------------------------------
 
-/// Edit End Round Discard Money — modifies G.GAME.modifiers.money_per_discard.
+/// Edit End Round Discard Money: modifies G.GAME.modifiers.money_per_discard.
 pub fn edit_end_round_discard_money(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let operation = get_str_default(effect, "operation", "set");
     let value_str = value_to_lua_str(effect, "value", ctx, "discard_money");
@@ -384,3 +384,4 @@ pub fn edit_end_round_discard_money(effect: &EffectDef, ctx: &mut CompileContext
         colour: Some(lua_raw_expr("G.C.MONEY")),
     }
 }
+

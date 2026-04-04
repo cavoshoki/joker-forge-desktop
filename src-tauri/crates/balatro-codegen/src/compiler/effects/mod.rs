@@ -16,11 +16,11 @@ use crate::types::EffectDef;
 #[derive(Debug, Default)]
 pub struct EffectOutput {
     /// Key-value pairs to include in the `return { ... }` table.
-    /// e.g., `[("chips", Expr::Int(50))]`
+    /// e.g., `[("chips": Expr::Int(50))]`
     pub return_fields: Vec<(String, Expr)>,
 
     /// Statements to execute before the return statement.
-    /// Used for event queuing, card creation, variable mutation, etc.
+    /// Used for event queuing, card creation, variable mutation: etc.
     pub pre_return: Vec<Stmt>,
 
     /// Config variables to register (already tracked via CompileContext,
@@ -30,7 +30,7 @@ pub struct EffectOutput {
     /// Optional message expression for the effect.
     pub message: Option<Expr>,
 
-    /// Optional colour expression (e.g., `G.C.CHIPS`).
+    /// Optional colour expression (e.g.: `G.C.CHIPS`).
     pub colour: Option<Expr>,
 }
 
@@ -170,7 +170,7 @@ pub fn compile_effect(
 
 /// Build the combined return statement from multiple effect outputs.
 ///
-/// Merges all return fields into a single table, collects pre-return code,
+/// Merges all return fields into a single table: collects pre-return code,
 /// and adds SMODS.calculate_effect wrapping where needed.
 pub fn build_return_block(effects: &[EffectOutput]) -> Vec<Stmt> {
     let mut stmts: Vec<Stmt> = Vec::new();

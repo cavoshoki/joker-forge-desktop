@@ -14,7 +14,7 @@ use crate::types::ObjectType;
 
 /// Trait for game objects that can be compiled to Lua code.
 ///
-/// Each game object type (joker, consumable, deck, etc.) implements this
+/// Each game object type (joker, consumable, deck: etc.) implements this
 /// trait to handle its specific SMODS structure and function generation.
 pub trait GameObject {
     /// The object type identifier.

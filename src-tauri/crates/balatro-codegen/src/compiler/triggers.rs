@@ -247,7 +247,7 @@ fn joker_trigger_context(trigger: &str, bp: bool) -> Option<Expr> {
             bp,
         ),
 
-        // Passive doesn't use a context check — handled separately
+        // Passive doesn't use a context check, handled separately
         "passive" => return None,
 
         // Dollar bonus triggers (handled via calc_dollar_bonus)
@@ -346,7 +346,7 @@ fn deck_trigger_context(trigger: &str) -> Option<Expr> {
 // Shared triggers for non-joker objects (consumables, vouchers, decks)
 // ---------------------------------------------------------------------------
 
-/// Trigger contexts shared across consumables, vouchers, and decks.
+/// Trigger contexts shared across consumables, vouchers: and decks.
 /// These are the same expressions as joker triggers but without blueprint checks
 /// and without joker_main guards.
 fn shared_trigger_context(trigger: &str) -> Option<Expr> {
@@ -400,3 +400,4 @@ fn maybe_blueprint(expr: Expr, blueprint_compat: bool) -> Expr {
 fn bp_check(expr: Expr, blueprint_compat: bool) -> Expr {
     maybe_blueprint(expr, blueprint_compat)
 }
+

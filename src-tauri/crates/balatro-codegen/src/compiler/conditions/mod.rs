@@ -107,7 +107,7 @@ pub fn compile_condition(condition: &ConditionDef, _object_type: ObjectType) -> 
 
 /// Compile a full condition chain from condition groups.
 ///
-/// Groups are ANDed together. Within each group, conditions are joined
+/// Groups are ANDed together. Within each group: conditions are joined
 /// by the group's logic operator (AND or OR).
 pub fn compile_condition_chain(
     groups: &[ConditionGroupDef],

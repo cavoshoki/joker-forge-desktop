@@ -8,6 +8,8 @@ import {
   getBalatroInstallPath,
   getExportDestinationMode,
   getSplitLocalizationExportEnabled,
+  getThemePreference,
+  setThemePreference,
   useProjectData,
 } from "@/lib/storage";
 import { serializeJokerforgeV2 } from "@/lib/jokerforge/exporter";
@@ -28,7 +30,9 @@ interface HeaderProps {
 
 export function Header({ title }: HeaderProps) {
   const location = useLocation();
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [theme, setTheme] = useState<"light" | "dark">(() =>
+    getThemePreference(),
+  );
   const [isExporting, setIsExporting] = useState(false);
   const [exportResult, setExportResult] = useState<ExportModRustResult | null>(
     null,
@@ -36,21 +40,17 @@ export function Header({ title }: HeaderProps) {
   const { data } = useProjectData();
 
   useEffect(() => {
-    const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    setTheme(isDark ? "dark" : "light");
-    if (isDark) {
-      document.documentElement.classList.add("dark");
-    }
-  }, []);
-
-  const toggleTheme = () => {
-    const newTheme = theme === "light" ? "dark" : "light";
-    setTheme(newTheme);
-    if (newTheme === "dark") {
+    if (theme === "dark") {
       document.documentElement.classList.add("dark");
     } else {
       document.documentElement.classList.remove("dark");
     }
+    setThemePreference(theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    const newTheme = theme === "light" ? "dark" : "light";
+    setTheme(newTheme);
   };
 
   const getPageTitle = (pathname: string) => {

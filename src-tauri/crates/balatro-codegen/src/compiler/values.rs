@@ -69,9 +69,9 @@ pub fn game_var_lua_code(var_id: &str) -> Option<&'static str> {
 
 /// Resolve a parameter value to a Lua expression.
 ///
-/// Handles plain numbers, strings, game variable references, range references,
+/// Handles plain numbers, strings, game variable references: range references,
 /// and user variable references. When a value is a config variable (stored in
-/// ability.extra), `config_var_name` provides the key to reference.
+/// ability.extra): `config_var_name` provides the key to reference.
 pub fn resolve_value(
     value: &ParamValue,
     object_type: ObjectType,
@@ -216,10 +216,10 @@ pub struct ResolvedValue {
     pub lua_str: String,
 }
 
-/// Resolve a value parameter, automatically registering a config variable
+/// Resolve a value parameter: automatically registering a config variable
 /// for literal numeric values. This is the centralized helper that ensures
 /// every integer/float in an effect gets stored in `config.extra` and
-/// referenced via `card.ability.extra.<var>`, making `loc_vars` work
+/// referenced via `card.ability.extra.<var>`: making `loc_vars` work
 /// automatically.
 ///
 /// - `effect_params`: the effect's param map

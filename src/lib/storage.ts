@@ -62,8 +62,10 @@ const BALATRO_AUTOFIND_ALERT_KEY = "joker_forge_balatro_autofind_alert";
 const SPLIT_LOCALIZATION_EXPORT_KEY = "joker_forge_split_localization_export";
 const EXPORT_DESTINATION_MODE_KEY = "joker_forge_export_destination_mode";
 const JOKERFORGE_EXPORT_AS_JSON_KEY = "joker_forge_export_as_json";
+const THEME_PREFERENCE_KEY = "joker_forge_theme_preference";
 
 export type ExportDestinationMode = "downloads" | "balatro-mods";
+export type ThemePreference = "light" | "dark";
 
 const DEFAULT_STATS: ProjectStats = {
   jokers: 0,
@@ -484,7 +486,20 @@ export const resetProjectData = () => {
   window.localStorage.removeItem(SPLIT_LOCALIZATION_EXPORT_KEY);
   window.localStorage.removeItem(EXPORT_DESTINATION_MODE_KEY);
   window.localStorage.removeItem(JOKERFORGE_EXPORT_AS_JSON_KEY);
+  window.localStorage.removeItem(THEME_PREFERENCE_KEY);
   window.dispatchEvent(new Event(EVENT_KEY));
+};
+
+export const getThemePreference = (): ThemePreference => {
+  if (typeof window === "undefined") return "dark";
+  const stored = window.localStorage.getItem(THEME_PREFERENCE_KEY);
+  if (stored === "light" || stored === "dark") return stored;
+  return "dark";
+};
+
+export const setThemePreference = (value: ThemePreference) => {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(THEME_PREFERENCE_KEY, value);
 };
 
 export const getConfirmDeleteEnabled = (): boolean => {

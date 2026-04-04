@@ -3,10 +3,10 @@ use crate::compiler::effects::EffectOutput;
 use crate::lua_ast::*;
 use crate::types::EffectDef;
 
-/// Create Joker effect — spawns a joker card.
+/// Create Joker effect: spawns a joker card.
 ///
 /// This is one of the more complex effects: it needs pre-return code for
-/// the event manager, handles slot limits, editions, and stickers.
+/// the event manager, handles slot limits, editions: and stickers.
 pub fn create_joker(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let joker_type = get_str_param(effect, "jokerType").unwrap_or("random");
     let edition = get_str_param(effect, "edition");
@@ -34,7 +34,7 @@ pub fn create_joker(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutp
                 lua_str(joker_type),
             ));
         }
-        _ => {} // "random" — no extra params
+        _ => {} // "random" , no extra params
     }
 
     // Build the event body
@@ -157,7 +157,7 @@ pub fn create_joker(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutp
     }
 }
 
-/// Create Consumable effect — spawns a consumable card.
+/// Create Consumable effect: spawns a consumable card.
 pub fn create_consumable(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let consumable_type = get_str_param(effect, "consumableType").unwrap_or("Tarot");
     let specific_key = get_str_param(effect, "consumableKey");
@@ -196,7 +196,7 @@ pub fn create_consumable(effect: &EffectDef, _ctx: &mut CompileContext) -> Effec
     }
 }
 
-/// Create Playing Card effect — adds a single base playing card.
+/// Create Playing Card effect: adds a single base playing card.
 pub fn create_playing_card(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let target = get_str_param(effect, "location").unwrap_or("deck");
     let message = get_str_param(effect, "customMessage").unwrap_or("Added Card!");
@@ -218,7 +218,7 @@ pub fn create_playing_card(effect: &EffectDef, _ctx: &mut CompileContext) -> Eff
     }
 }
 
-/// Create Playing Cards effect — adds multiple base playing cards.
+/// Create Playing Cards effect: adds multiple base playing cards.
 pub fn create_playing_cards(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let count = effect
         .params
@@ -241,7 +241,7 @@ pub fn create_playing_cards(effect: &EffectDef, _ctx: &mut CompileContext) -> Ef
     }
 }
 
-/// Create Tag effect — creates a random or specific tag.
+/// Create Tag effect: creates a random or specific tag.
 pub fn create_tag(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let mode = get_str_param(effect, "tag_type").unwrap_or("random");
     let specific = get_str_param(effect, "specific_tag").unwrap_or("tag_double");
@@ -266,7 +266,7 @@ pub fn create_tag(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput
     }
 }
 
-/// Create Copy Triggered Card — copies the card that triggered this joker (context.other_card).
+/// Create Copy Triggered Card: copies the card that triggered this joker (context.other_card).
 ///
 /// `add_to` controls whether the copy goes to "deck" (default) or "hand".
 /// Trigger-aware: scoring triggers use pre_return; others use func return field.
@@ -342,9 +342,9 @@ pub fn create_copy_triggered_card(
     }
 }
 
-/// Create Copy Played Card — copies cards from context.full_hand based on filters.
+/// Create Copy Played Card: copies cards from context.full_hand based on filters.
 ///
-/// Supports filtering by `card_index` (position), `card_rank`, and `card_suit`.
+/// Supports filtering by `card_index` (position), `card_rank`: and `card_suit`.
 /// `add_to` controls "deck" (default) or "hand" destination.
 /// Trigger-aware: scoring triggers use pre_return; others use func return field.
 pub fn create_copy_played_card(
@@ -428,10 +428,10 @@ pub fn create_copy_played_card(
     }
 }
 
-/// Create Last Played Planet — spawns the planet card for the last hand played.
+/// Create Last Played Planet: spawns the planet card for the last hand played.
 ///
 /// Searches `G.P_CENTER_POOLS.Planet` for a planet whose `config.hand_type`
-/// matches `G.GAME.last_hand_played`, then calls `SMODS.add_card`.
+/// matches `G.GAME.last_hand_played`: then calls `SMODS.add_card`.
 /// Optional `is_negative` param makes the resulting card negative edition.
 pub fn create_last_played_planet(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let is_negative = get_str_param(effect, "is_negative")
@@ -488,7 +488,7 @@ pub fn create_last_played_planet(effect: &EffectDef, _ctx: &mut CompileContext) 
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Returns the string value of a param, supporting both plain strings and
+/// Returns the string value of a param: supporting both plain strings and
 /// TypedValue (e.g. userVariable) whose value is a string.
 fn get_typed_str_param(effect: &EffectDef, key: &str) -> Option<String> {
     use crate::types::ParamValue;
@@ -502,7 +502,7 @@ fn get_typed_str_param(effect: &EffectDef, key: &str) -> Option<String> {
 /// Build Lua card selection code for `create_copy_played_card`.
 ///
 /// Returns a Lua snippet that declares `local cards_to_copy = {}` and populates
-/// it from `context.full_hand` according to position, rank, and suit filters.
+/// it from `context.full_hand` according to position, rank: and suit filters.
 fn build_card_selection(card_index: &str, card_rank: &str, card_suit: &str) -> String {
     // Build filter conditions
     let mut conditions: Vec<String> = Vec::new();
@@ -598,3 +598,4 @@ fn normalize_joker_key(key: &str) -> String {
         format!("j_{}", key)
     }
 }
+

@@ -22,7 +22,7 @@ fn get_str_opt(effect: &EffectDef, key: &str) -> Option<String> {
     effect.params.get(key).map(|v| v.to_string_lossy())
 }
 
-/// Show Message effect — displays a status message.
+/// Show Message effect: displays a status message.
 pub fn show_message(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let msg_type = effect
         .params
@@ -64,7 +64,7 @@ pub fn show_message(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutp
     }
 }
 
-/// Play Sound effect — plays a game sound.
+/// Play Sound effect: plays a game sound.
 pub fn play_sound(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let sound = effect
         .params
@@ -83,7 +83,7 @@ pub fn play_sound(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput
     }
 }
 
-/// Juice Up Joker — visual juice animation on the joker card.
+/// Juice Up Joker: visual juice animation on the joker card.
 pub fn juice_up_joker(_effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let juice = lua_expr_stmt(lua_method(
         lua_ident("card"),
@@ -100,7 +100,7 @@ pub fn juice_up_joker(_effect: &EffectDef, _ctx: &mut CompileContext) -> EffectO
     }
 }
 
-/// Set Dollars — adds or removes money.
+/// Set Dollars: adds or removes money.
 pub fn set_dollars(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let count = ctx.next_effect_count("dollars");
     let var_name = ctx.unique_var_name("dollars", count);
@@ -131,7 +131,7 @@ pub fn set_dollars(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput
     }
 }
 
-/// Retrigger effect — causes cards to retrigger.
+/// Retrigger effect: causes cards to retrigger.
 pub fn retrigger(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let count = ctx.next_effect_count("repetitions");
     let var_name = ctx.unique_var_name("repetitions", count);
@@ -186,7 +186,7 @@ pub fn level_up_hand(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutp
     }
 }
 
-/// Edit Blind Size — modifies the blind's chip requirement.
+/// Edit Blind Size: modifies the blind's chip requirement.
 pub fn edit_blind_size(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let operator = effect
         .params
@@ -229,7 +229,7 @@ pub fn edit_blind_size(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOu
     }
 }
 
-/// Set Sell Value effect — adjusts card sell value.
+/// Set Sell Value effect: adjusts card sell value.
 pub fn set_sell_value(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let operation = effect
         .params
@@ -348,7 +348,7 @@ pub fn win_game(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     }
 }
 
-/// Crash Game effect — throws a Lua error, intentionally crashing.
+/// Crash Game effect: throws a Lua error, intentionally crashing.
 pub fn crash_game(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let message = effect
         .params
@@ -369,7 +369,7 @@ pub fn crash_game(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput
     }
 }
 
-/// Show Special Message — displays an attention_text popup in the centre of the screen.
+/// Show Special Message: displays an attention_text popup in the centre of the screen.
 pub fn show_special_message(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let custom_message = effect
         .params
@@ -448,7 +448,7 @@ pub fn show_special_message(effect: &EffectDef, ctx: &mut CompileContext) -> Eff
     }
 }
 
-/// Shuffle Jokers — animates joker shuffling.
+/// Shuffle Jokers: animates joker shuffling.
 pub fn shuffle_jokers(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let custom_message = effect
         .params
@@ -503,7 +503,7 @@ pub fn shuffle_jokers(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOu
     }
 }
 
-/// Flip Joker — flips a joker card face-up or face-down.
+/// Flip Joker: flips a joker card face-up or face-down.
 pub fn flip_joker(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let selection_method = effect
         .params
@@ -616,7 +616,7 @@ pub fn flip_joker(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput
     }
 }
 
-/// Copy Joker — copies a joker (for joker context).
+/// Copy Joker: copies a joker (for joker context).
 pub fn copy_joker(effect: &EffectDef, _ctx: &mut CompileContext, trigger: &str) -> EffectOutput {
     let selection_method = effect
         .params
@@ -800,7 +800,7 @@ pub fn copy_joker(effect: &EffectDef, _ctx: &mut CompileContext, trigger: &str) 
     }
 }
 
-/// Copy Consumable — copies a consumable card from the consumables area.
+/// Copy Consumable: copies a consumable card from the consumables area.
 pub fn copy_consumable(
     effect: &EffectDef,
     _ctx: &mut CompileContext,
@@ -931,7 +931,7 @@ pub fn copy_consumable(
     }
 }
 
-/// Draw Cards — draws additional cards into the hand.
+/// Draw Cards: draws additional cards into the hand.
 pub fn draw_cards(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let count = ctx.next_effect_count("card_draw");
     let var_name = ctx.unique_var_name("card_draw", count);
@@ -976,7 +976,7 @@ pub fn draw_cards(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput 
     }
 }
 
-/// Emit Flag — sets a game pool flag.
+/// Emit Flag: sets a game pool flag.
 pub fn emit_flag(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let flag_name = effect
         .params
@@ -1043,7 +1043,7 @@ pub fn emit_flag(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     }
 }
 
-/// Add Booster Into Shop — adds a booster pack to the current shop.
+/// Add Booster Into Shop: adds a booster pack to the current shop.
 pub fn add_booster_into_shop(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let method = effect
         .params
@@ -1079,7 +1079,7 @@ pub fn add_booster_into_shop(effect: &EffectDef, _ctx: &mut CompileContext) -> E
     }
 }
 
-/// Add Voucher Into Shop — adds a voucher to the current shop.
+/// Add Voucher Into Shop: adds a voucher to the current shop.
 pub fn add_voucher_into_shop(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let method = effect
         .params
@@ -1123,7 +1123,7 @@ pub fn add_voucher_into_shop(effect: &EffectDef, _ctx: &mut CompileContext) -> E
     }
 }
 
-/// Edit Card Appearance — modifies a card's `in_pool` function to show/hide it.
+/// Edit Card Appearance: modifies a card's `in_pool` function to show/hide it.
 pub fn edit_card_appearance(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let appearance = effect
         .params
@@ -1165,7 +1165,7 @@ pub fn edit_card_appearance(effect: &EffectDef, _ctx: &mut CompileContext) -> Ef
 // edit_game_speed
 // ---------------------------------------------------------------------------
 
-/// Edit Game Speed — changes G.SETTINGS.GAMESPEED.
+/// Edit Game Speed: changes G.SETTINGS.GAMESPEED.
 pub fn edit_game_speed(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let speed = get_str_default(effect, "speed", "0.5");
     let custom_message = get_str_opt(effect, "customMessage");
@@ -1183,7 +1183,7 @@ pub fn edit_game_speed(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectO
 // fix_probability
 // ---------------------------------------------------------------------------
 
-/// Fix Probability — sets probability numerator and/or denominator.
+/// Fix Probability: sets probability numerator and/or denominator.
 pub fn fix_probability(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let part = get_str_default(effect, "part", "numerator");
     let resolved = resolve_config_value(&effect.params, "value", ctx, "set_probability");
@@ -1210,7 +1210,7 @@ pub fn fix_probability(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOu
 // mod_probability
 // ---------------------------------------------------------------------------
 
-/// Mod Probability — modifies probability numerator or denominator.
+/// Mod Probability: modifies probability numerator or denominator.
 pub fn mod_probability(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let chance_part = get_str_default(effect, "part", "numerator");
     let operation = get_str_default(effect, "operation", "multiply");
@@ -1252,7 +1252,7 @@ pub fn mod_probability(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOu
 // modify_blind_requirement
 // ---------------------------------------------------------------------------
 
-/// Modify Blind Requirement — changes G.GAME.blind.chips with HUD update.
+/// Modify Blind Requirement: changes G.GAME.blind.chips with HUD update.
 pub fn modify_blind_requirement(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let operation = get_str_default(effect, "operation", "multiply");
     let custom_message = get_str_opt(effect, "customMessage");
@@ -1324,7 +1324,7 @@ pub fn modify_blind_requirement(effect: &EffectDef, ctx: &mut CompileContext) ->
 // modify_all_blinds_requirement
 // ---------------------------------------------------------------------------
 
-/// Modify All Blinds Requirement — changes ante_scaling.
+/// Modify All Blinds Requirement: changes ante_scaling.
 pub fn modify_all_blinds_requirement(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let operation = get_str_default(effect, "operation", "multiply");
     let resolved = resolve_config_value(&effect.params, "value", ctx, "all_blinds_size");
@@ -1372,7 +1372,7 @@ pub fn modify_all_blinds_requirement(effect: &EffectDef, ctx: &mut CompileContex
 // permanent_bonus
 // ---------------------------------------------------------------------------
 
-/// Permanent Bonus — adds a permanent bonus to scored cards.
+/// Permanent Bonus: adds a permanent bonus to scored cards.
 pub fn permanent_bonus(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let bonus_type = get_str_default(effect, "bonus_type", "perma_bonus");
     let custom_message = get_str_opt(effect, "customMessage");
@@ -1415,7 +1415,7 @@ pub fn permanent_bonus(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOu
 // redeem_voucher
 // ---------------------------------------------------------------------------
 
-/// Redeem Voucher — creates and redeems a voucher card.
+/// Redeem Voucher: creates and redeems a voucher card.
 pub fn redeem_voucher(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let voucher_type = get_str_default(effect, "voucher_type", "random");
     let voucher_key = get_str_default(effect, "specific_voucher", "v_overstock_norm");
@@ -1468,7 +1468,7 @@ pub fn redeem_voucher(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOu
 // unlock_joker
 // ---------------------------------------------------------------------------
 
-/// Unlock Joker — unlocks and optionally discovers a joker.
+/// Unlock Joker: unlocks and optionally discovers a joker.
 pub fn unlock_joker(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let selection_method = get_str_default(effect, "selection_method", "key");
     let joker_key = get_str_default(effect, "joker_key", "j_joker");
@@ -1530,7 +1530,7 @@ pub fn unlock_joker(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutp
 // saved_effect
 // ---------------------------------------------------------------------------
 
-/// Saved effect — returns `saved = true` to prevent destruction.
+/// Saved effect: returns `saved = true` to prevent destruction.
 pub fn saved_effect(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let custom_message = get_str_opt(effect, "customMessage");
 
@@ -1551,7 +1551,7 @@ pub fn saved_effect(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutp
 // edit_joker
 // ---------------------------------------------------------------------------
 
-/// Edit Joker — modifies a joker's edition or sticker.
+/// Edit Joker: modifies a joker's edition or sticker.
 pub fn edit_joker(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let edition = get_str_default(effect, "edition", "none");
     let sticker = get_str_default(effect, "sticker", "none");
@@ -1611,7 +1611,7 @@ pub fn edit_joker(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput
 // edit_booster_packs
 // ---------------------------------------------------------------------------
 
-/// Edit Booster Packs — modifies booster pack size/choice.
+/// Edit Booster Packs: modifies booster pack size/choice.
 pub fn edit_booster_packs(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let booster_key = get_str_default(effect, "booster_key", "");
     let modify_type = get_str_default(effect, "modify_type", "size");
@@ -1649,7 +1649,7 @@ pub fn edit_booster_packs(effect: &EffectDef, ctx: &mut CompileContext) -> Effec
 // fool_effect
 // ---------------------------------------------------------------------------
 
-/// Fool Effect — recreates the last used Tarot/Planet card (consumable context).
+/// Fool effect: recreates the last used Tarot/Planet card (consumable context).
 pub fn fool_effect(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let custom_message = get_str_opt(effect, "customMessage");
 
@@ -1677,10 +1677,10 @@ pub fn fool_effect(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutpu
 }
 
 // ---------------------------------------------------------------------------
-// edit_cards (consumable context — batch card editing)
+// edit_cards (consumable context, batch card editing)
 // ---------------------------------------------------------------------------
 
-/// Edit Cards — applies modifications to selected/random cards in hand (consumable context).
+/// Edit Cards: applies modifications to selected/random cards in hand (consumable context).
 pub fn edit_cards(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let enhancement = get_str_default(effect, "enhancement", "none");
     let seal = get_str_default(effect, "seal", "none");
@@ -1901,3 +1901,4 @@ pub fn edit_cards(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput 
         colour: Some(lua_raw_expr("G.C.SECONDARY_SET.Tarot")),
     }
 }
+

@@ -138,7 +138,7 @@ fn build_voucher_table(
         entries.push(TableEntry::KeyValue("calculate".to_string(), f));
     }
 
-    // redeem function (card_used triggers — voucher-specific hook)
+    // redeem function (card_used triggers, voucher-specific hook)
     if let Some(f) = build_redeem_function(rule_outputs) {
         entries.push(TableEntry::KeyValue("redeem".to_string(), f));
     }
@@ -156,7 +156,7 @@ fn build_voucher_table(
 }
 
 /// Build the `redeem` function for vouchers.
-/// Vouchers use redeem(self, card) instead of use().
+/// Vouchers use redeem(self: card) instead of use().
 fn build_redeem_function(rule_outputs: &[RuleOutput]) -> Option<Expr> {
     let redeem_rules: Vec<&RuleOutput> = rule_outputs
         .iter()
@@ -203,3 +203,4 @@ fn build_draw_function(shader: &str) -> Option<Expr> {
 fn kv(key: &str, val: Expr) -> TableEntry {
     TableEntry::KeyValue(key.to_string(), val)
 }
+

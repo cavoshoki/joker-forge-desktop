@@ -29,7 +29,7 @@ fn is_scoring_trigger(trigger: &str) -> bool {
 // modify_internal_variable
 // ---------------------------------------------------------------------------
 
-/// Modify Internal Variable — changes a user-defined number variable.
+/// Modify Internal Variable: changes a user-defined number variable.
 pub fn modify_internal_variable(
     effect: &EffectDef,
     ctx: &mut CompileContext,
@@ -235,7 +235,7 @@ pub fn modify_internal_variable(
 // change_key_variable
 // ---------------------------------------------------------------------------
 
-/// Change Key Variable — changes a key-type user variable.
+/// Change Key Variable: changes a key-type user variable.
 pub fn change_key_variable(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let variable_name = get_str_default(effect, "variable_name", "keyvar");
     let change_type = get_str_default(effect, "change_type", "specific");
@@ -326,7 +326,7 @@ pub fn change_key_variable(effect: &EffectDef, _ctx: &mut CompileContext) -> Eff
 // change_text_variable
 // ---------------------------------------------------------------------------
 
-/// Change Text Variable — changes a text-type user variable.
+/// Change Text Variable: changes a text-type user variable.
 pub fn change_text_variable(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let variable_name = get_str_default(effect, "variable_name", "textvar");
     let change_type = get_str_default(effect, "change_type", "custom_text");
@@ -377,7 +377,7 @@ pub fn change_text_variable(effect: &EffectDef, _ctx: &mut CompileContext) -> Ef
 // change_rank_variable
 // ---------------------------------------------------------------------------
 
-/// Change Rank Variable — changes a rank-type user variable.
+/// Change Rank Variable: changes a rank-type user variable.
 pub fn change_rank_variable(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let variable_name = get_str_default(effect, "variable_name", "rankvar");
     let change_type = get_str_default(effect, "change_type", "random");
@@ -433,7 +433,7 @@ pub fn change_rank_variable(effect: &EffectDef, _ctx: &mut CompileContext) -> Ef
 // change_suit_variable
 // ---------------------------------------------------------------------------
 
-/// Change Suit Variable — changes a suit-type user variable.
+/// Change Suit Variable: changes a suit-type user variable.
 pub fn change_suit_variable(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let variable_name = get_str_default(effect, "variable_name", "suitvar");
     let change_type = get_str_default(effect, "change_type", "random");
@@ -483,7 +483,7 @@ pub fn change_suit_variable(effect: &EffectDef, _ctx: &mut CompileContext) -> Ef
 // change_poker_hand_variable
 // ---------------------------------------------------------------------------
 
-/// Change Poker Hand Variable — changes a poker-hand-type user variable.
+/// Change Poker Hand Variable: changes a poker-hand-type user variable.
 pub fn change_poker_hand_variable(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
     let variable_name = get_str_default(effect, "variable_name", "pokerhandvar");
     let change_type = get_str_default(effect, "change_type", "random");
@@ -569,3 +569,4 @@ fn rank_to_id(rank: &str) -> &'static str {
         _ => "14",
     }
 }
+

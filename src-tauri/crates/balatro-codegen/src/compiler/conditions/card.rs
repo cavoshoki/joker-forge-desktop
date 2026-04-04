@@ -1,7 +1,7 @@
 use crate::lua_ast::*;
 use crate::types::ConditionDef;
 
-/// Card Rank condition — checks the rank of the currently evaluated card.
+/// Card Rank condition: checks the rank of the currently evaluated card.
 pub fn card_rank(condition: &ConditionDef) -> Option<Expr> {
     let rank = condition.params.get("rank")?.as_str()?;
     let rank_id = rank_to_id(rank);
@@ -16,7 +16,7 @@ pub fn card_rank(condition: &ConditionDef) -> Option<Expr> {
     ))
 }
 
-/// Card Suit condition — checks the suit of the currently evaluated card.
+/// Card Suit condition: checks the suit of the currently evaluated card.
 pub fn card_suit(condition: &ConditionDef) -> Option<Expr> {
     let suit = condition.params.get("suit")?.as_str()?;
 
@@ -27,7 +27,7 @@ pub fn card_suit(condition: &ConditionDef) -> Option<Expr> {
     ))
 }
 
-/// Card Enhancement condition — checks if the card has a specific enhancement.
+/// Card Enhancement condition: checks whether the card has a specific enhancement.
 pub fn card_enhancement(condition: &ConditionDef) -> Option<Expr> {
     let enhancement = condition.params.get("enhancement")?.as_str()?;
 
@@ -37,7 +37,7 @@ pub fn card_enhancement(condition: &ConditionDef) -> Option<Expr> {
     ))
 }
 
-/// Card Edition condition — checks if the card has a specific edition.
+/// Card Edition condition: checks whether the card has a specific edition.
 pub fn card_edition(condition: &ConditionDef) -> Option<Expr> {
     let edition = condition.params.get("edition")?.as_str()?;
 
@@ -47,7 +47,7 @@ pub fn card_edition(condition: &ConditionDef) -> Option<Expr> {
     ))
 }
 
-/// Card Seal condition — checks if the card has a specific seal.
+/// Card Seal condition: checks whether the card has a specific seal.
 pub fn card_seal(condition: &ConditionDef) -> Option<Expr> {
     let seal = condition.params.get("seal")?.as_str()?;
 
@@ -57,7 +57,7 @@ pub fn card_seal(condition: &ConditionDef) -> Option<Expr> {
     ))
 }
 
-/// Card Index condition — checks the card's position in the scoring hand.
+/// Card Index condition: checks the card's position in the scoring hand.
 pub fn card_index(condition: &ConditionDef) -> Option<Expr> {
     let index_type = condition
         .params
@@ -101,3 +101,4 @@ fn rank_to_id(rank: &str) -> &str {
         _ => rank,
     }
 }
+

@@ -1,7 +1,7 @@
+use super::context::CompileContext;
+use super::{build_shared_loc_vars, compile_rules, RuleOutput};
 use crate::lua_ast::*;
 use crate::types::*;
-use super::context::CompileContext;
-use super::{compile_rules, build_shared_loc_vars, RuleOutput};
 
 /// Compile an enhancement definition into a Lua chunk.
 pub fn compile_enhancement(enhancement: &EnhancementDef, mod_prefix: &str) -> Chunk {
@@ -30,8 +30,8 @@ pub fn compile_enhancement(enhancement: &EnhancementDef, mod_prefix: &str) -> Ch
 }
 
 /// Extract base config values from unconditional simple effects.
-/// For enhancements, simple effects like add_chips/add_mult on card_scored become
-/// config fields (bonus, mult, h_chips, h_mult, p_dollars, h_dollars).
+/// For enhancements: simple effects like add_chips/add_mult on card_scored become
+/// config fields (bonus, mult, h_chips, h_mult, p_dollars: h_dollars).
 fn extract_base_config(rules: &[RuleDef]) -> Vec<(String, f64)> {
     let mut config: Vec<(String, f64)> = Vec::new();
 
@@ -57,15 +57,14 @@ fn extract_base_config(rules: &[RuleDef]) -> Vec<(String, f64)> {
                     _ => 0.0,
                 });
 
-            // Check if this is a simple numeric value (not a game variable or range)
+            // check whether this is a simple numeric value (not a game variable or range)
             let is_simple = effect
                 .params
                 .get("value")
                 .map(|v| match v {
                     ParamValue::Int(_) | ParamValue::Float(_) => true,
                     ParamValue::Str(s) => {
-                        !s.contains("GAMEVAR:") && !s.contains("RANGE:")
-                            && s.parse::<f64>().is_ok()
+                        !s.contains("GAMEVAR:") && !s.contains("RANGE:") && s.parse::<f64>().is_ok()
                     }
                     _ => false,
                 })
@@ -81,7 +80,9 @@ fn extract_base_config(rules: &[RuleDef]) -> Vec<(String, f64)> {
                 ("add_mult", "card_scored") => config.push(("mult".to_string(), value)),
                 ("add_mult", "card_held_in_hand") => config.push(("h_mult".to_string(), value)),
                 ("edit_dollars", "card_scored") => config.push(("p_dollars".to_string(), value)),
-                ("edit_dollars", "card_held_in_hand") => config.push(("h_dollars".to_string(), value)),
+                ("edit_dollars", "card_held_in_hand") => {
+                    config.push(("h_dollars".to_string(), value))
+                }
                 _ => {}
             }
         }
@@ -90,7 +91,7 @@ fn extract_base_config(rules: &[RuleDef]) -> Vec<(String, f64)> {
     config
 }
 
-/// Check if any rule has destroy effects (non-discard triggers)
+/// check whether any rule has destroy effects (non-discard triggers)
 fn has_non_discard_destroy(rules: &[RuleDef]) -> bool {
     rules.iter().any(|r| {
         r.trigger != "card_discarded"
@@ -100,7 +101,7 @@ fn has_non_discard_destroy(rules: &[RuleDef]) -> bool {
     })
 }
 
-/// Check if any rule has retrigger effects
+/// check whether any rule has retrigger effects
 fn has_retrigger_effects(rules: &[RuleDef]) -> bool {
     rules
         .iter()
@@ -221,7 +222,7 @@ fn build_enhancement_table(
     lua_table_raw(entries)
 }
 
-/// Build a calculate function specific to card types (enhancements, seals, editions).
+/// Build a calculate function specific to card types (enhancements, seals: editions).
 /// Handles destroy_card and retrigger contexts.
 pub(crate) fn build_card_calculate_function(
     rule_outputs: &[RuleOutput],
@@ -246,15 +247,9 @@ pub(crate) fn build_card_calculate_function(
         let destroy_check = lua_and(
             lua_path(&["context", "destroy_card"]),
             lua_and(
-                lua_eq(
-                    lua_path(&["context", "cardarea"]),
-                    lua_path(&["G", "play"]),
-                ),
+                lua_eq(lua_path(&["context", "cardarea"]), lua_path(&["G", "play"])),
                 lua_and(
-                    lua_eq(
-                        lua_path(&["context", "destroy_card"]),
-                        lua_ident("card"),
-                    ),
+                    lua_eq(lua_path(&["context", "destroy_card"]), lua_ident("card")),
                     lua_path(&["card", "should_destroy"]),
                 ),
             ),
@@ -285,9 +280,10 @@ pub(crate) fn build_card_calculate_function(
                 lua_path(&["context", "repetition"]),
                 lua_path(&["card", "should_retrigger"]),
             ),
-            vec![lua_return(lua_table(vec![
-                ("repetitions", lua_field(lua_raw_expr(ability_path), "retrigger_times")),
-            ]))],
+            vec![lua_return(lua_table(vec![(
+                "repetitions",
+                lua_field(lua_raw_expr(ability_path), "retrigger_times"),
+            )]))],
         ));
     }
 
@@ -333,7 +329,10 @@ pub(crate) fn build_card_calculate_function(
         for ro in &rules_for_trigger {
             let mut stmts = ro.effect_stmts.clone();
             if ro.has_destroy && trigger.as_str() != "card_discarded" {
-                stmts.insert(0, lua_assign(lua_path(&["card", "should_destroy"]), lua_bool(true)));
+                stmts.insert(
+                    0,
+                    lua_assign(lua_path(&["card", "should_destroy"]), lua_bool(true)),
+                );
             }
 
             if let Some(cond) = &ro.condition_expr {
