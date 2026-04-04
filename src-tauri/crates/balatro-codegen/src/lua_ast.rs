@@ -873,6 +873,76 @@ fn is_simple_entry(entry: &TableEntry) -> bool {
     }
 }
 
+/// Final-pass Lua formatting for generated text.
+///
+/// This is intentionally conservative: it normalizes line endings/trailing
+/// whitespace and applies indentation heuristics around common Lua block
+/// keywords (`if/elseif/else/do/function/repeat/end/until`) and table braces.
+///
+/// The AST emitter already produces good formatting; this helper mainly covers
+/// raw/manual Lua snippets that bypass structured emission.
+pub fn format_lua_source(source: &str) -> String {
+    let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
+    let mut out = String::with_capacity(normalized.len() + 32);
+
+    let mut indent: usize = 0;
+    for raw_line in normalized.lines() {
+        let line = raw_line.trim_end();
+        let trimmed = line.trim_start();
+
+        if trimmed.is_empty() {
+            out.push('\n');
+            continue;
+        }
+
+        let dedent_before = should_dedent_before(trimmed);
+        if dedent_before {
+            indent = indent.saturating_sub(1);
+        }
+
+        for _ in 0..indent {
+            out.push_str("    ");
+        }
+        out.push_str(trimmed);
+        out.push('\n');
+
+        if should_indent_after(trimmed) {
+            indent += 1;
+        }
+    }
+
+    out
+}
+
+fn should_dedent_before(line: &str) -> bool {
+    line == "end"
+        || line.starts_with("end ")
+        || line.starts_with("end,")
+        || line == "else"
+        || line.starts_with("elseif ")
+        || line.starts_with("until ")
+        || line == "}"
+        || line.starts_with("},")
+}
+
+fn should_indent_after(line: &str) -> bool {
+    if line == "else" || line.starts_with("elseif ") {
+        return true;
+    }
+
+    // One-line blocks should not affect indentation depth.
+    if line.contains(" then ") && line.contains(" end") {
+        return false;
+    }
+
+    line == "repeat"
+        || line.ends_with(" then")
+        || line.ends_with(" do")
+        || line.ends_with("{")
+        || line.starts_with("function ")
+        || line.contains(" = function(")
+}
+
 // ---------------------------------------------------------------------------
 // Display for Expr (convenience — uses Emitter)
 // ---------------------------------------------------------------------------
@@ -904,10 +974,7 @@ mod tests {
             ]))],
         };
         let out = Emitter::new().emit_chunk(&chunk);
-        assert_eq!(
-            out,
-            "return {\n    chips = 50,\n    mult = 10\n}\n"
-        );
+        assert_eq!(out, "return {\n    chips = 50,\n    mult = 10\n}\n");
     }
 
     #[test]
@@ -915,7 +982,10 @@ mod tests {
         let chunk = Chunk {
             stmts: vec![lua_if(
                 lua_and(
-                    lua_eq(lua_path(&["context", "cardarea"]), lua_path(&["G", "jokers"])),
+                    lua_eq(
+                        lua_path(&["context", "cardarea"]),
+                        lua_path(&["G", "jokers"]),
+                    ),
                     lua_path(&["context", "joker_main"]),
                 ),
                 vec![lua_return(lua_table(vec![("chips", lua_int(50))]))],

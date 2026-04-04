@@ -49,6 +49,58 @@ pub struct EntityMetadata {
     pub base_cost: i32,
     pub rarity_tier: String,
     pub blueprint_compatible: bool,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub eternal_compatible: Option<bool>,
+    #[serde(default)]
+    pub perishable_compatible: Option<bool>,
+    #[serde(default)]
+    pub unlocked: Option<bool>,
+    #[serde(default)]
+    pub discovered: Option<bool>,
+    #[serde(default)]
+    pub force_eternal: bool,
+    #[serde(default)]
+    pub force_perishable: bool,
+    #[serde(default)]
+    pub force_rental: bool,
+    #[serde(default)]
+    pub force_foil: bool,
+    #[serde(default)]
+    pub force_holographic: bool,
+    #[serde(default)]
+    pub force_polychrome: bool,
+    #[serde(default)]
+    pub force_negative: bool,
+    #[serde(default)]
+    pub ignore_slot_limit: bool,
+    #[serde(default)]
+    pub info_queues: Vec<String>,
+    #[serde(default)]
+    pub user_variables: Vec<EntityUserVariable>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntityUserVariable {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub var_type: String,
+    #[serde(default)]
+    pub initial_value: Option<f64>,
+    #[serde(default)]
+    pub initial_suit: Option<String>,
+    #[serde(default)]
+    pub initial_rank: Option<String>,
+    #[serde(default)]
+    pub initial_poker_hand: Option<String>,
+    #[serde(default)]
+    pub initial_key: Option<String>,
+    #[serde(default)]
+    pub initial_text: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -89,6 +141,22 @@ impl EntityState {
                 base_cost: 0,
                 rarity_tier: "common".to_string(),
                 blueprint_compatible: false,
+                name: None,
+                description: None,
+                eternal_compatible: None,
+                perishable_compatible: None,
+                unlocked: None,
+                discovered: None,
+                force_eternal: false,
+                force_perishable: false,
+                force_rental: false,
+                force_foil: false,
+                force_holographic: false,
+                force_polychrome: false,
+                force_negative: false,
+                ignore_slot_limit: false,
+                info_queues: Vec::new(),
+                user_variables: Vec::new(),
             },
             entity_type,
             nodes: HashMap::new(),

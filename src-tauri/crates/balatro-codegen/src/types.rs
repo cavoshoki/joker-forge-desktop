@@ -78,6 +78,24 @@ pub struct JokerDef {
     pub unlock: Option<UnlockDef>,
     #[serde(default)]
     pub user_variables: Vec<UserVariableDef>,
+    #[serde(default)]
+    pub force_eternal: bool,
+    #[serde(default)]
+    pub force_perishable: bool,
+    #[serde(default)]
+    pub force_rental: bool,
+    #[serde(default)]
+    pub force_foil: bool,
+    #[serde(default)]
+    pub force_holographic: bool,
+    #[serde(default)]
+    pub force_polychrome: bool,
+    #[serde(default)]
+    pub force_negative: bool,
+    #[serde(default)]
+    pub ignore_slot_limit: bool,
+    #[serde(default)]
+    pub info_queues: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -139,6 +157,10 @@ pub struct RuleDef {
     pub id: String,
     pub trigger: String,
     #[serde(default)]
+    pub retrigger: bool,
+    #[serde(default)]
+    pub destroy: bool,
+    #[serde(default)]
     pub condition_groups: Vec<ConditionGroupDef>,
     #[serde(default)]
     pub effects: Vec<EffectDef>,
@@ -171,6 +193,8 @@ pub struct ConditionDef {
     pub condition_type: String,
     #[serde(default)]
     pub negate: bool,
+    #[serde(default)]
+    pub operator: Option<LogicOp>,
     #[serde(default)]
     pub params: HashMap<String, ParamValue>,
 }
@@ -259,9 +283,7 @@ impl ParamValue {
             ParamValue::Int(n) => n.to_string(),
             ParamValue::Float(n) => n.to_string(),
             ParamValue::Bool(b) => b.to_string(),
-            ParamValue::Typed(t) => {
-                t.value.as_str().map(|s| s.to_string()).unwrap_or_default()
-            }
+            ParamValue::Typed(t) => t.value.as_str().map(|s| s.to_string()).unwrap_or_default(),
         }
     }
 }

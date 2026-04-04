@@ -7,10 +7,11 @@
 //! updating Rust, not both the TypeScript mapper and the Rust codegen.
 
 use balatro_codegen::types::{
-    AtlasPos, ConditionDef, ConditionGroupDef, DisplaySize, EffectDef, JokerDef, LogicOp,
-    LoopGroupDef, ParamValue, RandomGroupDef, RuleDef, TypedValue, UserVarType, UserVariableDef,
+    AppearanceDef, AtlasPos, ConditionDef, ConditionGroupDef, DisplaySize, EffectDef, JokerDef,
+    LogicOp, LoopGroupDef, ParamValue, RandomGroupDef, RuleDef, TypedValue, UnlockDef, UserVarType,
+    UserVariableDef,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -58,6 +59,34 @@ pub struct JokerDataInput {
     pub rules: Vec<RuleInput>,
     #[serde(rename = "userVariables", default)]
     pub user_variables: Vec<UserVariableInput>,
+    #[serde(default)]
+    pub force_eternal: bool,
+    #[serde(default)]
+    pub force_perishable: bool,
+    #[serde(default)]
+    pub force_rental: bool,
+    #[serde(default)]
+    pub force_foil: bool,
+    #[serde(default)]
+    pub force_holographic: bool,
+    #[serde(default)]
+    pub force_polychrome: bool,
+    #[serde(default)]
+    pub force_negative: bool,
+    #[serde(default, rename = "ignoreSlotLimit")]
+    pub ignore_slot_limit: bool,
+    #[serde(default)]
+    pub info_queues: Vec<String>,
+    #[serde(default)]
+    pub pools: Vec<String>,
+    #[serde(default)]
+    pub appears_in_shop: Option<bool>,
+    #[serde(default)]
+    pub appear_flags: Option<String>,
+    #[serde(default, rename = "unlockTrigger")]
+    pub unlock_trigger: Option<String>,
+    #[serde(default, rename = "unlockDescription")]
+    pub unlock_description: Option<String>,
 }
 
 /// Mirrors the TypeScript `Rule` interface.
@@ -93,6 +122,8 @@ pub struct ConditionInput {
     pub condition_type: String,
     #[serde(default)]
     pub negate: bool,
+    #[serde(default)]
+    pub operator: Option<String>,
     #[serde(default)]
     pub params: HashMap<String, WrappedParamInput>,
 }
@@ -164,6 +195,28 @@ pub struct BatchJokerEntry {
     pub file_name: String,
 }
 
+/// Mirrors the TypeScript `ModMetadata` interface for package export.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ModMetadataInput {
+    pub id: String,
+    pub name: String,
+    pub display_name: String,
+    pub author: Vec<String>,
+    pub description: String,
+    pub prefix: String,
+    pub main_file: String,
+    pub version: String,
+    pub priority: i64,
+    pub badge_colour: String,
+    pub badge_text_colour: String,
+    #[serde(default)]
+    pub dependencies: Vec<String>,
+    #[serde(default)]
+    pub conflicts: Vec<String>,
+    #[serde(default)]
+    pub provides: Vec<String>,
+}
+
 // ---------------------------------------------------------------------------
 // Conversion — JokerDataInput → JokerDef
 // ---------------------------------------------------------------------------
@@ -175,6 +228,9 @@ pub fn joker_data_to_def(
     pos: AtlasPosInput,
     soul_pos: Option<AtlasPosInput>,
 ) -> JokerDef {
+    let appearance = map_appearance(input);
+    let unlock = map_unlock(input);
+
     JokerDef {
         key: input.object_key.clone(),
         name: input.name.clone(),
@@ -191,9 +247,18 @@ pub fn joker_data_to_def(
         soul_pos: soul_pos.map(|sp| AtlasPos { x: sp.x, y: sp.y }),
         display_size: compute_display_size(input.scale_w, input.scale_h),
         rules: input.rules.iter().map(map_rule).collect(),
-        appearance: None,
-        unlock: None,
+        appearance,
+        unlock,
         user_variables: input.user_variables.iter().map(map_user_variable).collect(),
+        force_eternal: input.force_eternal,
+        force_perishable: input.force_perishable,
+        force_rental: input.force_rental,
+        force_foil: input.force_foil,
+        force_holographic: input.force_holographic,
+        force_polychrome: input.force_polychrome,
+        force_negative: input.force_negative,
+        ignore_slot_limit: input.ignore_slot_limit,
+        info_queues: input.info_queues.clone(),
     }
 }
 
@@ -202,9 +267,13 @@ pub fn joker_data_to_def(
 // ---------------------------------------------------------------------------
 
 fn map_rule(rule: &RuleInput) -> RuleDef {
+    let (retrigger, destroy) = compute_rule_flags(rule);
+
     RuleDef {
         id: rule.id.clone(),
         trigger: rule.trigger.clone(),
+        retrigger,
+        destroy,
         condition_groups: rule
             .condition_groups
             .iter()
@@ -218,7 +287,7 @@ fn map_rule(rule: &RuleInput) -> RuleDef {
 
 fn map_condition_group(cg: &ConditionGroupInput) -> ConditionGroupDef {
     ConditionGroupDef {
-        logic_operator: if cg.operator == "or" {
+        logic_operator: if cg.operator.eq_ignore_ascii_case("or") {
             LogicOp::Or
         } else {
             LogicOp::And
@@ -231,6 +300,7 @@ fn map_condition(c: &ConditionInput) -> ConditionDef {
     ConditionDef {
         condition_type: c.condition_type.clone(),
         negate: c.negate,
+        operator: c.operator.as_deref().and_then(parse_logic_op),
         params: map_params(&c.params),
     }
 }
@@ -385,4 +455,226 @@ fn compute_display_size(scale_w: Option<f64>, scale_h: Option<f64>) -> Option<Di
     } else {
         Some(DisplaySize { w, h })
     }
+}
+
+fn parse_logic_op(operator: &str) -> Option<LogicOp> {
+    match operator.trim().to_ascii_lowercase().as_str() {
+        "or" => Some(LogicOp::Or),
+        "and" => Some(LogicOp::And),
+        _ => None,
+    }
+}
+
+fn compute_rule_flags(rule: &RuleInput) -> (bool, bool) {
+    let mut retrigger = false;
+    let mut destroy = false;
+
+    for effect in &rule.effects {
+        update_rule_flags_from_effect(&effect.effect_type, &mut retrigger, &mut destroy);
+    }
+    for group in &rule.random_groups {
+        for effect in &group.effects {
+            update_rule_flags_from_effect(&effect.effect_type, &mut retrigger, &mut destroy);
+        }
+    }
+    for group in &rule.loops {
+        for effect in &group.effects {
+            update_rule_flags_from_effect(&effect.effect_type, &mut retrigger, &mut destroy);
+        }
+    }
+
+    (retrigger, destroy)
+}
+
+fn update_rule_flags_from_effect(effect_type: &str, retrigger: &mut bool, destroy: &mut bool) {
+    match effect_type {
+        "retrigger_playing_card" | "retrigger_cards" | "retrigger" => {
+            *retrigger = true;
+        }
+        "destroy_playing_card" | "destroy_card" => {
+            *destroy = true;
+        }
+        _ => {}
+    }
+}
+
+fn map_appearance(input: &JokerDataInput) -> Option<AppearanceDef> {
+    let mut appears_in = input.pools.clone();
+    let mut not_appears_in = Vec::new();
+    let mut appear_flags = Vec::new();
+
+    if input.appears_in_shop == Some(false) {
+        not_appears_in.push("sho".to_string());
+    }
+
+    if let Some(flags) = &input.appear_flags {
+        for flag in flags.split(',').map(str::trim).filter(|f| !f.is_empty()) {
+            appear_flags.push(flag.to_string());
+        }
+    }
+
+    appears_in.sort();
+    appears_in.dedup();
+
+    if appears_in.is_empty() && not_appears_in.is_empty() && appear_flags.is_empty() {
+        None
+    } else {
+        Some(AppearanceDef {
+            appears_in,
+            not_appears_in,
+            appear_flags,
+        })
+    }
+}
+
+fn map_unlock(input: &JokerDataInput) -> Option<UnlockDef> {
+    let condition = input
+        .unlock_trigger
+        .as_ref()
+        .map(|v| v.trim())
+        .filter(|v| !v.is_empty())?
+        .to_string();
+
+    let description = split_description(
+        input
+            .unlock_description
+            .as_deref()
+            .unwrap_or("Unlocked by default."),
+    );
+
+    Some(UnlockDef {
+        condition,
+        description,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Rust-side package text builders (entry.ts parity)
+// ---------------------------------------------------------------------------
+
+fn escape_lua_string(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('\'', "\\'")
+}
+
+fn normalize_joker_loc_key(prefix: &str, object_key: &str) -> String {
+    let raw = object_key.strip_prefix("j_").unwrap_or(object_key);
+    format!("j_{}_{}", prefix, raw)
+}
+
+fn build_lua_string_array(lines: &[String]) -> String {
+    if lines.is_empty() {
+        return "{}".to_string();
+    }
+
+    let mut out = String::from("{\n");
+    for (idx, line) in lines.iter().enumerate() {
+        let escaped = escape_lua_string(line);
+        out.push_str(&format!("        [{}] = '{}'", idx + 1, escaped));
+        if idx + 1 != lines.len() {
+            out.push_str(",\n");
+        }
+    }
+    out.push_str("\n      }");
+    out
+}
+
+pub fn build_localization_lua(mod_prefix: &str, jokers: &[BatchJokerEntry]) -> String {
+    let mut sorted: Vec<&BatchJokerEntry> = jokers.iter().collect();
+    sorted.sort_by(|a, b| a.joker_data.object_key.cmp(&b.joker_data.object_key));
+
+    let mut entries = Vec::new();
+    for entry in sorted {
+        let data = &entry.joker_data;
+        let key = normalize_joker_loc_key(mod_prefix, &data.object_key);
+        let text = split_description(&data.description);
+        let unlock_text = split_description(data.unlock_description.as_deref().unwrap_or(""));
+
+        let mut block = format!(
+            "    {} = {{\n      name = '{}',\n      text = {}",
+            key,
+            escape_lua_string(&data.name),
+            build_lua_string_array(&text)
+        );
+
+        if !unlock_text.is_empty() {
+            block.push_str(&format!(
+                ",\n      unlock = {}",
+                build_lua_string_array(&unlock_text)
+            ));
+        }
+        block.push_str("\n    }");
+        entries.push(block);
+    }
+
+    format!(
+        "return {{\n  descriptions = {{\n    Joker = {{\n{}\n    }}\n  }}\n}}\n",
+        entries.join(",\n")
+    )
+}
+
+pub fn build_main_lua(jokers: &[BatchJokerEntry]) -> String {
+    let mut sorted: Vec<&BatchJokerEntry> = jokers.iter().collect();
+    sorted.sort_by(|a, b| a.joker_data.object_key.cmp(&b.joker_data.object_key));
+
+    let requires = sorted
+        .iter()
+        .map(|j| {
+            format!(
+                "assert(SMODS.load_file(\"jokers/{}.lua\"))()",
+                j.joker_data.object_key
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let atlas_decl = if sorted.is_empty() {
+        String::new()
+    } else {
+        "SMODS.Atlas({\n    key = \"CustomJokers\",\n    path = \"CustomJokers.png\",\n    px = 71,\n    py = 95,\n    atlas_table = \"ASSET_ATLAS\"\n})\n\n".to_string()
+    };
+
+    format!(
+        "{}local NFS = require(\"nativefs\")\nto_big = to_big or function(a) return a end\nlenient_bignum = lenient_bignum or function(a) return a end\n\n{}\n",
+        atlas_decl, requires
+    )
+}
+
+#[derive(Serialize)]
+struct ModJsonPayload<'a> {
+    id: &'a str,
+    name: &'a str,
+    display_name: &'a str,
+    author: &'a [String],
+    description: &'a str,
+    prefix: &'a str,
+    main_file: &'a str,
+    version: &'a str,
+    priority: i64,
+    badge_colour: &'a str,
+    badge_text_colour: &'a str,
+    dependencies: &'a [String],
+    conflicts: &'a [String],
+    provides: &'a [String],
+}
+
+pub fn build_mod_json(metadata: &ModMetadataInput) -> Result<String, String> {
+    let payload = ModJsonPayload {
+        id: &metadata.id,
+        name: &metadata.name,
+        display_name: &metadata.display_name,
+        author: &metadata.author,
+        description: &metadata.description,
+        prefix: &metadata.prefix,
+        main_file: &metadata.main_file,
+        version: &metadata.version,
+        priority: metadata.priority,
+        badge_colour: &metadata.badge_colour,
+        badge_text_colour: &metadata.badge_text_colour,
+        dependencies: &metadata.dependencies,
+        conflicts: &metadata.conflicts,
+        provides: &metadata.provides,
+    };
+
+    serde_json::to_string_pretty(&payload)
+        .map_err(|e| format!("Failed to serialize mod metadata: {}", e))
 }

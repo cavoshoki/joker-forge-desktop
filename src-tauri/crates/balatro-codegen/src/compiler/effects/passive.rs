@@ -277,7 +277,7 @@ pub fn compile_passive(
         "showman" => Some(showman(effect, ctx)),
         "combine_ranks" => Some(combine_ranks(effect, ctx)),
         "combine_suits" => Some(combine_suits(effect, ctx)),
-        "reduce_flush_straight_requirement" => {
+        "reduce_flush_straight_requirement" | "reduce_flush_straight_requirements" => {
             Some(reduce_flush_straight_requirement(effect, ctx))
         }
         "copy_joker_ability" => Some(copy_joker_ability(effect, ctx)),

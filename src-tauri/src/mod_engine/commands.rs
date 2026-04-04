@@ -1,14 +1,15 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fs, path::Path};
 
 use balatro_codegen::{
-    compile_joker_with_options, compile_node_snippet, Emitter as LuaEmitter, JokerDef, ObjectType,
+    compile_joker_with_options, compile_node_snippet, format_lua_source,
+    Emitter as LuaEmitter, JokerDef, ObjectType,
 };
 use serde_json::Value;
 use tauri::{Emitter, State, Window};
 
 use super::{
     compiler::Compiler,
-    export::{AtlasPosInput, BatchJokerEntry, JokerDataInput},
+    export::{AtlasPosInput, BatchJokerEntry, JokerDataInput, ModMetadataInput},
     state::AppState,
     types::{Edge, EntityState, Node, RuleCatalogPayload, SnippetResponse, StateSyncPayload},
 };
@@ -257,7 +258,7 @@ pub fn get_node_snippet(
 #[tauri::command]
 pub fn compile_joker_lua(joker_def: JokerDef, mod_prefix: String) -> Result<String, String> {
     let chunk = compile_joker_with_options(&joker_def, &mod_prefix, true);
-    let lua = LuaEmitter::new().emit_chunk(&chunk);
+    let lua = format_lua_source(&LuaEmitter::new().emit_chunk(&chunk));
     Ok(lua)
 }
 
@@ -268,7 +269,7 @@ pub fn compile_joker_lua_with_options(
     include_loc_txt: bool,
 ) -> Result<String, String> {
     let chunk = compile_joker_with_options(&joker_def, &mod_prefix, include_loc_txt);
-    let lua = LuaEmitter::new().emit_chunk(&chunk);
+    let lua = format_lua_source(&LuaEmitter::new().emit_chunk(&chunk));
     Ok(lua)
 }
 
@@ -322,7 +323,7 @@ pub fn compile_joker_from_data(
 ) -> Result<String, String> {
     let joker_def = super::export::joker_data_to_def(&joker_data, pos, soul_pos);
     let chunk = compile_joker_with_options(&joker_def, &mod_prefix, include_loc_txt);
-    Ok(LuaEmitter::new().emit_chunk(&chunk))
+    Ok(format_lua_source(&LuaEmitter::new().emit_chunk(&chunk)))
 }
 
 /// Compile and write a batch of jokers to disk in a single IPC call.
@@ -350,7 +351,7 @@ pub fn batch_export_jokers(
         let joker_def =
             super::export::joker_data_to_def(&entry.joker_data, entry.pos.clone(), entry.soul_pos.clone());
         let chunk = compile_joker_with_options(&joker_def, &mod_prefix, include_loc_txt);
-        let lua = LuaEmitter::new().emit_chunk(&chunk);
+        let lua = format_lua_source(&LuaEmitter::new().emit_chunk(&chunk));
 
         let path = folder.join(&entry.file_name);
         std::fs::write(&path, lua.as_bytes())
@@ -359,4 +360,88 @@ pub fn batch_export_jokers(
     }
 
     Ok(count)
+}
+
+/// Export a full mod package (main file, metadata JSON, atlas assets, jokers, localization)
+/// in a single Rust command.
+#[tauri::command]
+pub fn export_mod_package(
+    mod_folder_path: String,
+    metadata: ModMetadataInput,
+    jokers: Vec<BatchJokerEntry>,
+    include_loc_txt: bool,
+    use_localization_file: bool,
+    localization_locale: Option<String>,
+    atlas_1x_png: Option<Vec<u8>>,
+    atlas_2x_png: Option<Vec<u8>>,
+) -> Result<usize, String> {
+    let root = Path::new(&mod_folder_path);
+    fs::create_dir_all(root)
+        .map_err(|e| format!("Failed to create mod folder {}: {}", mod_folder_path, e))?;
+
+    let mut file_count = 0;
+
+    let main_path = root.join(&metadata.main_file);
+    let main_lua = format_lua_source(&super::export::build_main_lua(&jokers));
+    fs::write(&main_path, main_lua.as_bytes())
+        .map_err(|e| format!("Failed to write {}: {}", main_path.display(), e))?;
+    file_count += 1;
+
+    let json_path = root.join(format!("{}.json", metadata.id));
+    let mod_json = super::export::build_mod_json(&metadata)?;
+    fs::write(&json_path, mod_json.as_bytes())
+        .map_err(|e| format!("Failed to write {}: {}", json_path.display(), e))?;
+    file_count += 1;
+
+    if let Some(bytes) = atlas_1x_png {
+        let path = root.join("assets").join("1x").join("CustomJokers.png");
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create {}: {}", parent.display(), e))?;
+        }
+        fs::write(&path, bytes)
+            .map_err(|e| format!("Failed to write {}: {}", path.display(), e))?;
+        file_count += 1;
+    }
+
+    if let Some(bytes) = atlas_2x_png {
+        let path = root.join("assets").join("2x").join("CustomJokers.png");
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create {}: {}", parent.display(), e))?;
+        }
+        fs::write(&path, bytes)
+            .map_err(|e| format!("Failed to write {}: {}", path.display(), e))?;
+        file_count += 1;
+    }
+
+    let joker_dir = root.join("jokers");
+    fs::create_dir_all(&joker_dir)
+        .map_err(|e| format!("Failed to create {}: {}", joker_dir.display(), e))?;
+
+    for entry in &jokers {
+        let joker_def =
+            super::export::joker_data_to_def(&entry.joker_data, entry.pos.clone(), entry.soul_pos.clone());
+        let chunk = compile_joker_with_options(&joker_def, &metadata.prefix, include_loc_txt);
+        let lua = format_lua_source(&LuaEmitter::new().emit_chunk(&chunk));
+
+        let path = joker_dir.join(&entry.file_name);
+        fs::write(&path, lua.as_bytes())
+            .map_err(|e| format!("Failed to write {}: {}", path.display(), e))?;
+        file_count += 1;
+    }
+
+    if use_localization_file {
+        let locale = localization_locale.unwrap_or_else(|| "en-us".to_string());
+        let localization_dir = root.join("localization");
+        fs::create_dir_all(&localization_dir)
+            .map_err(|e| format!("Failed to create {}: {}", localization_dir.display(), e))?;
+        let loc_path = localization_dir.join(format!("{}.lua", locale));
+        let loc_lua = format_lua_source(&super::export::build_localization_lua(&metadata.prefix, &jokers));
+        fs::write(&loc_path, loc_lua.as_bytes())
+            .map_err(|e| format!("Failed to write {}: {}", loc_path.display(), e))?;
+        file_count += 1;
+    }
+
+    Ok(file_count)
 }

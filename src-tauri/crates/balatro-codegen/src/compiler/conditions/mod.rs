@@ -131,21 +131,32 @@ pub fn compile_condition_chain(
 
 /// Compile a single condition group.
 fn compile_condition_group(group: &ConditionGroupDef, object_type: ObjectType) -> Option<Expr> {
-    let cond_exprs: Vec<Expr> = group
-        .conditions
-        .iter()
-        .filter_map(|c| compile_condition(c, object_type))
-        .collect();
-
-    if cond_exprs.is_empty() {
+    if group.conditions.is_empty() {
         return None;
     }
 
-    let combined = match group.logic_operator {
-        LogicOp::And => lua_and_chain(cond_exprs),
-        LogicOp::Or => lua_or_chain(cond_exprs),
-    };
+    let mut compiled: Vec<(Expr, Option<LogicOp>)> = Vec::new();
+    for condition in &group.conditions {
+        if let Some(expr) = compile_condition(condition, object_type) {
+            compiled.push((expr, condition.operator));
+        }
+    }
 
-    // Wrap OR groups in parens for clarity (done by the emitter's precedence logic)
+    if compiled.is_empty() {
+        return None;
+    }
+
+    let mut iter = compiled.into_iter();
+    let (mut combined, mut pending_op) = iter.next()?;
+
+    for (expr, next_op) in iter {
+        let op = pending_op.unwrap_or(group.logic_operator);
+        combined = match op {
+            LogicOp::And => lua_and(combined, expr),
+            LogicOp::Or => lua_or(combined, expr),
+        };
+        pending_op = next_op;
+    }
+
     Some(combined)
 }

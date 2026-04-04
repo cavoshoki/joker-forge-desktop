@@ -28,6 +28,7 @@ pub fn run() {
             // Unified export commands — accept raw JokerData, eliminate TS mapping
             commands::compile_joker_from_data,
             commands::batch_export_jokers,
+            commands::export_mod_package,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

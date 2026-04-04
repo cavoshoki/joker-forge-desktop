@@ -10,6 +10,22 @@ pub fn trigger_context(
     trigger: &str,
     blueprint_compat: bool,
 ) -> Expr {
+    trigger_context_for_rule(object_type, trigger, blueprint_compat, false)
+}
+
+/// Generate trigger context with per-rule modifiers (e.g. retrigger effects).
+pub fn trigger_context_for_rule(
+    object_type: ObjectType,
+    trigger: &str,
+    blueprint_compat: bool,
+    use_retrigger_context: bool,
+) -> Expr {
+    if use_retrigger_context {
+        if let Some(expr) = retrigger_trigger_context(object_type, trigger, blueprint_compat) {
+            return expr;
+        }
+    }
+
     let ctx = match object_type {
         ObjectType::Joker => joker_trigger_context(trigger, blueprint_compat),
         ObjectType::Consumable => consumable_trigger_context(trigger),
@@ -39,6 +55,20 @@ pub fn retrigger_trigger_context(
             );
             Some(maybe_blueprint(base, blueprint_compat))
         }
+        (ObjectType::Joker, "card_held_in_hand")
+        | (ObjectType::Joker, "card_held_in_hand_end_of_round") => {
+            let base = lua_and(
+                ctx("repetition"),
+                lua_and(
+                    lua_eq(ctx("cardarea"), lua_path(&["G", "hand"])),
+                    lua_and(
+                        ctx("end_of_round"),
+                        lua_raw_expr("(next(context.card_effects[1]) or #context.card_effects > 1)"),
+                    ),
+                ),
+            );
+            Some(maybe_blueprint(base, blueprint_compat))
+        }
         (ObjectType::Card, "card_scored") => {
             Some(lua_and(ctx("repetition"), lua_eq(ctx("cardarea"), lua_path(&["G", "play"]))))
         }
@@ -58,11 +88,11 @@ fn joker_trigger_context(trigger: &str, bp: bool) -> Option<Expr> {
             bp,
         ),
         "before_hand_played" => bp_check(
-            lua_and(ctx("before"), lua_and(ctx("joker_main"), lua_not(ctx("blueprint")))),
-            false, // blueprint check is embedded
+            lua_and(ctx("before"), lua_eq(ctx("cardarea"), lua_path(&["G", "jokers"]))),
+            bp,
         ),
         "after_hand_played" => bp_check(
-            lua_and(ctx("after"), ctx("joker_main")),
+            lua_and(ctx("after"), lua_eq(ctx("cardarea"), lua_path(&["G", "jokers"]))),
             bp,
         ),
         "card_scored" => bp_check(
@@ -70,29 +100,29 @@ fn joker_trigger_context(trigger: &str, bp: bool) -> Option<Expr> {
             bp,
         ),
         "joker_evaluated" => bp_check(
-            lua_and(lua_eq(ctx("cardarea"), lua_path(&["G", "jokers"])), ctx("joker_main")),
+            ctx("other_joker"),
             bp,
         ),
         "joker_triggered" => bp_check(
-            lua_and(lua_eq(ctx("cardarea"), lua_path(&["G", "jokers"])), ctx("joker_main")),
+            ctx("post_trigger"),
             bp,
         ),
 
         // In blind events
         "hand_drawn" => bp_check(
-            lua_and(ctx("first_hand_drawn"), ctx("joker_main")),
+            ctx("hand_drawn"),
             bp,
         ),
         "first_hand_drawn" => bp_check(
-            lua_and(ctx("first_hand_drawn"), ctx("joker_main")),
+            ctx("first_hand_drawn"),
             bp,
         ),
         "hand_discarded" => bp_check(
-            lua_and(ctx("discard"), ctx("joker_main")),
+            ctx("pre_discard"),
             bp,
         ),
         "card_discarded" => bp_check(
-            lua_and(ctx("individual"), lua_eq(ctx("cardarea"), lua_path(&["G", "play"]))),
+            ctx("discard"),
             bp,
         ),
         "card_held_in_hand" => bp_check(
@@ -126,15 +156,18 @@ fn joker_trigger_context(trigger: &str, bp: bool) -> Option<Expr> {
             bp,
         ),
         "blind_disabled" => bp_check(
-            lua_and(ctx("debuffed_hand"), ctx("joker_main")),
+            ctx("blind_disabled"),
             bp,
         ),
         "boss_defeated" => bp_check(
-            lua_and(ctx("end_of_round"), ctx("joker_main")),
+            lua_and(
+                ctx("end_of_round"),
+                lua_and(ctx("main_eval"), lua_raw_expr("G.GAME.blind.boss")),
+            ),
             bp,
         ),
         "ante_start" => bp_check(
-            lua_and(ctx("setting_blind"), ctx("joker_main")),
+            ctx("ante_change"),
             bp,
         ),
 
@@ -156,11 +189,11 @@ fn joker_trigger_context(trigger: &str, bp: bool) -> Option<Expr> {
             bp,
         ),
         "shop_entered" => bp_check(
-            lua_and(ctx("open_booster"), ctx("joker_main")),
+            ctx("starting_shop"),
             bp,
         ),
         "shop_exited" => bp_check(
-            lua_and(ctx("shop_final"), ctx("joker_main")),
+            ctx("ending_shop"),
             bp,
         ),
         "shop_reroll" => bp_check(
@@ -184,7 +217,7 @@ fn joker_trigger_context(trigger: &str, bp: bool) -> Option<Expr> {
 
         // Special
         "card_destroyed" => bp_check(
-            lua_and(ctx("destroying_card"), ctx("joker_main")),
+            ctx("remove_playing_cards"),
             bp,
         ),
         "game_over" => bp_check(
@@ -192,7 +225,7 @@ fn joker_trigger_context(trigger: &str, bp: bool) -> Option<Expr> {
             bp,
         ),
         "change_probability" => bp_check(
-            ctx("change_probability"),
+            ctx("pseudorandom_result"),
             bp,
         ),
 

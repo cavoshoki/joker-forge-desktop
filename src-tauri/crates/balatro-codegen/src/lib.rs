@@ -5,7 +5,7 @@ pub mod types;
 
 // Re-export key types for convenience
 pub use compiler::{compile_joker, compile_joker_with_options, compile_node_snippet};
-pub use lua_ast::{Chunk, Emitter, Expr, Stmt};
+pub use lua_ast::{format_lua_source, Chunk, Emitter, Expr, Stmt};
 pub use objects::GameObject;
 pub use types::{JokerDef, ModConfig, ObjectType};
 
@@ -35,6 +35,8 @@ mod integration_tests {
             rules: vec![RuleDef {
                 id: "rule1".to_string(),
                 trigger: "hand_played".to_string(),
+                retrigger: false,
+                destroy: false,
                 condition_groups: vec![],
                 effects: vec![EffectDef {
                     effect_type: "add_chips".to_string(),
@@ -50,6 +52,15 @@ mod integration_tests {
             appearance: None,
             unlock: None,
             user_variables: vec![],
+            force_eternal: false,
+            force_perishable: false,
+            force_rental: false,
+            force_foil: false,
+            force_holographic: false,
+            force_polychrome: false,
+            force_negative: false,
+            ignore_slot_limit: false,
+            info_queues: vec![],
         };
 
         let chunk = compile_joker(&joker, "modprefix");
@@ -118,6 +129,8 @@ mod integration_tests {
             rules: vec![RuleDef {
                 id: "rule1".to_string(),
                 trigger: "hand_played".to_string(),
+                retrigger: false,
+                destroy: false,
                 condition_groups: vec![],
                 effects: vec![EffectDef {
                     effect_type: "add_chips".to_string(),
@@ -133,6 +146,15 @@ mod integration_tests {
             appearance: None,
             unlock: None,
             user_variables: vec![],
+            force_eternal: false,
+            force_perishable: false,
+            force_rental: false,
+            force_foil: false,
+            force_holographic: false,
+            force_polychrome: false,
+            force_negative: false,
+            ignore_slot_limit: false,
+            info_queues: vec![],
         };
 
         let chunk = compile_joker(&joker, "modprefix");
@@ -172,6 +194,8 @@ mod integration_tests {
             rules: vec![RuleDef {
                 id: "rule1".to_string(),
                 trigger: "hand_played".to_string(),
+                retrigger: false,
+                destroy: false,
                 condition_groups: vec![],
                 effects: vec![
                     EffectDef {
@@ -197,6 +221,15 @@ mod integration_tests {
             appearance: None,
             unlock: None,
             user_variables: vec![],
+            force_eternal: false,
+            force_perishable: false,
+            force_rental: false,
+            force_foil: false,
+            force_holographic: false,
+            force_polychrome: false,
+            force_negative: false,
+            ignore_slot_limit: false,
+            info_queues: vec![],
         };
 
         let chunk = compile_joker(&joker, "modprefix");

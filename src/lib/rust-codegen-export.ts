@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { downloadDir, join } from "@tauri-apps/api/path";
-import { exists, mkdir, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { exists } from "@tauri-apps/plugin-fs";
 import type { JokerData, ModMetadata } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
@@ -144,92 +144,6 @@ const dataURLToUint8Array = (dataUrl: string): Uint8Array => {
   return bytes;
 };
 
-// ---------------------------------------------------------------------------
-// Lua / JSON text builders (pure TypeScript strings — no Rust needed)
-// ---------------------------------------------------------------------------
-
-const escapeLuaString = (value: string): string =>
-  value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-
-const normalizeJokerLocKey = (prefix: string, objectKey: string): string => {
-  const rawKey = objectKey.startsWith("j_") ? objectKey.slice(2) : objectKey;
-  return `j_${prefix}_${rawKey}`;
-};
-
-const splitDescription = (description: string): string[] => {
-  const normalized = description
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/\[s\]/g, "\n");
-  const lines = normalized
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-  return lines.length > 0 ? lines : ["No description"];
-};
-
-const buildLuaStringArray = (lines: string[]): string => {
-  if (lines.length === 0) return "{}";
-  const items = lines
-    .map((line, index) => `        [${index + 1}] = '${escapeLuaString(line)}'`)
-    .join(",\n");
-  return `{\n${items}\n      }`;
-};
-
-const buildLocalizationLua = (
-  modPrefix: string,
-  jokers: JokerData[],
-): string => {
-  const sorted = [...jokers].sort((a, b) => a.orderValue - b.orderValue);
-  const entries = sorted
-    .map((joker) => {
-      const key = normalizeJokerLocKey(modPrefix, joker.objectKey);
-      const text = splitDescription(joker.description || "");
-      const unlockText = splitDescription(joker.unlockDescription || "");
-      const unlockBlock =
-        unlockText.length > 0
-          ? `,\n      unlock = ${buildLuaStringArray(unlockText)}`
-          : "";
-      return `    ${key} = {\n      name = '${escapeLuaString(joker.name || "")}',\n      text = ${buildLuaStringArray(text)}${unlockBlock}\n    }`;
-    })
-    .join(",\n");
-
-  return `return {\n  descriptions = {\n    Joker = {\n${entries}\n    }\n  }\n}\n`;
-};
-
-const buildMainLua = (jokers: JokerData[]): string => {
-  const sorted = [...jokers].sort((a, b) => a.orderValue - b.orderValue);
-  const requires = sorted
-    .map((j) => `assert(SMODS.load_file("jokers/${j.objectKey}.lua"))()`)
-    .join("\n");
-
-  const atlasDecl =
-    sorted.length > 0
-      ? `SMODS.Atlas({\n    key = "CustomJokers",\n    path = "CustomJokers.png",\n    px = 71,\n    py = 95,\n    atlas_table = "ASSET_ATLAS"\n})\n\n`
-      : "";
-
-  return `${atlasDecl}local NFS = require("nativefs")\nto_big = to_big or function(a) return a end\nlenient_bignum = lenient_bignum or function(a) return a end\n\n${requires}\n`;
-};
-
-const buildModJson = (metadata: ModMetadata): string => {
-  const payload = {
-    id: metadata.id,
-    name: metadata.name,
-    display_name: metadata.display_name,
-    author: metadata.author,
-    description: metadata.description,
-    prefix: metadata.prefix,
-    main_file: metadata.main_file,
-    version: metadata.version,
-    priority: metadata.priority,
-    badge_colour: metadata.badge_colour,
-    badge_text_colour: metadata.badge_text_colour,
-    dependencies: metadata.dependencies,
-    conflicts: metadata.conflicts,
-    provides: metadata.provides,
-  };
-  return JSON.stringify(payload, null, 2);
-};
-
 const downloadBlob = (filename: string, content: Blob) => {
   const url = URL.createObjectURL(content);
   const a = document.createElement("a");
@@ -340,74 +254,26 @@ export const exportModRust = async (
   );
   const useLocalizationFile = options.useLocalizationFile ?? false;
   const locale = options.localizationLocale ?? "en-us";
-  let fileCount = 0;
-
-  await mkdir(modFolderPath, { recursive: true });
-
-  const jokersFolderPath = await join(modFolderPath, "jokers");
-  await mkdir(jokersFolderPath, { recursive: true });
-
-  // Write text metadata files (pure string building — no Rust roundtrip needed)
-  await writeTextFile(
-    await join(modFolderPath, metadata.main_file),
-    buildMainLua(jokers),
-  );
-  fileCount += 1;
-  await writeTextFile(
-    await join(modFolderPath, `${metadata.id}.json`),
-    buildModJson(metadata),
-  );
-  fileCount += 1;
 
   const sorted = [...jokers].sort((a, b) => a.orderValue - b.orderValue);
+  const atlas1x = sorted.length > 0 ? await buildJokerAtlas(sorted, 1) : null;
+  const atlas2x = sorted.length > 0 ? await buildJokerAtlas(sorted, 2) : null;
 
-  if (sorted.length > 0) {
-    // Atlas images: Canvas rendering must stay in TypeScript
-    const assetsFolderPath = await join(modFolderPath, "assets");
-    const assets1xPath = await join(assetsFolderPath, "1x");
-    const assets2xPath = await join(assetsFolderPath, "2x");
-    await mkdir(assets1xPath, { recursive: true });
-    await mkdir(assets2xPath, { recursive: true });
-
-    const atlas1x = await buildJokerAtlas(sorted, 1);
-    const atlas2x = await buildJokerAtlas(sorted, 2);
-
-    await writeFile(
-      await join(assets1xPath, "CustomJokers.png"),
-      dataURLToUint8Array(atlas1x.atlasDataUrl),
-    );
-    fileCount += 1;
-    await writeFile(
-      await join(assets2xPath, "CustomJokers.png"),
-      dataURLToUint8Array(atlas2x.atlasDataUrl),
-    );
-    fileCount += 1;
-
-    // Compile all jokers + write their Lua files in a single Rust call.
-    // Rust maps JokerData → JokerDef internally; no TypeScript mapping needed.
-    const written = await invoke<number>("batch_export_jokers", {
-      jokerFolderPath: jokersFolderPath,
-      modPrefix: metadata.prefix,
-      jokers: sorted.map((joker) => ({
-        jokerData: joker,
-        pos: atlas1x.positionsById[joker.id] ?? { x: 0, y: 0 },
-        soulPos: atlas1x.soulPositionsById[joker.id] ?? null,
-        fileName: `${joker.objectKey}.lua`,
-      })),
-      includeLocTxt: !useLocalizationFile,
-    });
-    fileCount += written;
-  }
-
-  if (useLocalizationFile) {
-    const localizationPath = await join(modFolderPath, "localization");
-    await mkdir(localizationPath, { recursive: true });
-    await writeTextFile(
-      await join(localizationPath, `${locale}.lua`),
-      buildLocalizationLua(metadata.prefix, sorted),
-    );
-    fileCount += 1;
-  }
+  const fileCount = await invoke<number>("export_mod_package", {
+    modFolderPath,
+    metadata,
+    jokers: sorted.map((joker) => ({
+      jokerData: joker,
+      pos: atlas1x?.positionsById[joker.id] ?? { x: 0, y: 0 },
+      soulPos: atlas1x?.soulPositionsById[joker.id] ?? null,
+      fileName: `${joker.objectKey}.lua`,
+    })),
+    includeLocTxt: !useLocalizationFile,
+    useLocalizationFile,
+    localizationLocale: locale,
+    atlas1xPng: atlas1x ? dataURLToUint8Array(atlas1x.atlasDataUrl) : null,
+    atlas2xPng: atlas2x ? dataURLToUint8Array(atlas2x.atlasDataUrl) : null,
+  });
 
   return { exportRootPath, modFolderPath, fileCount };
 };

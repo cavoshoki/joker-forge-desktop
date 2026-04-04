@@ -42,9 +42,13 @@ pub fn compile_joker_with_options(
         },
     ));
 
-    Chunk {
-        stmts: vec![lua_comment(format!(" {}", joker.name)), smods_call],
+    let mut stmts = vec![lua_comment(format!(" {}", joker.name)), smods_call];
+    stmts.extend(build_global_hook_stmts(&rule_outputs, &ctx));
+    if joker.ignore_slot_limit {
+        stmts.extend(build_ignore_slot_limit_stmts(&ctx));
     }
+
+    Chunk { stmts }
 }
 
 /// Compile a single node for snippet preview.
@@ -68,18 +72,19 @@ pub fn compile_node_snippet(
         "trigger" => {
             let ctx_expr = triggers::trigger_context(object_type, specific, false);
             let stmt = lua_if(ctx_expr, vec![lua_comment("... effects ...")]);
-            Emitter::new().emit_stmts(&[stmt])
+            crate::lua_ast::format_lua_source(&Emitter::new().emit_stmts(&[stmt]))
         }
         "condition" => {
             let condition = ConditionDef {
                 condition_type: specific.to_string(),
                 negate: false,
+                operator: None,
                 params: convert_params(params),
             };
             match conditions::compile_condition(&condition, object_type) {
                 Some(expr) => {
                     let stmt = lua_if(expr, vec![lua_comment("... effects ...")]);
-                    Emitter::new().emit_stmts(&[stmt])
+                    crate::lua_ast::format_lua_source(&Emitter::new().emit_stmts(&[stmt]))
                 }
                 None => format!("-- condition '{}' not yet implemented", specific),
             }
@@ -98,7 +103,7 @@ pub fn compile_node_snippet(
             match effects::compile_effect(&effect, &mut ctx, "hand_played") {
                 Some(output) => {
                     let stmts = effects::build_return_block(&[output]);
-                    Emitter::new().emit_stmts(&stmts)
+                    crate::lua_ast::format_lua_source(&Emitter::new().emit_stmts(&stmts))
                 }
                 None => format!("-- effect '{}' not yet implemented", specific),
             }
@@ -117,6 +122,35 @@ struct RuleOutput {
     effect_stmts: Vec<Stmt>,
     is_passive: bool,
     passive_outputs: Vec<effects::passive::PassiveEffectOutput>,
+    passive_hooks: Vec<PassiveHookSpec>,
+    has_retrigger: bool,
+    has_destroy: bool,
+    blind_rewards: Vec<BlindRewardOutput>,
+}
+
+struct BlindRewardOutput {
+    condition_expr: Option<Expr>,
+    amount_expr: Expr,
+    boss_only: bool,
+}
+
+enum PassiveHookSpec {
+    DiscountItems {
+        joker_key: String,
+        discount_type: String,
+        discount_method: String,
+        discount_amount: f64,
+    },
+    ReduceFlushStraightRequirements {
+        joker_key: String,
+        reduction_value: i64,
+    },
+    Shortcut {
+        joker_key: String,
+    },
+    Showman {
+        joker_key: String,
+    },
 }
 
 fn compile_rules(rules: &[RuleDef], ctx: &mut CompileContext) -> Vec<RuleOutput> {
@@ -136,18 +170,34 @@ fn compile_single_rule(rule: &RuleDef, ctx: &mut CompileContext) -> RuleOutput {
 
     // Check for passive effects
     let mut passive_outputs = Vec::new();
+    let mut passive_hooks = Vec::new();
     if is_passive {
         for effect in &rule.effects {
             if let Some(po) = effects::passive::compile_passive(effect, ctx) {
                 passive_outputs.push(po);
+            }
+            if let Some(hook) = passive_hook_from_effect(effect, ctx) {
+                passive_hooks.push(hook);
             }
         }
     }
 
     // Compile regular effects
     let mut effect_outputs = Vec::new();
+    let mut blind_rewards = Vec::new();
     if !is_passive {
         for effect in &rule.effects {
+            if effect.effect_type == "blind_reward"
+                && (trigger == "round_end" || trigger == "boss_defeated")
+            {
+                blind_rewards.push(BlindRewardOutput {
+                    condition_expr: condition_expr.clone(),
+                    amount_expr: compile_blind_reward_amount(effect, ctx),
+                    boss_only: trigger == "boss_defeated",
+                });
+                continue;
+            }
+
             if let Some(eo) = effects::compile_effect(effect, ctx, &trigger) {
                 effect_outputs.push(eo);
             }
@@ -158,6 +208,12 @@ fn compile_single_rule(rule: &RuleDef, ctx: &mut CompileContext) -> RuleOutput {
     for rg in &rule.random_groups {
         let rg_effects = compile_random_group(rg, ctx, &trigger);
         effect_outputs.extend(rg_effects);
+    }
+
+    // Compile loop groups
+    for lg in &rule.loop_groups {
+        let lg_effects = compile_loop_group(lg, ctx, &trigger);
+        effect_outputs.extend(lg_effects);
     }
 
     // Build the effect statements
@@ -173,6 +229,10 @@ fn compile_single_rule(rule: &RuleDef, ctx: &mut CompileContext) -> RuleOutput {
         effect_stmts,
         is_passive,
         passive_outputs,
+        passive_hooks,
+        has_retrigger: rule.retrigger,
+        has_destroy: rule.destroy,
+        blind_rewards,
     }
 }
 
@@ -198,21 +258,25 @@ fn compile_random_group(
 
     // Wrap in probability check:
     // if SMODS.pseudorandom_probability(...) then <inner> end
-    let odds_var = format!("odds_{}", rg.id.replace('-', "_"));
+    let clean_id = rg.id.replace('-', "_");
+    let odds_var = format!("odds_{}", clean_id);
+    let numerator_var = format!("numerator_{}", clean_id);
     let prob_check = lua_call(
         "SMODS.pseudorandom_probability",
         vec![
             lua_ident("card"),
             lua_str(format!("group_{}", rg.id)),
-            lua_int(1),
+            lua_field(lua_raw_expr(ctx.ability_path()), &numerator_var),
             lua_field(lua_raw_expr(ctx.ability_path()), &odds_var),
             lua_str(ctx.smods_key()),
             lua_bool(false),
         ],
     );
 
-    // Register the odds config variable
+    // Register probability config variables
+    let numerator = rg.chance_numerator.as_i64().unwrap_or(1);
     let denom = rg.chance_denominator.as_i64().unwrap_or(2);
+    ctx.add_config_int(&numerator_var, numerator);
     ctx.add_config_int(&odds_var, denom);
 
     let wrapped = effects::EffectOutput {
@@ -224,6 +288,53 @@ fn compile_random_group(
     };
 
     vec![wrapped]
+}
+
+fn compile_loop_group(
+    lg: &LoopGroupDef,
+    ctx: &mut CompileContext,
+    trigger: &str,
+) -> Vec<effects::EffectOutput> {
+    let mut inner_outputs = Vec::new();
+    for effect in &lg.effects {
+        if let Some(eo) = effects::compile_effect(effect, ctx, trigger) {
+            inner_outputs.push(eo);
+        }
+    }
+
+    if inner_outputs.is_empty() {
+        return vec![];
+    }
+
+    let inner_stmts = effects::build_return_block(&inner_outputs);
+    if inner_stmts.is_empty() {
+        return vec![];
+    }
+
+    let loop_var_name = format!("loop_count_{}", lg.id.replace('-', "_"));
+    let loop_count = lg.count.as_i64().unwrap_or(1).max(1);
+    ctx.add_config_int(&loop_var_name, loop_count);
+
+    let loop_stmt = Stmt::ForRange {
+        var: "_jf_loop_i".to_string(),
+        start: lua_int(1),
+        stop: lua_field(lua_raw_expr(ctx.ability_path()), &loop_var_name),
+        step: None,
+        body: inner_stmts,
+    };
+
+    vec![effects::EffectOutput {
+        return_fields: vec![],
+        pre_return: vec![loop_stmt],
+        config_vars: vec![],
+        message: None,
+        colour: None,
+    }]
+}
+
+fn compile_blind_reward_amount(effect: &EffectDef, ctx: &mut CompileContext) -> Expr {
+    let resolved = values::resolve_config_value(&effect.params, "value", ctx, "blind_reward");
+    resolved.expr
 }
 
 fn build_joker_table(
@@ -354,10 +465,23 @@ fn build_joker_table(
         }
     }
 
+    // set_ability hook for forced stickers/editions and user-variable state initialization
+    if let Some(set_ability_fn) = build_set_ability(joker) {
+        entries.push(TableEntry::KeyValue("set_ability".to_string(), set_ability_fn));
+    }
+
     // Loc vars function
-    let loc_vars_fn = build_loc_vars(ctx);
+    let loc_vars_fn = build_loc_vars(joker, ctx, rule_outputs);
     if let Some(f) = loc_vars_fn {
         entries.push(TableEntry::KeyValue("loc_vars".to_string(), f));
+    }
+
+    // Blind reward hook
+    if let Some(calc_dollar_bonus) = build_calc_dollar_bonus(rule_outputs) {
+        entries.push(TableEntry::KeyValue(
+            "calc_dollar_bonus".to_string(),
+            calc_dollar_bonus,
+        ));
     }
 
     // Passive effect functions
@@ -391,6 +515,17 @@ fn build_calculate_function(rule_outputs: &[RuleOutput], ctx: &CompileContext) -
 
     // Group rules by trigger
     let mut body: Vec<Stmt> = Vec::new();
+    let has_any_destroy = non_passive.iter().any(|r| r.has_destroy);
+
+    if has_any_destroy {
+        body.push(lua_if(
+            lua_and(
+                lua_path(&["context", "destroy_card"]),
+                lua_path(&["context", "destroy_card", "should_destroy"]),
+            ),
+            vec![lua_return(lua_table(vec![("remove", lua_bool(true))]))],
+        ));
+    }
 
     // Also include passive calculate statements
     for ro in rule_outputs {
@@ -415,18 +550,44 @@ fn build_calculate_function(rule_outputs: &[RuleOutput], ctx: &CompileContext) -
             .filter(|r| r.trigger == *trigger)
             .collect();
 
+        let use_retrigger_context = rules_for_trigger.iter().any(|r| r.has_retrigger);
+        let has_trigger_destroy = rules_for_trigger.iter().any(|r| r.has_destroy);
+
         // Get the trigger context expression
-        let trigger_ctx = triggers::trigger_context(ctx.object_type, trigger, ctx.blueprint_compat);
+        let trigger_ctx = triggers::trigger_context_for_rule(
+            ctx.object_type,
+            trigger,
+            ctx.blueprint_compat,
+            use_retrigger_context,
+        );
 
         let mut trigger_body: Vec<Stmt> = Vec::new();
 
+        if has_trigger_destroy && trigger.as_str() != "card_discarded" {
+            trigger_body.push(lua_assign(
+                lua_path(&["context", "other_card", "should_destroy"]),
+                lua_bool(false),
+            ));
+        }
+
         for ro in &rules_for_trigger {
+            let mut rule_stmts = ro.effect_stmts.clone();
+            if ro.has_destroy && trigger.as_str() != "card_discarded" {
+                rule_stmts.insert(
+                    0,
+                    lua_assign(
+                        lua_path(&["context", "other_card", "should_destroy"]),
+                        lua_bool(true),
+                    ),
+                );
+            }
+
             if let Some(cond) = &ro.condition_expr {
                 // Wrap effects in condition check
-                trigger_body.push(lua_if(cond.clone(), ro.effect_stmts.clone()));
+                trigger_body.push(lua_if(cond.clone(), rule_stmts));
             } else {
                 // No conditions — effects execute directly
-                trigger_body.extend(ro.effect_stmts.clone());
+                trigger_body.extend(rule_stmts);
             }
         }
 
@@ -481,27 +642,480 @@ fn build_passive_functions(rule_outputs: &[RuleOutput]) -> (Option<Expr>, Option
 }
 
 /// Build the `loc_vars` function for localization variables.
-fn build_loc_vars(ctx: &CompileContext) -> Option<Expr> {
+fn build_loc_vars(
+    joker: &JokerDef,
+    ctx: &CompileContext,
+    _rule_outputs: &[RuleOutput],
+) -> Option<Expr> {
     let vars = ctx.config_vars();
-    if vars.is_empty() {
+    let has_user_vars = !ctx.user_vars().is_empty();
+    let has_info_queue = !joker.info_queues.is_empty();
+
+    if vars.is_empty() && !has_user_vars && !has_info_queue {
         return None;
     }
 
-    // Return { vars = { var1, var2, ... } }
-    let var_refs: Vec<TableEntry> = vars
+    let mut body: Vec<Stmt> = Vec::new();
+
+    for (index, key) in joker.info_queues.iter().enumerate() {
+        let object_path = if key.starts_with("tag_") {
+            format!("G.P_TAGS[\"{}\"]", key)
+        } else if key.starts_with("stake_") {
+            format!("G.P_STAKES[\"{}\"]", key)
+        } else if key.starts_with("j_")
+            || key.starts_with("c_")
+            || key.starts_with("v_")
+            || key.starts_with("b_")
+            || key.starts_with("m_")
+            || key.starts_with("e_")
+            || key.starts_with("p_")
+        {
+            format!("G.P_CENTERS[\"{}\"]", key)
+        } else {
+            format!("G.P_SEALS[\"{}\"]", key)
+        };
+
+        body.push(lua_raw_stmt(format!(
+            "local info_queue_{} = {}; if info_queue_{} then info_queue[#info_queue + 1] = info_queue_{} else error(\"JOKERFORGE: Invalid key in infoQueues: '{}'.\") end",
+            index, object_path, index, index, key
+        )));
+    }
+
+    let mut var_refs: Vec<TableEntry> = vars
         .iter()
-        .map(|v| TableEntry::Value(lua_field(lua_raw_expr("self.config.extra"), &v.name)))
+        .filter(|v| !v.name.starts_with("odds_") && !v.name.starts_with("numerator_"))
+        .map(|v| {
+            TableEntry::Value(lua_field(lua_raw_expr("self.config.extra"), &v.name))
+        })
         .collect();
 
-    let body = vec![lua_return(lua_table_raw(vec![TableEntry::KeyValue(
-        "vars".to_string(),
-        lua_table_raw(var_refs),
-    )]))];
+    let mut colour_refs: Vec<TableEntry> = Vec::new();
+    for uv in ctx.user_vars() {
+        match uv.var_type {
+            crate::types::UserVarType::Suit => {
+                let default_suit = uv.initial_value.to_string_lossy();
+                var_refs.push(TableEntry::Value(lua_raw_expr(format!(
+                    "localize((G.GAME.current_round.{}_card or {{}}).suit or '{}', 'suits_singular')",
+                    uv.name, default_suit
+                ))));
+                colour_refs.push(TableEntry::Value(lua_raw_expr(format!(
+                    "G.C.SUITS[(G.GAME.current_round.{}_card or {{}}).suit or '{}']",
+                    uv.name, default_suit
+                ))));
+            }
+            crate::types::UserVarType::Rank => {
+                let default_rank = uv.initial_value.to_string_lossy();
+                var_refs.push(TableEntry::Value(lua_raw_expr(format!(
+                    "localize((G.GAME.current_round.{}_card or {{}}).rank or '{}', 'ranks')",
+                    uv.name, default_rank
+                ))));
+            }
+            crate::types::UserVarType::PokerHand => {
+                let default_hand = uv.initial_value.to_string_lossy();
+                var_refs.push(TableEntry::Value(lua_raw_expr(format!(
+                    "localize((G.GAME.current_round.{}_hand or '{}'), 'poker_hands')",
+                    uv.name, default_hand
+                ))));
+            }
+            _ => {
+                var_refs.push(TableEntry::Value(lua_field(
+                    lua_raw_expr("self.config.extra"),
+                    &uv.name,
+                )));
+            }
+        }
+    }
+
+    let mut probability_pairs: Vec<(String, String)> = vars
+        .iter()
+        .filter_map(|v| {
+            if !v.name.starts_with("odds_") {
+                return None;
+            }
+            let suffix = v.name.trim_start_matches("odds_");
+            Some((format!("numerator_{}", suffix), v.name.clone()))
+        })
+        .collect();
+    probability_pairs.sort();
+    probability_pairs.dedup();
+
+    for (index, (num, den)) in probability_pairs.into_iter().enumerate() {
+        let suffix = if index == 0 {
+            String::new()
+        } else {
+            (index + 1).to_string()
+        };
+        body.push(lua_raw_stmt(format!(
+            "local new_numerator{suffix}, new_denominator{suffix} = SMODS.get_probability_vars(card, self.config.extra.{num}, self.config.extra.{den}, '{key}')",
+            suffix = suffix,
+            num = num,
+            den = den,
+            key = ctx.smods_key(),
+        )));
+        var_refs.push(TableEntry::Value(lua_ident(format!("new_numerator{}", suffix))));
+        var_refs.push(TableEntry::Value(lua_ident(format!("new_denominator{}", suffix))));
+    }
+
+    let mut return_entries = vec![TableEntry::KeyValue("vars".to_string(), lua_table_raw(var_refs))];
+    if !colour_refs.is_empty() {
+        return_entries.push(TableEntry::KeyValue(
+            "colours".to_string(),
+            lua_table_raw(colour_refs),
+        ));
+    }
+    body.push(lua_return(lua_table_raw(return_entries)));
 
     Some(Expr::Function {
-        params: vec!["self".into(), "info_queue".into()],
+        params: vec!["self".into(), "info_queue".into(), "card".into()],
         body,
     })
+}
+
+fn build_set_ability(joker: &JokerDef) -> Option<Expr> {
+    let mut body: Vec<Stmt> = Vec::new();
+
+    if joker.force_eternal {
+        body.push(lua_raw_stmt("card:set_eternal(true)"));
+    }
+    if joker.force_perishable {
+        body.push(lua_raw_stmt("card:add_sticker('perishable', true)"));
+    }
+    if joker.force_rental {
+        body.push(lua_raw_stmt("card:add_sticker('rental', true)"));
+    }
+    if joker.force_foil {
+        body.push(lua_raw_stmt("card:set_edition('e_foil', true)"));
+    }
+    if joker.force_holographic {
+        body.push(lua_raw_stmt("card:set_edition('e_holo', true)"));
+    }
+    if joker.force_polychrome {
+        body.push(lua_raw_stmt("card:set_edition('e_polychrome', true)"));
+    }
+    if joker.force_negative {
+        body.push(lua_raw_stmt("card:set_edition('e_negative', true)"));
+    }
+
+    let mut needs_round_guard = false;
+    for uv in &joker.user_variables {
+        match uv.var_type {
+            crate::types::UserVarType::Suit => {
+                needs_round_guard = true;
+                let default_suit = uv.initial_value.to_string_lossy();
+                body.push(lua_raw_stmt(format!(
+                    "G.GAME.current_round.{}_card = {{ suit = '{}' }}",
+                    uv.name, default_suit
+                )));
+            }
+            crate::types::UserVarType::Rank => {
+                needs_round_guard = true;
+                let default_rank = uv.initial_value.to_string_lossy();
+                body.push(lua_raw_stmt(format!(
+                    "G.GAME.current_round.{}_card = {{ rank = '{}', id = {} }}",
+                    uv.name,
+                    default_rank,
+                    rank_to_id(&default_rank)
+                )));
+            }
+            crate::types::UserVarType::PokerHand => {
+                needs_round_guard = true;
+                let default_hand = uv.initial_value.to_string_lossy();
+                body.push(lua_raw_stmt(format!(
+                    "G.GAME.current_round.{}_hand = '{}'",
+                    uv.name, default_hand
+                )));
+            }
+            _ => {}
+        }
+    }
+
+    if body.is_empty() {
+        return None;
+    }
+
+    if needs_round_guard {
+        body.insert(0, lua_raw_stmt("if not G.GAME or not G.GAME.current_round then return end"));
+    }
+
+    Some(Expr::Function {
+        params: vec!["self".into(), "card".into(), "initial".into()],
+        body,
+    })
+}
+
+fn rank_to_id(rank: &str) -> i64 {
+    match rank {
+        "2" => 2,
+        "3" => 3,
+        "4" => 4,
+        "5" => 5,
+        "6" => 6,
+        "7" => 7,
+        "8" => 8,
+        "9" => 9,
+        "10" => 10,
+        "Jack" | "J" => 11,
+        "Queen" | "Q" => 12,
+        "King" | "K" => 13,
+        _ => 14,
+    }
+}
+
+fn build_calc_dollar_bonus(rule_outputs: &[RuleOutput]) -> Option<Expr> {
+    let mut regular: Vec<&BlindRewardOutput> = Vec::new();
+    let mut boss: Vec<&BlindRewardOutput> = Vec::new();
+
+    for ro in rule_outputs {
+        for reward in &ro.blind_rewards {
+            if reward.boss_only {
+                boss.push(reward);
+            } else {
+                regular.push(reward);
+            }
+        }
+    }
+
+    if regular.is_empty() && boss.is_empty() {
+        return None;
+    }
+
+    let mut body: Vec<Stmt> = vec![lua_local("blind_reward", lua_int(0))];
+
+    if !boss.is_empty() {
+        let mut boss_body: Vec<Stmt> = Vec::new();
+        for reward in &boss {
+            let add_stmt = lua_assign(
+                lua_ident("blind_reward"),
+                lua_add(
+                    lua_ident("blind_reward"),
+                    lua_call("math.max", vec![reward.amount_expr.clone(), lua_int(0)]),
+                ),
+            );
+            if let Some(cond) = &reward.condition_expr {
+                boss_body.push(lua_if(cond.clone(), vec![add_stmt]));
+            } else {
+                boss_body.push(add_stmt);
+            }
+        }
+        body.push(lua_if(lua_raw_expr("G.GAME.blind and G.GAME.blind.boss"), boss_body));
+    }
+
+    for reward in &regular {
+        let add_stmt = lua_assign(
+            lua_ident("blind_reward"),
+            lua_add(
+                lua_ident("blind_reward"),
+                lua_call("math.max", vec![reward.amount_expr.clone(), lua_int(0)]),
+            ),
+        );
+        if let Some(cond) = &reward.condition_expr {
+            body.push(lua_if(cond.clone(), vec![add_stmt]));
+        } else {
+            body.push(add_stmt);
+        }
+    }
+
+    body.push(lua_if(
+        lua_gt(lua_ident("blind_reward"), lua_int(0)),
+        vec![lua_return(lua_ident("blind_reward"))],
+    ));
+
+    Some(Expr::Function {
+        params: vec!["card".into()],
+        body,
+    })
+}
+
+fn passive_hook_from_effect(effect: &EffectDef, ctx: &mut CompileContext) -> Option<PassiveHookSpec> {
+    let joker_key = ctx.smods_key();
+    match effect.effect_type.as_str() {
+        "discount_items" => {
+            let discount_type = effect
+                .params
+                .get("discount_type")
+                .or_else(|| effect.params.get("discountType"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("all_shop_items")
+                .to_string();
+            let discount_method = effect
+                .params
+                .get("discount_method")
+                .or_else(|| effect.params.get("discountMethod"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("flat_reduction")
+                .to_string();
+            let discount_amount = effect
+                .params
+                .get("discount_amount")
+                .or_else(|| effect.params.get("discountAmount"))
+                .and_then(|v| v.as_f64())
+                .unwrap_or(1.0);
+            Some(PassiveHookSpec::DiscountItems {
+                joker_key,
+                discount_type,
+                discount_method,
+                discount_amount,
+            })
+        }
+        "reduce_flush_straight_requirements" | "reduce_flush_straight_requirement" => {
+            let reduction_value = effect
+                .params
+                .get("reduction_value")
+                .or_else(|| effect.params.get("reductionValue"))
+                .and_then(|v| v.as_i64())
+                .unwrap_or(1)
+                .max(1);
+            Some(PassiveHookSpec::ReduceFlushStraightRequirements {
+                joker_key,
+                reduction_value,
+            })
+        }
+        "shortcut" => Some(PassiveHookSpec::Shortcut { joker_key }),
+        "showman" => Some(PassiveHookSpec::Showman { joker_key }),
+        _ => None,
+    }
+}
+
+fn build_global_hook_stmts(rule_outputs: &[RuleOutput], _ctx: &CompileContext) -> Vec<Stmt> {
+    let mut hooks: Vec<&PassiveHookSpec> = Vec::new();
+    for ro in rule_outputs {
+        for hook in &ro.passive_hooks {
+            hooks.push(hook);
+        }
+    }
+
+    if hooks.is_empty() {
+        return vec![];
+    }
+
+    let mut discount_hooks = Vec::new();
+    let mut reduction_hooks = Vec::new();
+    let mut shortcut_keys = Vec::new();
+    let mut showman_keys = Vec::new();
+
+    for hook in hooks {
+        match hook {
+            PassiveHookSpec::DiscountItems { .. } => discount_hooks.push(hook),
+            PassiveHookSpec::ReduceFlushStraightRequirements { .. } => reduction_hooks.push(hook),
+            PassiveHookSpec::Shortcut { joker_key } => shortcut_keys.push(joker_key.clone()),
+            PassiveHookSpec::Showman { joker_key } => showman_keys.push(joker_key.clone()),
+        }
+    }
+
+    let mut stmts = Vec::new();
+
+    if !discount_hooks.is_empty() {
+        let mut code = String::from(
+            "local card_set_cost_ref = Card.set_cost\nfunction Card:set_cost()\n    card_set_cost_ref(self)",
+        );
+        for hook in discount_hooks {
+            if let PassiveHookSpec::DiscountItems {
+                joker_key,
+                discount_type,
+                discount_method,
+                discount_amount,
+            } = hook
+            {
+                let cond = discount_type_to_condition(discount_type);
+                let logic = discount_method_to_logic(discount_method, *discount_amount);
+                code.push_str(&format!(
+                    "\n    if next(SMODS.find_card(\"{}\")) then\n        if {} then\n            {}\n        end\n    end",
+                    joker_key, cond, logic
+                ));
+            }
+        }
+        code.push_str("\n    self.sell_cost = math.max(1, math.floor(self.cost / 2)) + (self.ability.extra_value or 0)\n    self.sell_cost_label = self.facing == 'back' and '?' or self.sell_cost\nend");
+        stmts.push(lua_raw_stmt(code));
+    }
+
+    if !reduction_hooks.is_empty() {
+        let mut code = String::from(
+            "local smods_four_fingers_ref = SMODS.four_fingers\nfunction SMODS.four_fingers()",
+        );
+        for hook in reduction_hooks {
+            if let PassiveHookSpec::ReduceFlushStraightRequirements {
+                joker_key,
+                reduction_value,
+            } = hook
+            {
+                let target = 5_i64.saturating_sub(*reduction_value);
+                code.push_str(&format!(
+                    "\n    if next(SMODS.find_card(\"{}\")) then\n        return {}\n    end",
+                    joker_key,
+                    target.max(1)
+                ));
+            }
+        }
+        code.push_str("\n    return smods_four_fingers_ref()\nend");
+        stmts.push(lua_raw_stmt(code));
+    }
+
+    if !shortcut_keys.is_empty() {
+        shortcut_keys.sort();
+        shortcut_keys.dedup();
+        let mut code = String::from(
+            "local smods_shortcut_ref = SMODS.shortcut\nfunction SMODS.shortcut()",
+        );
+        for key in &shortcut_keys {
+            code.push_str(&format!(
+                "\n    if next(SMODS.find_card(\"{}\")) then\n        return true\n    end",
+                key
+            ));
+        }
+        code.push_str("\n    return smods_shortcut_ref()\nend");
+        stmts.push(lua_raw_stmt(code));
+    }
+
+    if !showman_keys.is_empty() {
+        showman_keys.sort();
+        showman_keys.dedup();
+        let mut code = String::from(
+            "local smods_showman_ref = SMODS.showman\nfunction SMODS.showman(card_key)",
+        );
+        for key in &showman_keys {
+            code.push_str(&format!(
+                "\n    if next(SMODS.find_card(\"{}\")) then\n        return true\n    end",
+                key
+            ));
+        }
+        code.push_str("\n    return smods_showman_ref(card_key)\nend");
+        stmts.push(lua_raw_stmt(code));
+    }
+
+    stmts
+}
+
+fn build_ignore_slot_limit_stmts(ctx: &CompileContext) -> Vec<Stmt> {
+    vec![lua_raw_stmt(format!(
+        "local check_for_buy_space_ref = G.FUNCS.check_for_buy_space\nG.FUNCS.check_for_buy_space = function(card)\n    if card.config.center.key == \"{}\" then\n        return true\n    end\n    return check_for_buy_space_ref(card)\nend\n\nlocal can_select_card_ref = G.FUNCS.can_select_card\nG.FUNCS.can_select_card = function(e)\n    if e.config.ref_table.config.center.key == \"{}\" then\n        e.config.colour = G.C.GREEN\n        e.config.button = \"use_card\"\n    else\n        can_select_card_ref(e)\n    end\nend",
+        ctx.smods_key(),
+        ctx.smods_key(),
+    ))]
+}
+
+fn discount_type_to_condition(discount_type: &str) -> &'static str {
+    match discount_type {
+        "planet" => "(self.ability.set == 'Planet' or (self.ability.set == 'Booster' and self.config.center.kind == 'Celestial'))",
+        "tarot" => "(self.ability.set == 'Tarot' or (self.ability.set == 'Booster' and self.config.center.kind == 'Arcana'))",
+        "spectral" => "(self.ability.set == 'Spectral' or (self.ability.set == 'Booster' and self.config.center.kind == 'Spectral'))",
+        "standard" => "(self.ability.set == 'Enhanced' or (self.ability.set == 'Booster' and self.config.center.kind == 'Standard'))",
+        "jokers" => "self.ability.set == 'Joker'",
+        "vouchers" => "self.ability.set == 'Voucher'",
+        "all_consumables" => "(self.ability.set == 'Tarot' or self.ability.set == 'Planet' or self.ability.set == 'Spectral')",
+        "all_cards" => "(self.ability.set == 'Joker' or self.ability.set == 'Tarot' or self.ability.set == 'Planet' or self.ability.set == 'Spectral' or self.ability.set == 'Enhanced' or self.ability.set == 'Booster')",
+        _ => "(self.ability.set == 'Joker' or self.ability.set == 'Tarot' or self.ability.set == 'Planet' or self.ability.set == 'Spectral' or self.ability.set == 'Enhanced' or self.ability.set == 'Booster' or self.ability.set == 'Voucher')",
+    }
+}
+
+fn discount_method_to_logic(discount_method: &str, amount: f64) -> String {
+    match discount_method {
+        "make_free" => "self.cost = 0".to_string(),
+        "percentage_reduction" => format!(
+            "self.cost = math.max(0, math.floor(self.cost * (1 - ({}) / 100)))",
+            amount
+        ),
+        _ => format!("self.cost = math.max(0, self.cost - ({}))", amount),
+    }
 }
 
 /// Build the `in_pool` function for appearance restrictions.
@@ -517,8 +1131,9 @@ fn build_in_pool(appearance: &AppearanceDef, _ctx: &CompileContext) -> Option<Ex
 
     // Not appears in checks
     for pool in &appearance.not_appears_in {
+        let field = if pool.len() <= 3 { "source" } else { "type" };
         conditions.push(lua_not(lua_eq(
-            lua_field(lua_ident("args"), "type"),
+            lua_field(lua_ident("args"), field),
             lua_str(pool),
         )));
     }
@@ -528,7 +1143,10 @@ fn build_in_pool(appearance: &AppearanceDef, _ctx: &CompileContext) -> Option<Ex
         let appear_checks: Vec<Expr> = appearance
             .appears_in
             .iter()
-            .map(|pool| lua_eq(lua_field(lua_ident("args"), "type"), lua_str(pool)))
+            .map(|pool| {
+                let field = if pool.len() <= 3 { "source" } else { "type" };
+                lua_eq(lua_field(lua_ident("args"), field), lua_str(pool))
+            })
             .collect();
         conditions.push(lua_or_chain(appear_checks));
     }
