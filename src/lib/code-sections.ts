@@ -1,6 +1,3 @@
-// Track and merge generated code sections for the custom editor.
-// Rust emits JF markers (`-- [JF:id] begin/end`); markers are stripped before save.
-
 const MARKER_RE = /^(\s*)-- \[JF:([^\]]+)\] (begin|end)\s*$/;
 
 export interface SectionInfo {

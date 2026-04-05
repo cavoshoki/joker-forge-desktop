@@ -341,7 +341,6 @@ const LiveCodePanel: React.FC<LiveCodePanelProps> = ({
       view.destroy();
       viewRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Update editor content when code changes
