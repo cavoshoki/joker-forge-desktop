@@ -117,25 +117,22 @@ pub fn destroy_consumable(_effect: &EffectDef, _ctx: &mut CompileContext) -> Eff
 }
 
 /// Destroy Cards effect: destroys highlighted or random cards in hand.
-pub fn destroy_cards(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
+pub fn destroy_cards(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let method = effect
         .params
         .get("method")
         .and_then(|v| v.as_str())
         .unwrap_or("random");
-    let count = effect
-        .params
-        .get("count")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(1)
-        .max(1);
 
     let stmt = if method == "selected" {
         lua_raw_stmt("if G.hand and G.hand.highlighted then SMODS.destroy_cards(G.hand.highlighted) end")
     } else {
+        let resolved = crate::compiler::values::resolve_config_value(
+            &effect.params, "count", ctx, "destroy_count",
+        );
         lua_raw_stmt(format!(
             "local destroyed_cards = {{}}; local temp_hand = {{}}; for _, c in ipairs(G.hand.cards or {{}}) do temp_hand[#temp_hand + 1] = c end; pseudoshuffle(temp_hand, 12345); for i = 1, {} do if temp_hand[i] then destroyed_cards[#destroyed_cards + 1] = temp_hand[i] end end; if #destroyed_cards > 0 then SMODS.destroy_cards(destroyed_cards) end",
-            count
+            resolved.lua_str
         ))
     };
 

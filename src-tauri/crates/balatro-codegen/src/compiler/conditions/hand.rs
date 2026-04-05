@@ -1,4 +1,5 @@
-use crate::compiler::values::comparison_op;
+use crate::compiler::context::CompileContext;
+use crate::compiler::values::{comparison_op, resolve_condition_value};
 use crate::lua_ast::*;
 use crate::types::ConditionDef;
 
@@ -66,46 +67,46 @@ pub fn hand_type(condition: &ConditionDef) -> Option<Expr> {
 }
 
 /// Hand Count condition: checks the number of cards in the current hand.
-pub fn hand_count(condition: &ConditionDef) -> Option<Expr> {
+pub fn hand_count(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     let operator = condition
         .params
         .get("operator")
         .and_then(|v| v.as_str())
         .unwrap_or("equals");
-    let value = condition.params.get("value")?.as_i64()?;
+    let value_expr = resolve_condition_value(&condition.params, "value", ctx, "hand_count")?;
 
     Some(comparison_op(
         operator,
         lua_len(lua_path(&["G", "hand", "cards"])),
-        lua_int(value),
+        value_expr,
     ))
 }
 
 /// Hand Size condition: checks the hand size limit.
-pub fn hand_size(condition: &ConditionDef) -> Option<Expr> {
+pub fn hand_size(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     let operator = condition
         .params
         .get("operator")
         .and_then(|v| v.as_str())
         .unwrap_or("equals");
-    let value = condition.params.get("value")?.as_i64()?;
+    let value_expr = resolve_condition_value(&condition.params, "value", ctx, "hand_size")?;
 
     Some(comparison_op(
         operator,
         lua_path(&["G", "hand", "config", "card_limit"]),
-        lua_int(value),
+        value_expr,
     ))
 }
 
 /// Suit Count condition: number of cards of a specific suit in the scoring hand.
-pub fn suit_count(condition: &ConditionDef) -> Option<Expr> {
+pub fn suit_count(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     let suit = condition.params.get("suit")?.as_str()?;
     let operator = condition
         .params
         .get("operator")
         .and_then(|v| v.as_str())
         .unwrap_or("greater_than");
-    let value = condition.params.get("value")?.as_i64()?;
+    let value_expr = resolve_condition_value(&condition.params, "value", ctx, "suit_count")?;
 
     // Count cards with matching suit in scoring hand
     let count_expr = lua_raw_expr(format!(
@@ -114,18 +115,18 @@ pub fn suit_count(condition: &ConditionDef) -> Option<Expr> {
         suit
     ));
 
-    Some(comparison_op(operator, count_expr, lua_int(value)))
+    Some(comparison_op(operator, count_expr, value_expr))
 }
 
 /// Rank Count condition: number of cards of a specific rank in the scoring hand.
-pub fn rank_count(condition: &ConditionDef) -> Option<Expr> {
+pub fn rank_count(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     let rank = condition.params.get("rank")?.as_str()?;
     let operator = condition
         .params
         .get("operator")
         .and_then(|v| v.as_str())
         .unwrap_or("greater_than");
-    let value = condition.params.get("value")?.as_i64()?;
+    let value_expr = resolve_condition_value(&condition.params, "value", ctx, "rank_count")?;
 
     let rank_id = rank_to_id(rank);
     let count_expr = lua_raw_expr(format!(
@@ -134,43 +135,43 @@ pub fn rank_count(condition: &ConditionDef) -> Option<Expr> {
         rank_id
     ));
 
-    Some(comparison_op(operator, count_expr, lua_int(value)))
+    Some(comparison_op(operator, count_expr, value_expr))
 }
 
 /// Hand Level condition: checks the level of the scoring hand.
-pub fn hand_level(condition: &ConditionDef) -> Option<Expr> {
+pub fn hand_level(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     let operator = condition
         .params
         .get("operator")
         .and_then(|v| v.as_str())
         .unwrap_or("greater_than");
-    let value = condition.params.get("value")?.as_i64()?;
+    let value_expr = resolve_condition_value(&condition.params, "value", ctx, "hand_level")?;
 
     Some(comparison_op(
         operator,
         lua_path(&["G", "GAME", "hands[context.scoring_name]", "level"]),
-        lua_int(value),
+        value_expr,
     ))
 }
 
 /// Discarded Card Count: checks the number of discarded cards.
-pub fn discarded_card_count(condition: &ConditionDef) -> Option<Expr> {
+pub fn discarded_card_count(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     let operator = condition
         .params
         .get("operator")
         .and_then(|v| v.as_str())
         .unwrap_or("equals");
-    let value = condition.params.get("value")?.as_i64()?;
+    let value_expr = resolve_condition_value(&condition.params, "value", ctx, "discarded_card_count")?;
 
     Some(comparison_op(
         operator,
         lua_len(lua_path(&["context", "full_hand"])),
-        lua_int(value),
+        value_expr,
     ))
 }
 
 /// Discarded Suit Count: count of discarded cards of a specific suit.
-pub fn discarded_suit_count(condition: &ConditionDef) -> Option<Expr> {
+pub fn discarded_suit_count(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     let suit = condition
         .params
         .get("specific_suit")
@@ -181,7 +182,8 @@ pub fn discarded_suit_count(condition: &ConditionDef) -> Option<Expr> {
         .get("quantifier")
         .and_then(|v| v.as_str())
         .unwrap_or("at_least");
-    let count = condition.params.get("count").and_then(|v| v.as_i64()).unwrap_or(1);
+    let value_expr = resolve_condition_value(&condition.params, "count", ctx, "discarded_suit_count")
+        .unwrap_or_else(|| lua_int(1));
 
     let count_expr = lua_raw_expr(format!(
         "(function() local c = 0; for _, v in ipairs(context.full_hand or {{}}) do \
@@ -190,11 +192,11 @@ pub fn discarded_suit_count(condition: &ConditionDef) -> Option<Expr> {
     ));
 
     let op = quantifier_to_op(quantifier);
-    Some(comparison_op(op, count_expr, lua_int(count)))
+    Some(comparison_op(op, count_expr, value_expr))
 }
 
 /// Discarded Rank Count: count of discarded cards of a specific rank.
-pub fn discarded_rank_count(condition: &ConditionDef) -> Option<Expr> {
+pub fn discarded_rank_count(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     let rank = condition
         .params
         .get("specific_rank")
@@ -205,7 +207,8 @@ pub fn discarded_rank_count(condition: &ConditionDef) -> Option<Expr> {
         .get("quantifier")
         .and_then(|v| v.as_str())
         .unwrap_or("at_least");
-    let count = condition.params.get("count").and_then(|v| v.as_i64()).unwrap_or(1);
+    let value_expr = resolve_condition_value(&condition.params, "count", ctx, "discarded_rank_count")
+        .unwrap_or_else(|| lua_int(1));
 
     let rank_id = rank_to_id(rank);
     let count_expr = lua_raw_expr(format!(
@@ -215,11 +218,11 @@ pub fn discarded_rank_count(condition: &ConditionDef) -> Option<Expr> {
     ));
 
     let op = quantifier_to_op(quantifier);
-    Some(comparison_op(op, count_expr, lua_int(count)))
+    Some(comparison_op(op, count_expr, value_expr))
 }
 
 /// Enhancement Count: count of cards with a specific enhancement in hand/play.
-pub fn enhancement_count(condition: &ConditionDef) -> Option<Expr> {
+pub fn enhancement_count(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     let enhancement = condition
         .params
         .get("enhancement")
@@ -230,7 +233,7 @@ pub fn enhancement_count(condition: &ConditionDef) -> Option<Expr> {
         .get("operator")
         .and_then(|v| v.as_str())
         .unwrap_or("greater_than");
-    let value = condition.params.get("value")?.as_i64()?;
+    let value_expr = resolve_condition_value(&condition.params, "value", ctx, "enhancement_count")?;
 
     let check = if enhancement == "any" {
         "v.config.center.key ~= 'c_base'".to_string()
@@ -244,11 +247,11 @@ pub fn enhancement_count(condition: &ConditionDef) -> Option<Expr> {
         check
     ));
 
-    Some(comparison_op(operator, count_expr, lua_int(value)))
+    Some(comparison_op(operator, count_expr, value_expr))
 }
 
 /// Edition Count: count of cards with a specific edition in hand/play.
-pub fn edition_count(condition: &ConditionDef) -> Option<Expr> {
+pub fn edition_count(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     let edition = condition
         .params
         .get("edition")
@@ -259,7 +262,7 @@ pub fn edition_count(condition: &ConditionDef) -> Option<Expr> {
         .get("operator")
         .and_then(|v| v.as_str())
         .unwrap_or("greater_than");
-    let value = condition.params.get("value")?.as_i64()?;
+    let value_expr = resolve_condition_value(&condition.params, "value", ctx, "edition_count")?;
 
     let check = if edition == "any" {
         "v.edition and next(v.edition)".to_string()
@@ -273,11 +276,11 @@ pub fn edition_count(condition: &ConditionDef) -> Option<Expr> {
         check
     ));
 
-    Some(comparison_op(operator, count_expr, lua_int(value)))
+    Some(comparison_op(operator, count_expr, value_expr))
 }
 
 /// Seal Count: count of cards with a specific seal in hand/play.
-pub fn seal_count(condition: &ConditionDef) -> Option<Expr> {
+pub fn seal_count(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     let seal = condition
         .params
         .get("seal")
@@ -288,7 +291,7 @@ pub fn seal_count(condition: &ConditionDef) -> Option<Expr> {
         .get("operator")
         .and_then(|v| v.as_str())
         .unwrap_or("greater_than");
-    let value = condition.params.get("value")?.as_i64()?;
+    let value_expr = resolve_condition_value(&condition.params, "value", ctx, "seal_count")?;
 
     let check = if seal == "any" {
         "v.seal".to_string()
@@ -302,7 +305,7 @@ pub fn seal_count(condition: &ConditionDef) -> Option<Expr> {
         check
     ));
 
-    Some(comparison_op(operator, count_expr, lua_int(value)))
+    Some(comparison_op(operator, count_expr, value_expr))
 }
 
 /// Poker Hand Been Played: check whether the current poker hand has been played before.
@@ -385,18 +388,18 @@ pub fn first_last_scored(condition: &ConditionDef) -> Option<Expr> {
 }
 
 /// Cards Selected: check count of selected/highlighted cards.
-pub fn cards_selected(condition: &ConditionDef) -> Option<Expr> {
+pub fn cards_selected(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     let operator = condition
         .params
         .get("operator")
         .and_then(|v| v.as_str())
         .unwrap_or("equals");
-    let value = condition.params.get("value")?.as_i64()?;
+    let value_expr = resolve_condition_value(&condition.params, "value", ctx, "cards_selected")?;
 
     Some(comparison_op(
         operator,
         lua_len(lua_path(&["G", "hand", "highlighted"])),
-        lua_int(value),
+        value_expr,
     ))
 }
 

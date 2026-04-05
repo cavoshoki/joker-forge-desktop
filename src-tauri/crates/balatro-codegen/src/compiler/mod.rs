@@ -101,7 +101,13 @@ pub fn compile_node_snippet(
                 operator: None,
                 params: convert_params(params),
             };
-            match conditions::compile_condition(&condition, object_type) {
+            let mut preview_ctx = CompileContext::new(
+                object_type,
+                mod_prefix.to_string(),
+                "preview".to_string(),
+                false,
+            );
+            match conditions::compile_condition(&condition, object_type, &mut preview_ctx) {
                 Some(expr) => {
                     let stmt = lua_if(expr, vec![lua_comment("... effects ...")]);
                     crate::lua_ast::format_lua_source(&Emitter::new().emit_stmts(&[stmt]))
@@ -186,7 +192,7 @@ fn compile_single_rule(rule: &RuleDef, ctx: &mut CompileContext) -> RuleOutput {
 
     // Compile conditions
     let condition_expr =
-        conditions::compile_condition_chain(&rule.condition_groups, ctx.object_type);
+        conditions::compile_condition_chain(&rule.condition_groups, ctx.object_type, ctx);
 
     // Check for passive effects
     let mut passive_outputs = Vec::new();

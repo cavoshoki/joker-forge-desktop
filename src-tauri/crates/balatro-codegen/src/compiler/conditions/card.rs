@@ -1,3 +1,5 @@
+use crate::compiler::context::CompileContext;
+use crate::compiler::values::resolve_condition_value;
 use crate::lua_ast::*;
 use crate::types::ConditionDef;
 
@@ -58,7 +60,7 @@ pub fn card_seal(condition: &ConditionDef) -> Option<Expr> {
 }
 
 /// Card Index condition: checks the card's position in the scoring hand.
-pub fn card_index(condition: &ConditionDef) -> Option<Expr> {
+pub fn card_index(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     let index_type = condition
         .params
         .get("index_type")
@@ -75,14 +77,12 @@ pub fn card_index(condition: &ConditionDef) -> Option<Expr> {
             lua_raw_expr("context.scoring_hand[#context.scoring_hand]"),
         )),
         "number" => {
-            let index = condition
-                .params
-                .get("index_number")
-                .and_then(|v| v.as_i64())
-                .unwrap_or(1);
+            let index_expr = resolve_condition_value(
+                &condition.params, "index_number", ctx, "card_index",
+            ).unwrap_or_else(|| lua_int(1));
             Some(lua_eq(
                 lua_path(&["context", "other_card"]),
-                lua_raw_expr(format!("context.scoring_hand[{}]", index)),
+                lua_index(lua_path(&["context", "scoring_hand"]), index_expr),
             ))
         }
         _ => Some(lua_eq(

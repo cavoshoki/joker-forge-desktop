@@ -391,6 +391,86 @@ pub fn resolve_config_value(
     }
 }
 
+/// Resolve a numeric condition parameter, automatically registering it in
+/// `config.extra` and returning the ability-path expression. Uses the
+/// condition type and parameter name to build a unique slug, e.g.
+/// `hand_count_value0`. Non-numeric values fall through to a literal.
+pub fn resolve_condition_value(
+    condition_params: &std::collections::HashMap<String, crate::types::ParamValue>,
+    param_key: &str,
+    ctx: &mut crate::compiler::context::CompileContext,
+    condition_type: &str,
+) -> Option<Expr> {
+    use crate::types::ParamValue;
+
+    let param = condition_params.get(param_key)?;
+
+    // Build the base name from condition_type + param_key
+    let var_base = format!("{}_{}", condition_type, param_key);
+
+    match param {
+        ParamValue::Int(n) => {
+            let count = ctx.next_effect_count(&var_base);
+            let var_name = ctx.unique_var_name(&var_base, count);
+            ctx.add_config_int(&var_name, *n);
+            Some(ability_path_expr(ctx.object_type, &var_name))
+        }
+        ParamValue::Float(n) => {
+            let count = ctx.next_effect_count(&var_base);
+            let var_name = ctx.unique_var_name(&var_base, count);
+            ctx.add_config_num(&var_name, *n);
+            Some(ability_path_expr(ctx.object_type, &var_name))
+        }
+        ParamValue::Str(s) => {
+            if let Ok(n) = s.parse::<f64>() {
+                let count = ctx.next_effect_count(&var_base);
+                let var_name = ctx.unique_var_name(&var_base, count);
+                if n.fract() == 0.0 {
+                    ctx.add_config_int(&var_name, n as i64);
+                } else {
+                    ctx.add_config_num(&var_name, n);
+                }
+                Some(ability_path_expr(ctx.object_type, &var_name))
+            } else {
+                // Non-numeric string, return as literal
+                Some(lua_raw_expr(s))
+            }
+        }
+        ParamValue::Typed(t) => match t.value_type.as_str() {
+            "gameVariable" => {
+                if let Some(s) = t.value.as_str() {
+                    if let Some(gv) = parse_game_var(s) {
+                        return Some(build_game_var_expr(&gv));
+                    }
+                }
+                None
+            }
+            "userVariable" => {
+                if let Some(name) = t.value.as_str() {
+                    return Some(ability_path_expr(ctx.object_type, name));
+                }
+                None
+            }
+            _ => {
+                if let Some(n) = t.value.as_i64() {
+                    let count = ctx.next_effect_count(&var_base);
+                    let var_name = ctx.unique_var_name(&var_base, count);
+                    ctx.add_config_int(&var_name, n);
+                    return Some(ability_path_expr(ctx.object_type, &var_name));
+                }
+                if let Some(n) = t.value.as_f64() {
+                    let count = ctx.next_effect_count(&var_base);
+                    let var_name = ctx.unique_var_name(&var_base, count);
+                    ctx.add_config_num(&var_name, n);
+                    return Some(ability_path_expr(ctx.object_type, &var_name));
+                }
+                None
+            }
+        },
+        _ => None,
+    }
+}
+
 /// Convert a comparison operator string to the corresponding Lua binary op expression.
 pub fn comparison_op(operator: &str, lhs: Expr, rhs: Expr) -> Expr {
     match operator {

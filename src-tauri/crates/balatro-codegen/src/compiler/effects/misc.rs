@@ -102,28 +102,10 @@ pub fn juice_up_joker(_effect: &EffectDef, _ctx: &mut CompileContext) -> EffectO
 
 /// Set Dollars: adds or removes money.
 pub fn set_dollars(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
-    let count = ctx.next_effect_count("dollars");
-    let var_name = ctx.unique_var_name("dollars", count);
-
-    let value = effect.params.get("value");
-    let value_expr = if let Some(val) = value {
-        match val {
-            crate::types::ParamValue::Int(n) => {
-                ctx.add_config_int(&var_name, *n);
-                crate::compiler::values::ability_path_expr(ctx.object_type, &var_name)
-            }
-            crate::types::ParamValue::Float(n) => {
-                ctx.add_config_int(&var_name, *n as i64);
-                crate::compiler::values::ability_path_expr(ctx.object_type, &var_name)
-            }
-            _ => crate::compiler::values::resolve_value(val, ctx.object_type, None),
-        }
-    } else {
-        lua_int(0)
-    };
+    let resolved = resolve_config_value(&effect.params, "value", ctx, "dollars");
 
     EffectOutput {
-        return_fields: vec![("dollars".to_string(), value_expr)],
+        return_fields: vec![("dollars".to_string(), resolved.expr)],
         pre_return: vec![],
         config_vars: vec![],
         message: None,
@@ -133,25 +115,10 @@ pub fn set_dollars(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput
 
 /// Retrigger effect: causes cards to retrigger.
 pub fn retrigger(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
-    let count = ctx.next_effect_count("repetitions");
-    let var_name = ctx.unique_var_name("repetitions", count);
-
-    let value = effect.params.get("value");
-    let value_expr = if let Some(val) = value {
-        match val {
-            crate::types::ParamValue::Int(n) => {
-                ctx.add_config_int(&var_name, *n);
-                crate::compiler::values::ability_path_expr(ctx.object_type, &var_name)
-            }
-            _ => crate::compiler::values::resolve_value(val, ctx.object_type, None),
-        }
-    } else {
-        ctx.add_config_int(&var_name, 1);
-        crate::compiler::values::ability_path_expr(ctx.object_type, &var_name)
-    };
+    let resolved = resolve_config_value(&effect.params, "value", ctx, "repetitions");
 
     EffectOutput {
-        return_fields: vec![("repetitions".to_string(), value_expr)],
+        return_fields: vec![("repetitions".to_string(), resolved.expr)],
         pre_return: vec![],
         config_vars: vec![],
         message: Some(lua_call("localize", vec![lua_str("k_again_ex")])),
@@ -383,24 +350,13 @@ pub fn show_special_message(effect: &EffectDef, ctx: &mut CompileContext) -> Eff
         .and_then(|v| v.as_str())
         .unwrap_or("G.C.WHITE");
 
-    // scale and hold can be parameterised; fall back to sensible defaults
-    let scale = effect
-        .params
-        .get("scale")
-        .and_then(|v| v.as_f64())
-        .unwrap_or(1.0);
-    let hold = effect
-        .params
-        .get("hold")
-        .and_then(|v| v.as_f64())
-        .unwrap_or(1.2);
+    let scale_resolved = resolve_config_value(&effect.params, "scale", ctx, "msg_scale");
+    let hold_resolved = resolve_config_value(&effect.params, "hold", ctx, "msg_hold");
     let silent = effect
         .params
         .get("silent")
         .and_then(|v| v.as_str())
         .unwrap_or("true");
-
-    let _ = ctx; // no config vars needed
 
     let lua = format!(
         "G.E_MANAGER:add_event(Event({{\n\
@@ -433,8 +389,8 @@ pub fn show_special_message(effect: &EffectDef, ctx: &mut CompileContext) -> Eff
             end\n\
         }}))",
         msg = custom_message,
-        scale = scale,
-        hold = hold,
+        scale = scale_resolved.lua_str,
+        hold = hold_resolved.lua_str,
         colour = colour,
         silent = silent
     );
@@ -504,7 +460,7 @@ pub fn shuffle_jokers(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOu
 }
 
 /// Flip Joker: flips a joker card face-up or face-down.
-pub fn flip_joker(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
+pub fn flip_joker(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
     let selection_method = effect
         .params
         .get("selection_method")
@@ -515,11 +471,6 @@ pub fn flip_joker(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput
         .get("position")
         .and_then(|v| v.as_str())
         .unwrap_or("first");
-    let specific_index = effect
-        .params
-        .get("specific_index")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(1);
     let custom_message = effect
         .params
         .get("customMessage")
@@ -577,12 +528,17 @@ pub fn flip_joker(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput
                         if self_index < #G.jokers.cards then G.jokers.cards[self_index + 1]:flip() end\n\
                     end"
                 .to_string(),
-            _ => format!(
-                "if #G.jokers.cards > 0 then\n\
-                    if G.jokers.cards[{}] then G.jokers.cards[{}]:flip() end\n\
-                end",
-                specific_index, specific_index
-            ),
+            _ => {
+                let resolved = resolve_config_value(
+                    &effect.params, "specific_index", ctx, "flip_index",
+                );
+                format!(
+                    "if #G.jokers.cards > 0 then\n\
+                        if G.jokers.cards[{idx}] then G.jokers.cards[{idx}]:flip() end\n\
+                    end",
+                    idx = resolved.lua_str
+                )
+            },
         },
         "variable" => format!(
             "local joker_to_flip_key = card.ability.extra.{}\n\
@@ -617,7 +573,7 @@ pub fn flip_joker(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput
 }
 
 /// Copy Joker: copies a joker (for joker context).
-pub fn copy_joker(effect: &EffectDef, _ctx: &mut CompileContext, trigger: &str) -> EffectOutput {
+pub fn copy_joker(effect: &EffectDef, ctx: &mut CompileContext, trigger: &str) -> EffectOutput {
     let selection_method = effect
         .params
         .get("selection_method")
@@ -633,11 +589,6 @@ pub fn copy_joker(effect: &EffectDef, _ctx: &mut CompileContext, trigger: &str) 
         .get("position")
         .and_then(|v| v.as_str())
         .unwrap_or("first");
-    let specific_index = effect
-        .params
-        .get("specific_index")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(1);
     let edition = effect
         .params
         .get("edition")
@@ -700,10 +651,15 @@ pub fn copy_joker(effect: &EffectDef, _ctx: &mut CompileContext, trigger: &str) 
                     end\n\
                     local target_joker = (my_pos and my_pos < #G.jokers.cards) and G.jokers.cards[my_pos + 1] or nil"
                 .to_string(),
-            _ => format!(
-                "local target_joker = G.jokers.cards[{}] or nil",
-                specific_index
-            ),
+            _ => {
+                let resolved = resolve_config_value(
+                    &effect.params, "specific_index", ctx, "copy_joker_index",
+                );
+                format!(
+                    "local target_joker = G.jokers.cards[{}] or nil",
+                    resolved.lua_str
+                )
+            },
         },
         _ => "local available_jokers = {}\n\
                 for i, joker in ipairs(G.jokers.cards) do\n\
@@ -933,21 +889,7 @@ pub fn copy_consumable(
 
 /// Draw Cards: draws additional cards into the hand.
 pub fn draw_cards(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
-    let count = ctx.next_effect_count("card_draw");
-    let var_name = ctx.unique_var_name("card_draw", count);
-
-    let _value_expr = if let Some(val) = effect.params.get("value") {
-        match val {
-            crate::types::ParamValue::Int(n) => {
-                ctx.add_config_int(&var_name, *n);
-                crate::compiler::values::ability_path_expr(ctx.object_type, &var_name)
-            }
-            _ => crate::compiler::values::resolve_value(val, ctx.object_type, None),
-        }
-    } else {
-        ctx.add_config_int(&var_name, 1);
-        crate::compiler::values::ability_path_expr(ctx.object_type, &var_name)
-    };
+    let resolved = resolve_config_value(&effect.params, "value", ctx, "card_draw");
 
     let custom_message = effect
         .params
@@ -955,17 +897,14 @@ pub fn draw_cards(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput 
         .and_then(|v| v.as_str())
         .map(str::to_owned);
 
-    // Emit the value expr to string for use in the message concat
-    let val_path = format!("{}.{}", ctx.ability_path(), var_name);
-
     let draw_stmt = lua_raw_stmt(format!(
         "if G.hand and #G.hand.cards > 0 then\n    SMODS.draw_cards({})\nend",
-        val_path
+        resolved.lua_str
     ));
 
     let message = custom_message
         .map(lua_str)
-        .unwrap_or_else(|| lua_raw_expr(format!("\"+\"..tostring({})..' Cards Drawn'", val_path)));
+        .unwrap_or_else(|| lua_raw_expr(format!("\"+\"..tostring({})..' Cards Drawn'", resolved.lua_str)));
 
     EffectOutput {
         return_fields: vec![],

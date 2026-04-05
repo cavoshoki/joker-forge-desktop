@@ -186,17 +186,12 @@ pub fn reduce_flush_straight_requirement(
 // Copy Joker Ability
 // ---------------------------------------------------------------------------
 
-pub fn copy_joker_ability(effect: &EffectDef, _ctx: &mut CompileContext) -> PassiveEffectOutput {
+pub fn copy_joker_ability(effect: &EffectDef, ctx: &mut CompileContext) -> PassiveEffectOutput {
     let selection_method = effect
         .params
         .get("selection_method")
         .and_then(|v| v.as_str())
         .unwrap_or("right");
-    let specific_index = effect
-        .params
-        .get("specific_index")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(1);
 
     let target_logic = match selection_method {
         "right" => "local my_pos = nil\n\
@@ -217,11 +212,16 @@ pub fn copy_joker_ability(effect: &EffectDef, _ctx: &mut CompileContext) -> Pass
         "first" => "target_joker = G.jokers.cards[1]\n\
             if target_joker == card then target_joker = nil end"
             .to_string(),
-        "specific" => format!(
-            "target_joker = G.jokers.cards[{}]\n\
-            if target_joker == card then target_joker = nil end",
-            specific_index
-        ),
+        "specific" => {
+            let resolved = crate::compiler::values::resolve_config_value(
+                &effect.params, "specific_index", ctx, "copy_ability_index",
+            );
+            format!(
+                "target_joker = G.jokers.cards[{}]\n\
+                if target_joker == card then target_joker = nil end",
+                resolved.lua_str
+            )
+        },
         _ => "target_joker = G.jokers.cards[#G.jokers.cards]\n\
             if target_joker == card then target_joker = nil end"
             .to_string(),

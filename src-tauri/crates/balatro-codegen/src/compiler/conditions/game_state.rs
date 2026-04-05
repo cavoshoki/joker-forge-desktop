@@ -1,12 +1,15 @@
-use crate::compiler::values::comparison_op;
+use crate::compiler::context::CompileContext;
+use crate::compiler::values::{comparison_op, resolve_condition_value};
 use crate::lua_ast::*;
 use crate::types::ConditionDef;
 
 /// Ante Level condition.
-pub fn ante_level(condition: &ConditionDef) -> Option<Expr> {
+pub fn ante_level(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     simple_compare(
         condition,
         lua_path(&["G", "GAME", "round_resets", "ante"]),
+        ctx,
+        "ante_level",
     )
 }
 
@@ -35,50 +38,62 @@ pub fn blind_name(condition: &ConditionDef) -> Option<Expr> {
 }
 
 /// Player Money condition.
-pub fn player_money(condition: &ConditionDef) -> Option<Expr> {
+pub fn player_money(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     simple_compare(
         condition,
         lua_path(&["G", "GAME", "dollars"]),
+        ctx,
+        "player_money",
     )
 }
 
 /// Remaining Hands condition.
-pub fn remaining_hands(condition: &ConditionDef) -> Option<Expr> {
+pub fn remaining_hands(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     simple_compare(
         condition,
         lua_path(&["G", "GAME", "current_round", "hands_left"]),
+        ctx,
+        "remaining_hands",
     )
 }
 
 /// Remaining Discards condition.
-pub fn remaining_discards(condition: &ConditionDef) -> Option<Expr> {
+pub fn remaining_discards(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     simple_compare(
         condition,
         lua_path(&["G", "GAME", "current_round", "discards_left"]),
+        ctx,
+        "remaining_discards",
     )
 }
 
 /// Joker Count condition.
-pub fn joker_count(condition: &ConditionDef) -> Option<Expr> {
+pub fn joker_count(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     simple_compare(
         condition,
         lua_len(lua_path(&["G", "jokers", "cards"])),
+        ctx,
+        "joker_count",
     )
 }
 
 /// Consumable Count condition.
-pub fn consumable_count(condition: &ConditionDef) -> Option<Expr> {
+pub fn consumable_count(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     simple_compare(
         condition,
         lua_len(lua_path(&["G", "consumeables", "cards"])),
+        ctx,
+        "consumable_count",
     )
 }
 
 /// Deck Size condition.
-pub fn deck_size(condition: &ConditionDef) -> Option<Expr> {
+pub fn deck_size(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     simple_compare(
         condition,
         lua_len(lua_path(&["G", "deck", "cards"])),
+        ctx,
+        "deck_size",
     )
 }
 
@@ -115,22 +130,19 @@ pub fn boss_blind_type(condition: &ConditionDef) -> Option<Expr> {
 }
 
 /// Check Blind Requirements: checks whether blind requirements percentage is met.
-pub fn check_blind_requirements(condition: &ConditionDef) -> Option<Expr> {
+pub fn check_blind_requirements(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     let operator = condition
         .params
         .get("operator")
         .and_then(|v| v.as_str())
         .unwrap_or("greater_equals");
-    let percentage = condition
-        .params
-        .get("percentage")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(25);
+    let value_expr = resolve_condition_value(&condition.params, "percentage", ctx, "blind_req")
+        .unwrap_or_else(|| lua_int(25));
 
     // Compare (G.GAME.chips / G.GAME.blind.chips * 100) against percentage
     let ratio_expr = lua_raw_expr("((G.GAME.chips or 0) / (G.GAME.blind.chips or 1) * 100)".to_string());
 
-    Some(comparison_op(operator, ratio_expr, lua_int(percentage)))
+    Some(comparison_op(operator, ratio_expr, value_expr))
 }
 
 /// Check Deck: checks what deck is being used.
@@ -144,7 +156,7 @@ pub fn check_deck(condition: &ConditionDef) -> Option<Expr> {
 }
 
 /// Deck Count: total deck card count (#G.playing_cards).
-pub fn deck_count(condition: &ConditionDef) -> Option<Expr> {
+pub fn deck_count(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     let property_type = condition
         .params
         .get("property_type")
@@ -155,7 +167,7 @@ pub fn deck_count(condition: &ConditionDef) -> Option<Expr> {
         .get("operator")
         .and_then(|v| v.as_str())
         .unwrap_or("greater_than");
-    let value = condition.params.get("value")?.as_i64()?;
+    let value_expr = resolve_condition_value(&condition.params, "value", ctx, "deck_count")?;
 
     let check = match property_type {
         "rank" => {
@@ -214,7 +226,7 @@ pub fn deck_count(condition: &ConditionDef) -> Option<Expr> {
         check
     ));
 
-    Some(comparison_op(operator, count_expr, lua_int(value)))
+    Some(comparison_op(operator, count_expr, value_expr))
 }
 
 /// In Blind: check whether currently in a blind.
@@ -382,7 +394,7 @@ pub fn probability_identifier(condition: &ConditionDef) -> Option<Expr> {
 }
 
 /// Probability Part Compare: compare probability parts.
-pub fn probability_part_compare(condition: &ConditionDef) -> Option<Expr> {
+pub fn probability_part_compare(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     let part = condition
         .params
         .get("part")
@@ -393,7 +405,7 @@ pub fn probability_part_compare(condition: &ConditionDef) -> Option<Expr> {
         .get("operator")
         .and_then(|v| v.as_str())
         .unwrap_or("equals");
-    let value = condition.params.get("value")?.as_i64()?;
+    let value_expr = resolve_condition_value(&condition.params, "value", ctx, "probability_part")?;
 
     let lhs = match part {
         "numerator" => lua_path(&["context", "probability", "numerator"]),
@@ -401,7 +413,7 @@ pub fn probability_part_compare(condition: &ConditionDef) -> Option<Expr> {
         _ => lua_path(&["context", "probability", "numerator"]),
     };
 
-    Some(comparison_op(operator, lhs, lua_int(value)))
+    Some(comparison_op(operator, lhs, value_expr))
 }
 
 /// Booster Type: check booster pack type.
@@ -425,14 +437,15 @@ pub fn booster_type(condition: &ConditionDef) -> Option<Expr> {
 }
 
 /// Helper for conditions that compare a game state expression against a value.
-fn simple_compare(condition: &ConditionDef, game_expr: Expr) -> Option<Expr> {
+/// Registers the numeric value in `config.extra` using the condition type as slug.
+fn simple_compare(condition: &ConditionDef, game_expr: Expr, ctx: &mut CompileContext, condition_type: &str) -> Option<Expr> {
     let operator = condition
         .params
         .get("operator")
         .and_then(|v| v.as_str())
         .unwrap_or("greater_than");
-    let value = condition.params.get("value")?.as_i64()?;
+    let value_expr = resolve_condition_value(&condition.params, "value", ctx, condition_type)?;
 
-    Some(comparison_op(operator, game_expr, lua_int(value)))
+    Some(comparison_op(operator, game_expr, value_expr))
 }
 

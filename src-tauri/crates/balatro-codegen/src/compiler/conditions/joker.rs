@@ -1,4 +1,5 @@
-use crate::compiler::values::comparison_op;
+use crate::compiler::context::CompileContext;
+use crate::compiler::values::{comparison_op, resolve_condition_value};
 use crate::lua_ast::*;
 use crate::types::ConditionDef;
 
@@ -31,13 +32,13 @@ pub fn specific_joker_owned(condition: &ConditionDef) -> Option<Expr> {
     )))
 }
 
-pub fn joker_rarity_count(condition: &ConditionDef) -> Option<Expr> {
+pub fn joker_rarity_count(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     let operator = get_param(condition, &["operator", "op"])
         .and_then(|v| v.as_str())
         .unwrap_or("greater_equals");
-    let value = get_param(condition, &["value", "count"])
-        .and_then(|v| v.as_i64())
-        .unwrap_or(1);
+    let value_expr = resolve_condition_value(&condition.params, "value", ctx, "joker_rarity_count")
+        .or_else(|| resolve_condition_value(&condition.params, "count", ctx, "joker_rarity_count"))
+        .unwrap_or_else(|| lua_int(1));
     let rarity = get_param(condition, &["rarity"])
         .map(|v| v.to_string_lossy())
         .unwrap_or_else(|| "any".to_string());
@@ -53,10 +54,10 @@ pub fn joker_rarity_count(condition: &ConditionDef) -> Option<Expr> {
         check
     ));
 
-    Some(comparison_op(operator, count_expr, lua_int(value)))
+    Some(comparison_op(operator, count_expr, value_expr))
 }
 
-pub fn joker_position(condition: &ConditionDef) -> Option<Expr> {
+pub fn joker_position(condition: &ConditionDef, ctx: &mut CompileContext) -> Option<Expr> {
     let position = get_param(condition, &["position", "index_type"])
         .and_then(|v| v.as_str())
         .unwrap_or("first");
@@ -68,12 +69,12 @@ pub fn joker_position(condition: &ConditionDef) -> Option<Expr> {
             lua_raw_expr("G.jokers.cards[#G.jokers.cards]"),
         )),
         _ => {
-            let idx = get_param(condition, &["specific_index", "index_number"])
-                .and_then(|v| v.as_i64())
-                .unwrap_or(1);
+            let idx_expr = resolve_condition_value(&condition.params, "specific_index", ctx, "joker_position")
+                .or_else(|| resolve_condition_value(&condition.params, "index_number", ctx, "joker_position"))
+                .unwrap_or_else(|| lua_int(1));
             Some(lua_eq(
                 lua_ident("card"),
-                lua_raw_expr(format!("G.jokers.cards[{}]", idx)),
+                lua_index(lua_path(&["G", "jokers", "cards"]), idx_expr),
             ))
         }
     }

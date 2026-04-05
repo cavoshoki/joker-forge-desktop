@@ -219,17 +219,14 @@ pub fn create_playing_card(effect: &EffectDef, _ctx: &mut CompileContext) -> Eff
 }
 
 /// Create Playing Cards effect: adds multiple base playing cards.
-pub fn create_playing_cards(effect: &EffectDef, _ctx: &mut CompileContext) -> EffectOutput {
-    let count = effect
-        .params
-        .get("count")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(1)
-        .max(1);
+pub fn create_playing_cards(effect: &EffectDef, ctx: &mut CompileContext) -> EffectOutput {
+    let resolved = crate::compiler::values::resolve_config_value(
+        &effect.params, "count", ctx, "create_cards_count",
+    );
 
     let pre = vec![lua_raw_stmt(format!(
         "for _ = 1, {} do SMODS.add_card({{ set = 'Base' }}) end",
-        count
+        resolved.lua_str
     ))];
 
     EffectOutput {
