@@ -353,10 +353,14 @@ pub fn batch_export_jokers(
     let mut count = 0;
 
     for entry in &jokers {
-        let joker_def =
-            super::export::joker_data_to_def(&entry.joker_data, entry.pos.clone(), entry.soul_pos.clone());
-        let chunk = compile_joker_with_options(&joker_def, &mod_prefix, include_loc_txt);
-        let lua = format_lua_source(&LuaEmitter::new().emit_chunk(&chunk));
+        let lua = if let Some(custom) = &entry.custom_lua {
+            custom.clone()
+        } else {
+            let joker_def =
+                super::export::joker_data_to_def(&entry.joker_data, entry.pos.clone(), entry.soul_pos.clone());
+            let chunk = compile_joker_with_options(&joker_def, &mod_prefix, include_loc_txt);
+            format_lua_source(&LuaEmitter::new().emit_chunk(&chunk))
+        };
 
         let path = folder.join(&entry.file_name);
         std::fs::write(&path, lua.as_bytes())
@@ -425,10 +429,14 @@ pub fn export_mod_package(
         .map_err(|e| format!("Failed to create {}: {}", joker_dir.display(), e))?;
 
     for entry in &jokers {
-        let joker_def =
-            super::export::joker_data_to_def(&entry.joker_data, entry.pos.clone(), entry.soul_pos.clone());
-        let chunk = compile_joker_with_options(&joker_def, &metadata.prefix, include_loc_txt);
-        let lua = format_lua_source(&LuaEmitter::new().emit_chunk(&chunk));
+        let lua = if let Some(custom) = &entry.custom_lua {
+            custom.clone()
+        } else {
+            let joker_def =
+                super::export::joker_data_to_def(&entry.joker_data, entry.pos.clone(), entry.soul_pos.clone());
+            let chunk = compile_joker_with_options(&joker_def, &metadata.prefix, include_loc_txt);
+            format_lua_source(&LuaEmitter::new().emit_chunk(&chunk))
+        };
 
         let path = joker_dir.join(&entry.file_name);
         fs::write(&path, lua.as_bytes())

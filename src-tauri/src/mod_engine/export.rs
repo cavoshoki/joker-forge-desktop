@@ -193,6 +193,9 @@ pub struct BatchJokerEntry {
     pub soul_pos: Option<AtlasPosInput>,
     /// Filename to write: e.g. `"j_my_joker.lua"`.
     pub file_name: String,
+    /// Optional custom Lua code. When present, skip compilation and use this.
+    #[serde(default)]
+    pub custom_lua: Option<String>,
 }
 
 /// Mirrors the TypeScript `ModMetadata` interface for package export.

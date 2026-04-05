@@ -44,6 +44,9 @@ import Inspector from "./inspector";
 import LiveCodePanel from "./live-code-panel";
 import HistoryPanel from "./history-panel";
 import { compileSingleJokerLua } from "@/lib/rust-codegen-export";
+import { extractSections, mergeWithGenerated } from "@/lib/code-sections";
+import type { SectionInfo } from "@/lib/code-sections";
+import type { CustomCodeState } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -243,14 +246,50 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
     null,
   );
   const [isDragSelecting, setIsDragSelecting] = useState(false);
+  const [isMiddlePanning, setIsMiddlePanning] = useState(false);
   const [lastContextWorldPoint, setLastContextWorldPoint] =
     useState<WorldPoint | null>(null);
+  const middlePanStartRef = useRef<{
+    clientX: number;
+    clientY: number;
+    originX: number;
+    originY: number;
+    scale: number;
+  } | null>(null);
   const historyPastRef = useRef<Rule[][]>([]);
   const historyFutureRef = useRef<Rule[][]>([]);
   const historyPrevRulesRef = useRef<Rule[]>([]);
   const suppressHistoryRef = useRef(false);
   const copiedRulesRef = useRef<Rule[]>([]);
   const pasteOffsetStepRef = useRef(1);
+
+  // Custom code editor state
+  const [customCode, setCustomCode] = useState<CustomCodeState | undefined>(
+    item.customCode,
+  );
+  const lastGeneratedCleanRef = useRef<string>("");
+  const lastSectionsRef = useRef<SectionInfo[]>(
+    item.customCode?.sections ?? [],
+  );
+  const prevRulesSnapshotRef = useRef<string>("");
+  const customCodeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const customCodeRef = useRef(customCode);
+  customCodeRef.current = customCode;
+
+  // Stable item reference that excludes customCode to prevent regeneration loops.
+  // When onUpdateItem({ customCode }) fires, the parent rerenders with a new item
+  // object, but we don't want that to trigger a fresh compilation.
+  const itemCodegenKey = useMemo(() => {
+    const { customCode: _, ...rest } = item;
+    return JSON.stringify(rest);
+  }, [item]);
+  const itemWithoutCustomCode = useMemo(() => {
+    const { customCode: _, ...rest } = item;
+    return rest;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemCodegenKey]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -292,6 +331,50 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
       return "Message: Unknown error (could not serialize error payload).";
     }
   }, []);
+
+  // Handle user edits in the code editor (debounced auto-save)
+  const handleCodeChange = useCallback(
+    (newCode: string) => {
+      if (!lastGeneratedCleanRef.current) return;
+
+      // Keep the displayed snippet in sync so the external-update effect
+      // in LiveCodePanel doesn't overwrite the user's edits on re-render.
+      setLiveCodeSnippet(newCode);
+
+      if (customCodeDebounceRef.current) {
+        clearTimeout(customCodeDebounceRef.current);
+      }
+
+      customCodeDebounceRef.current = setTimeout(() => {
+        const hasChanges =
+          newCode.trim() !== lastGeneratedCleanRef.current.trim();
+
+        const newCustomCode: CustomCodeState | undefined = hasChanges
+          ? {
+              fullCode: newCode,
+              lastGeneratedCode: lastGeneratedCleanRef.current,
+              sections: lastSectionsRef.current,
+            }
+          : undefined;
+
+        setCustomCode(newCustomCode);
+        onUpdateItem({ customCode: newCustomCode });
+      }, 300);
+    },
+    [onUpdateItem],
+  );
+
+  // Reset all custom code back to generated
+  const handleResetCustomCode = useCallback(() => {
+    if (customCodeDebounceRef.current) {
+      clearTimeout(customCodeDebounceRef.current);
+    }
+    setCustomCode(undefined);
+    onUpdateItem({ customCode: undefined });
+    if (lastGeneratedCleanRef.current) {
+      setLiveCodeSnippet(lastGeneratedCleanRef.current);
+    }
+  }, [onUpdateItem]);
 
   const handleSaveAndClose = useCallback(() => {
     if (!isReadOnly) {
@@ -760,6 +843,14 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
   useEffect(() => {
     if (isOpen) {
       const handleKeyPress = (event: KeyboardEvent) => {
+        const isCodeMirrorTarget =
+          event.target instanceof HTMLElement &&
+          !!event.target.closest(".cm-editor");
+
+        if (isCodeMirrorTarget) {
+          return;
+        }
+
         const isEditableTarget =
           event.target instanceof HTMLInputElement ||
           event.target instanceof HTMLTextAreaElement ||
@@ -2424,7 +2515,11 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
         return;
       }
 
-      if (target.closest("[data-rb-context], [data-rb-panel='true']")) {
+      if (
+        target.closest(
+          "[data-rb-context], [data-rb-panel='true'], [data-rb-live-code='true']",
+        )
+      ) {
         return;
       }
 
@@ -2437,6 +2532,33 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
       });
       setSelectedItem(null);
       setSelectedRuleIds([]);
+    },
+    [],
+  );
+
+  const handleViewportMouseDownCapture = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (event.button !== 1) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      middlePanStartRef.current = {
+        clientX: event.clientX,
+        clientY: event.clientY,
+        originX: panState.x,
+        originY: panState.y,
+        scale: panState.scale,
+      };
+      setIsMiddlePanning(true);
+    },
+    [panState.x, panState.y, panState.scale],
+  );
+
+  const handleViewportAuxClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (event.button !== 1) return;
+      event.preventDefault();
     },
     [],
   );
@@ -2505,6 +2627,41 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
       window.removeEventListener("mouseup", handleMouseUp);
     };
   }, [isDragSelecting]);
+
+  useEffect(() => {
+    if (!isMiddlePanning) return;
+
+    document.body.style.cursor = "grabbing";
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const start = middlePanStartRef.current;
+      if (!start) return;
+
+      const deltaX = event.clientX - start.clientX;
+      const deltaY = event.clientY - start.clientY;
+
+      transformRef.current?.setTransform(
+        start.originX + deltaX,
+        start.originY + deltaY,
+        start.scale,
+        0,
+      );
+    };
+
+    const stopMiddlePan = () => {
+      setIsMiddlePanning(false);
+      middlePanStartRef.current = null;
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", stopMiddlePan);
+
+    return () => {
+      document.body.style.cursor = "";
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", stopMiddlePan);
+    };
+  }, [isMiddlePanning]);
 
   const resolveContextTarget = useCallback(
     (target: EventTarget | null): RuleBuilderContextTarget => {
@@ -2836,7 +2993,7 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
   );
 
   const handleLiveCodeResizeStart = useCallback(
-    (e: React.MouseEvent<HTMLButtonElement>) => {
+    (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
 
@@ -3038,10 +3195,12 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
           return;
         }
 
-        setLiveCodeTitle(`Item Preview: ${item.name || "Current Item"}`);
+        setLiveCodeTitle(
+          `Item Preview: ${itemWithoutCustomCode.name || "Current Item"}`,
+        );
 
-        const code = await compileSingleJokerLua(
-          { ...(item as any), rules },
+        const freshGenerated = await compileSingleJokerLua(
+          { ...(itemWithoutCustomCode as any), rules },
           "mod",
           { includeLocTxt: true },
         );
@@ -3050,10 +3209,99 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
           return;
         }
 
-        const normalized = (code || "").toLowerCase();
+        const normalized = (freshGenerated || "").toLowerCase();
         const isNotImplemented = normalized.includes("not yet implemented");
 
-        setLiveCodeSnippet(code || "-- no snippet output");
+        // Determine which rules changed since the last generation
+        const currentRulesSnapshot = JSON.stringify(rules);
+        const changedRuleIds = new Set<string>();
+        if (
+          prevRulesSnapshotRef.current &&
+          prevRulesSnapshotRef.current !== currentRulesSnapshot
+        ) {
+          try {
+            const prevRules = JSON.parse(
+              prevRulesSnapshotRef.current,
+            ) as Rule[];
+            const prevMap = new Map(
+              prevRules.map((r) => [r.id, JSON.stringify(r)]),
+            );
+            const currMap = new Map(
+              rules.map((r) => [r.id, JSON.stringify(r)]),
+            );
+
+            // Rules that were modified or added
+            for (const [id, serialized] of currMap) {
+              if (!prevMap.has(id) || prevMap.get(id) !== serialized) {
+                changedRuleIds.add(id);
+              }
+            }
+            // Rules that were deleted
+            for (const id of prevMap.keys()) {
+              if (!currMap.has(id)) {
+                changedRuleIds.add(id);
+              }
+            }
+          } catch {
+            // If snapshot parsing fails, treat all rules as changed
+            rules.forEach((r) => changedRuleIds.add(r.id));
+          }
+        }
+        prevRulesSnapshotRef.current = currentRulesSnapshot;
+
+        // Extract clean code and section map from the marker-based output
+        const { cleanCode: freshClean, sections: freshSections } =
+          extractSections(freshGenerated);
+
+        let displayCode = freshClean || "-- no snippet output";
+
+        // If user has custom code, merge with the new generation
+        if (customCodeRef.current?.fullCode) {
+          const oldSections =
+            customCodeRef.current.sections ?? lastSectionsRef.current;
+
+          // On first load (no previous generation yet), use saved
+          // lastGeneratedCode from the custom code state for comparison.
+          // If the new generation is identical to what was last generated,
+          // just display the user's saved code directly.
+          const prevClean =
+            lastGeneratedCleanRef.current ||
+            customCodeRef.current.lastGeneratedCode;
+
+          if (prevClean === freshClean) {
+            // Nothing changed in generation, show user's code as-is
+            displayCode = customCodeRef.current.fullCode;
+          } else if (oldSections.length > 0) {
+            try {
+              displayCode = mergeWithGenerated(
+                customCodeRef.current.fullCode,
+                oldSections,
+                freshClean,
+                freshSections,
+                changedRuleIds,
+              );
+
+              // Persist the merged result
+              const mergedCustom: CustomCodeState = {
+                fullCode: displayCode,
+                lastGeneratedCode: freshClean,
+                sections: freshSections,
+              };
+              setCustomCode(mergedCustom);
+              onUpdateItem({ customCode: mergedCustom });
+            } catch {
+              displayCode = freshClean;
+            }
+          } else {
+            // No section info available, show user's saved code
+            displayCode = customCodeRef.current.fullCode;
+          }
+        }
+
+        lastGeneratedCleanRef.current = freshClean;
+        lastSectionsRef.current = freshSections;
+
+        setLiveCodeSnippet(displayCode);
         setLiveCodeStatusMessage(
           isNotImplemented
             ? "This item has not been fully coded in yet for live generation."
@@ -3087,7 +3335,7 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
   }, [
     getConditionType,
     getEffectType,
-    item,
+    itemWithoutCustomCode,
     formatLiveCodeErrorDetails,
     isOpen,
     itemType,
@@ -3226,8 +3474,12 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
               >
                 <div
                   ref={builderViewportRef}
-                  className="relative h-full overflow-hidden"
+                  className={`relative h-full overflow-hidden ${
+                    isMiddlePanning ? "cursor-grabbing" : "cursor-grab"
+                  }`}
                   style={{ width: `${builderWidthPercent}%` }}
+                  onMouseDownCapture={handleViewportMouseDownCapture}
+                  onAuxClick={handleViewportAuxClick}
                   onMouseDown={handleCanvasMouseDown}
                 >
                   <div
@@ -3539,6 +3791,14 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
                     isBlockPreview={!!liveCodePreviewTarget}
                     onBackToItem={() => setLiveCodePreviewTarget(null)}
                     onStartResize={handleLiveCodeResizeStart}
+                    onCodeChange={
+                      !isReadOnly && !liveCodePreviewTarget
+                        ? handleCodeChange
+                        : undefined
+                    }
+                    onResetCustomCode={handleResetCustomCode}
+                    hasCustomCode={!!customCode}
+                    sections={lastSectionsRef.current}
                   />
                 )}
               </div>

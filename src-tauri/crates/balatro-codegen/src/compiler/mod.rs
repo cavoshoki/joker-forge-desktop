@@ -143,6 +143,7 @@ pub fn compile_node_snippet(
 // ---------------------------------------------------------------------------
 
 pub(crate) struct RuleOutput {
+    pub(crate) rule_id: String,
     pub(crate) trigger: String,
     pub(crate) condition_expr: Option<Expr>,
     pub(crate) effect_stmts: Vec<Stmt>,
@@ -250,6 +251,7 @@ fn compile_single_rule(rule: &RuleDef, ctx: &mut CompileContext) -> RuleOutput {
     };
 
     RuleOutput {
+        rule_id: rule.id.clone(),
         trigger,
         condition_expr,
         effect_stmts,
@@ -375,6 +377,7 @@ fn build_joker_table(
     entries.push(kv("key", lua_str(&joker.key)));
 
     // Config table with extra
+    entries.push(jf_section_begin("config"));
     let config_extra = ctx.build_config_extra_table();
     if !config_extra.is_empty() {
         entries.push(TableEntry::KeyValue(
@@ -385,8 +388,10 @@ fn build_joker_table(
             )]),
         ));
     }
+    entries.push(jf_section_end("config"));
 
     if include_loc_txt {
+        entries.push(jf_section_begin("loc_txt"));
         // Localization, use ['name'], ['text'], ['unlock'] bracket keys
         // Text and unlock use numbered array entries: [1] = '...', [2] = '...'
         let text_entries: Vec<TableEntry> = joker
@@ -419,6 +424,7 @@ fn build_joker_table(
             "loc_txt".to_string(),
             lua_table_raw(loc_txt_entries),
         ));
+        entries.push(jf_section_end("loc_txt"));
     }
 
     // Position
@@ -467,6 +473,7 @@ fn build_joker_table(
     }
 
     // Scalar properties
+    entries.push(jf_section_begin("props"));
     entries.push(kv("cost", lua_int(joker.cost as i64)));
     // Rarity, standard rarities are numeric, custom rarities are strings
     let rarity_expr = match joker.rarity.as_str() {
@@ -483,6 +490,7 @@ fn build_joker_table(
     entries.push(kv("unlocked", lua_bool(joker.unlocked)));
     entries.push(kv("discovered", lua_bool(joker.discovered)));
     entries.push(kv("atlas", lua_str(&joker.atlas)));
+    entries.push(jf_section_end("props"));
 
     // In-pool function
     if let Some(appearance) = &joker.appearance {
@@ -497,10 +505,12 @@ fn build_joker_table(
     }
 
     // Loc vars function
+    entries.push(jf_section_begin("loc_vars"));
     let loc_vars_fn = build_loc_vars(joker, ctx, rule_outputs);
     if let Some(f) = loc_vars_fn {
         entries.push(TableEntry::KeyValue("loc_vars".to_string(), f));
     }
+    entries.push(jf_section_end("loc_vars"));
 
     // Blind reward hook
     if let Some(calc_dollar_bonus) = build_calc_dollar_bonus(rule_outputs) {
@@ -608,6 +618,8 @@ fn build_calculate_function(rule_outputs: &[RuleOutput], ctx: &CompileContext) -
                 );
             }
 
+            let section_id = format!("rule:{}", ro.rule_id);
+            trigger_body.push(jf_stmt_begin(&section_id));
             if let Some(cond) = &ro.condition_expr {
                 // Wrap effects in condition check
                 trigger_body.push(lua_if(cond.clone(), rule_stmts));
@@ -615,6 +627,7 @@ fn build_calculate_function(rule_outputs: &[RuleOutput], ctx: &CompileContext) -
                 // No conditions, effects execute directly
                 trigger_body.extend(rule_stmts);
             }
+            trigger_body.push(jf_stmt_end(&section_id));
         }
 
         if !trigger_body.is_empty() {

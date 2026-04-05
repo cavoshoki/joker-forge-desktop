@@ -1,12 +1,42 @@
-import React from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import {
   BracketsCurly,
   WarningCircle,
   ArrowCounterClockwise,
-  ArrowsOutLineHorizontal,
-  DotsSixVertical,
+  ArrowsClockwise,
+  HashStraight,
 } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { EditorState, Compartment } from "@codemirror/state";
+import {
+  EditorView,
+  keymap,
+  lineNumbers,
+  highlightActiveLine,
+  highlightActiveLineGutter,
+} from "@codemirror/view";
+import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { StreamLanguage } from "@codemirror/language";
+import { lua } from "@codemirror/legacy-modes/mode/lua";
+import { oneDark } from "@codemirror/theme-one-dark";
+import { searchKeymap } from "@codemirror/search";
+import {
+  autocompletion,
+  acceptCompletion,
+  completionStatus,
+  completionKeymap,
+  closeBrackets,
+  closeBracketsKeymap,
+  moveCompletionSelection,
+} from "@codemirror/autocomplete";
+import { luaSmodsCompletions } from "@/lib/lua-completions";
+import { reconstructWithMarkers } from "@/lib/code-sections";
+import type { SectionInfo } from "@/lib/code-sections";
 
 interface LiveCodePanelProps {
   title: string;
@@ -18,80 +48,126 @@ interface LiveCodePanelProps {
   widthPercent: number;
   isBlockPreview: boolean;
   onBackToItem: () => void;
-  onStartResize: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  onStartResize: (e: React.MouseEvent) => void;
+  onCodeChange?: (code: string) => void;
+  onResetCustomCode?: () => void;
+  hasCustomCode?: boolean;
+  /** Section map for reconstructing markers in read-only view */
+  sections?: SectionInfo[];
 }
 
-const LUA_KEYWORDS = new Set([
-  "and",
-  "break",
-  "do",
-  "else",
-  "elseif",
-  "end",
-  "false",
-  "for",
-  "function",
-  "if",
-  "in",
-  "local",
-  "nil",
-  "not",
-  "or",
-  "repeat",
-  "return",
-  "then",
-  "true",
-  "until",
-  "while",
-]);
+// Theme that inherits the panel background (transparent)
+const editorTheme = EditorView.theme({
+  "&": {
+    height: "100%",
+    backgroundColor: "transparent !important",
+  },
+  "&.cm-editor": {
+    backgroundColor: "transparent !important",
+    userSelect: "text",
+    WebkitUserSelect: "text",
+  },
+  "&.cm-editor ::selection": {
+    backgroundColor: "hsl(var(--primary) / 0.5)",
+  },
+  ".cm-content": {
+    fontFamily:
+      "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace",
+    caretColor: "hsl(var(--foreground))",
+    lineHeight: "1.6",
+    padding: "12px 0",
+    userSelect: "text",
+    WebkitUserSelect: "text",
+    cursor: "text",
+  },
+  ".cm-content[contenteditable='false']": {
+    cursor: "text",
+  },
+  ".cm-line": {
+    userSelect: "text",
+    WebkitUserSelect: "text",
+    cursor: "text",
+  },
+  ".cm-gutters": {
+    backgroundColor: "transparent !important",
+    borderRight: "1px solid hsl(var(--border) / 0.3)",
+    color: "hsl(var(--foreground) / 0.25)",
+    minWidth: "3.4rem",
+  },
+  ".cm-activeLineGutter": {
+    backgroundColor: "hsl(var(--foreground) / 0.04)",
+  },
+  ".cm-activeLine": {
+    backgroundColor: "hsl(var(--foreground) / 0.03)",
+  },
+  ".cm-selectionLayer .cm-selectionBackground": {
+    backgroundColor: "hsl(var(--primary) / 0.42) !important",
+  },
+  "&.cm-focused .cm-selectionLayer .cm-selectionBackground": {
+    backgroundColor: "hsl(var(--primary) / 0.58) !important",
+  },
+  ".cm-content ::selection": {
+    backgroundColor: "hsl(var(--primary) / 0.5)",
+  },
+  ".cm-line ::selection": {
+    backgroundColor: "hsl(var(--primary) / 0.5)",
+  },
+  ".cm-cursor": {
+    borderLeftColor: "hsl(var(--foreground))",
+    borderLeftWidth: "2px",
+  },
+  ".cm-scroller": {
+    overflow: "auto",
+  },
+  // Autocomplete tooltip styling
+  ".cm-tooltip.cm-tooltip-autocomplete": {
+    backgroundColor: "hsl(var(--card))",
+    border: "1px solid hsl(var(--border))",
+    borderRadius: "8px",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+  },
+  ".cm-tooltip.cm-tooltip-autocomplete > ul": {
+    fontFamily:
+      "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace",
+  },
+  ".cm-tooltip.cm-tooltip-autocomplete > ul > li": {
+    padding: "3px 8px",
+  },
+  ".cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]": {
+    backgroundColor: "hsl(var(--primary) / 0.3)",
+    color: "hsl(var(--foreground))",
+    outline: "1px solid hsl(var(--primary) / 0.75)",
+    boxShadow: "inset 0 0 0 1px hsl(var(--primary) / 0.35)",
+  },
+  ".cm-completionLabel": {
+    color: "hsl(var(--foreground))",
+  },
+  ".cm-completionDetail": {
+    color: "hsl(var(--muted-foreground))",
+    fontStyle: "normal",
+    marginLeft: "8px",
+  },
+  ".cm-completionMatchedText": {
+    color: "hsl(var(--primary))",
+    textDecoration: "none",
+    fontWeight: "600",
+  },
+});
 
-const LUA_GLOBALS = new Set([
-  "SMODS",
-  "G",
-  "card",
-  "context",
-  "self",
-  "args",
-  "math",
-  "table",
-  "string",
-  "pairs",
-  "ipairs",
-]);
+const readOnlyCompartment = new Compartment();
+const fontSizeCompartment = new Compartment();
 
-const tokenClassName = (token: string): string => {
-  if (token.startsWith("--")) return "text-emerald-300";
-  if (/^".*"$|^'.*'$/.test(token)) return "text-amber-200";
-  if (/^\d+(?:\.\d+)?$/.test(token)) return "text-fuchsia-300";
-  if (LUA_KEYWORDS.has(token)) return "text-sky-300 font-semibold";
-  if (LUA_GLOBALS.has(token)) return "text-violet-300";
-  if (/^[{}()[\],.:=+-/*<>#]+$/.test(token)) return "text-foreground/70";
-  return "text-foreground/90";
-};
+const makeFontSizeTheme = (size: number) =>
+  EditorView.theme({
+    "&": { fontSize: `${size}px` },
+    ".cm-tooltip.cm-tooltip-autocomplete > ul": {
+      fontSize: `${Math.max(size - 1, 9)}px`,
+    },
+  });
 
-const LUA_TOKEN_PATTERN =
-  /--.*$|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b\d+(?:\.\d+)?\b|\b[a-zA-Z_][a-zA-Z0-9_]*\b|[{}()[\],.:=+\-/*<>#]+|\s+|./g;
-
-const renderLuaLine = (line: string, lineIndex: number) => {
-  const tokens = line.match(LUA_TOKEN_PATTERN) ?? [line];
-  return (
-    <div key={`code-line-${lineIndex}`} className="contents">
-      <span className="select-none text-right pr-4 text-foreground/35 tabular-nums">
-        {lineIndex + 1}
-      </span>
-      <span className="whitespace-pre">
-        {tokens.map((token, tokenIndex) => (
-          <span
-            key={`token-${lineIndex}-${tokenIndex}`}
-            className={tokenClassName(token)}
-          >
-            {token}
-          </span>
-        ))}
-      </span>
-    </div>
-  );
-};
+const MIN_FONT_SIZE = 8;
+const MAX_FONT_SIZE = 24;
+const DEFAULT_FONT_SIZE = 12;
 
 const LiveCodePanel: React.FC<LiveCodePanelProps> = ({
   title,
@@ -104,41 +180,290 @@ const LiveCodePanel: React.FC<LiveCodePanelProps> = ({
   isBlockPreview,
   onBackToItem,
   onStartResize,
+  onCodeChange,
+  onResetCustomCode,
+  hasCustomCode = false,
+  sections,
 }) => {
-  const lines = (isLoading ? "Generating snippet..." : code).split("\n");
+  const editorRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<EditorView | null>(null);
+  const onCodeChangeRef = useRef(onCodeChange);
+  const isExternalUpdateRef = useRef(false);
+  const refreshAnimTimeoutRef = useRef<number | null>(null);
+
+  // Section markers: hidden by default
+  const [showMarkers, setShowMarkers] = useState(false);
+  // Font size for Ctrl+scroll zoom
+  const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE);
+
+  onCodeChangeRef.current = onCodeChange;
+
+  const triggerRefreshAnimation = useCallback((charCount: number) => {
+    const view = viewRef.current;
+    if (!view) return;
+
+    const content = view.contentDOM;
+    const refreshDurationMs = Math.max(
+      48,
+      Math.min(120, 44 + Math.round(Math.sqrt(Math.max(charCount, 1)) * 1.1)),
+    );
+    content.style.setProperty("--jf-live-refresh-ms", `${refreshDurationMs}ms`);
+
+    content.classList.remove("jf-live-refresh");
+    // Force reflow so the class re-add retriggers the animation.
+    void content.offsetWidth;
+    content.classList.add("jf-live-refresh");
+
+    if (refreshAnimTimeoutRef.current !== null) {
+      window.clearTimeout(refreshAnimTimeoutRef.current);
+    }
+
+    refreshAnimTimeoutRef.current = window.setTimeout(() => {
+      content.classList.remove("jf-live-refresh");
+      content.style.removeProperty("--jf-live-refresh-ms");
+      refreshAnimTimeoutRef.current = null;
+    }, refreshDurationMs + 40);
+  }, []);
+
+  // Ctrl+scroll to change font size
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    setFontSize((prev) => {
+      const delta = e.deltaY > 0 ? -1 : 1;
+      return Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, prev + delta));
+    });
+  }, []);
+
+  // Update CM font size when state changes
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: fontSizeCompartment.reconfigure(makeFontSizeTheme(fontSize)),
+    });
+  }, [fontSize]);
+
+  // Editable when not in block preview and onCodeChange is provided
+  const isEditable = !isBlockPreview && !!onCodeChange;
+
+  // When markers toggled on in non-editable view, reconstruct markers
+  const displayCode =
+    !isEditable && showMarkers && sections && sections.length > 0
+      ? reconstructWithMarkers(code, sections)
+      : code;
+
+  // Create editor on mount
+  useEffect(() => {
+    if (!editorRef.current) return;
+
+    const updateListener = EditorView.updateListener.of((update) => {
+      if (update.docChanged && !isExternalUpdateRef.current) {
+        const newCode = update.state.doc.toString();
+        onCodeChangeRef.current?.(newCode);
+      }
+    });
+
+    const state = EditorState.create({
+      doc: displayCode,
+      extensions: [
+        lineNumbers(),
+        highlightActiveLine(),
+        highlightActiveLineGutter(),
+        history(),
+        StreamLanguage.define(lua),
+        oneDark,
+        editorTheme,
+        fontSizeCompartment.of(makeFontSizeTheme(DEFAULT_FONT_SIZE)),
+        keymap.of([
+          {
+            key: "Enter",
+            run: (view) => {
+              if (completionStatus(view.state) !== "active") {
+                return false;
+              }
+              return acceptCompletion(view);
+            },
+          },
+          {
+            key: "Shift-Tab",
+            run: (view) => {
+              if (completionStatus(view.state) !== "active") {
+                return false;
+              }
+              return moveCompletionSelection(false)(view);
+            },
+          },
+          // Insert a literal tab at the cursor
+          {
+            key: "Tab",
+            run: (view) => {
+              if (completionStatus(view.state) === "active") {
+                return moveCompletionSelection(true)(view);
+              }
+              view.dispatch(view.state.replaceSelection("\t"), {
+                scrollIntoView: true,
+                userEvent: "input",
+              });
+              return true;
+            },
+          },
+          ...closeBracketsKeymap,
+          ...defaultKeymap,
+          ...historyKeymap,
+          ...searchKeymap,
+          ...completionKeymap,
+        ]),
+        closeBrackets(),
+        autocompletion({
+          override: [luaSmodsCompletions],
+          activateOnTyping: true,
+          maxRenderedOptions: 30,
+        }),
+        EditorState.allowMultipleSelections.of(true),
+        readOnlyCompartment.of(EditorState.readOnly.of(!isEditable)),
+        updateListener,
+        EditorView.lineWrapping,
+      ],
+    });
+
+    const view = new EditorView({
+      state,
+      parent: editorRef.current,
+    });
+
+    viewRef.current = view;
+
+    return () => {
+      if (refreshAnimTimeoutRef.current !== null) {
+        window.clearTimeout(refreshAnimTimeoutRef.current);
+      }
+      view.destroy();
+      viewRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Update editor content when code changes
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+
+    const currentCode = view.state.doc.toString();
+
+    if (currentCode !== displayCode) {
+      isExternalUpdateRef.current = true;
+      view.dispatch({
+        changes: {
+          from: 0,
+          to: currentCode.length,
+          insert: displayCode,
+        },
+      });
+      isExternalUpdateRef.current = false;
+
+      if (!isLoading) {
+        triggerRefreshAnimation(displayCode.length);
+      }
+    }
+  }, [displayCode, isLoading, triggerRefreshAnimation]);
+
+  // Toggle read-only based on block preview / onCodeChange
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: readOnlyCompartment.reconfigure(
+        EditorState.readOnly.of(!isEditable),
+      ),
+    });
+  }, [isEditable]);
 
   return (
     <aside
       data-rb-live-code="true"
-      className="relative h-full bg-card/40 backdrop-blur-sm border-l border-border"
+      className="relative h-full bg-card/95 backdrop-blur-md border-l border-border"
       style={{ width: `${widthPercent}%` }}
     >
-      <div className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-10 w-10 rounded-xl bg-linear-to-b from-background to-background/80 border border-border/70 shadow-lg hover:shadow-xl hover:border-primary/60 cursor-col-resize"
-          onMouseDown={onStartResize}
-          title="Drag to resize"
-        >
-          <div className="relative flex items-center justify-center">
-            <ArrowsOutLineHorizontal className="h-4 w-4 text-primary/80" />
-            <DotsSixVertical className="absolute h-3.5 w-3.5 text-foreground/40" />
-          </div>
-        </Button>
+      {/* Resize notch */}
+      <div
+        className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20 cursor-col-resize group"
+        onMouseDown={onStartResize}
+      >
+        <div className="w-2 h-12 rounded-full bg-border/60 group-hover:bg-primary/50 group-active:bg-primary/70 transition-colors duration-150 shadow-sm" />
       </div>
 
       <div className="h-full flex flex-col">
+        {/* Header bar */}
         <div className="min-h-16 px-4 py-2 border-b border-border/80 flex items-center justify-between gap-3 bg-card/70">
           <div className="flex items-center gap-2 min-w-0">
             <BracketsCurly className="h-4 w-4 text-muted-foreground shrink-0" />
             <span className="text-xs font-bold tracking-widest text-muted-foreground uppercase shrink-0">
-              Live Code
+              {isBlockPreview ? "Live Code" : "Code Editor"}
             </span>
             <span className="text-xs text-foreground/70 truncate">{title}</span>
+            {hasCustomCode && !isBlockPreview && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 font-medium shrink-0">
+                Edited
+              </span>
+            )}
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Toggle section markers */}
+            {!isBlockPreview && sections && sections.length > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    onClick={() => setShowMarkers((prev) => !prev)}
+                    className={
+                      "h-8 w-8 rounded-lg border-2 transition-all duration-200 cursor-pointer " +
+                      (showMarkers
+                        ? "bg-primary/10 border-primary/45 text-primary shadow-sm"
+                        : "bg-card/90 border-border text-muted-foreground hover:border-primary/40 hover:text-primary")
+                    }
+                    icon={<HashStraight className="h-3.5 w-3.5" />}
+                  />
+                </TooltipTrigger>
+                <TooltipContent
+                  side="bottom"
+                  sideOffset={6}
+                  className="text-xs font-medium"
+                >
+                  {showMarkers
+                    ? "Hide section markers"
+                    : "Show section markers"}
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {/* Reset custom code */}
+            {hasCustomCode && onResetCustomCode && !isBlockPreview && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    onClick={onResetCustomCode}
+                    className="h-8 w-8 rounded-lg border-2 transition-all duration-200 cursor-pointer bg-card/90 border-amber-400/40 text-amber-400 hover:bg-amber-400/10 hover:border-amber-400/60"
+                    icon={<ArrowsClockwise className="h-3.5 w-3.5" />}
+                  />
+                </TooltipTrigger>
+                <TooltipContent
+                  side="bottom"
+                  sideOffset={6}
+                  className="text-xs font-medium"
+                >
+                  Reset all custom code changes
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {/* Back to full item view */}
             {isBlockPreview && (
               <Button
                 variant="outline"
@@ -149,6 +474,12 @@ const LiveCodePanel: React.FC<LiveCodePanelProps> = ({
                 <ArrowCounterClockwise className="h-3.5 w-3.5 mr-1" />
                 Full Item View
               </Button>
+            )}
+
+            {fontSize !== DEFAULT_FONT_SIZE && (
+              <span className="text-[10px] text-muted-foreground">
+                {fontSize}px
+              </span>
             )}
             <span className="text-[10px] text-muted-foreground w-9 text-right">
               {Math.round(widthPercent)}%
@@ -176,12 +507,11 @@ const LiveCodePanel: React.FC<LiveCodePanelProps> = ({
           </div>
         ) : null}
 
-        <div className="flex-1 p-4 min-h-0">
-          <div className="h-full w-full rounded-lg bg-background/90 overflow-auto text-xs leading-relaxed font-mono">
-            <div className="grid grid-cols-[3.4rem_1fr] gap-x-0 px-0 py-3 min-w-max">
-              {lines.map((line, lineIndex) => renderLuaLine(line, lineIndex))}
-            </div>
-          </div>
+        <div className="flex-1 min-h-0" onWheel={handleWheel}>
+          <div
+            ref={editorRef}
+            className="h-full w-full overflow-hidden [&_.cm-editor]:h-full [&_.cm-editor]:bg-transparent! [&_.cm-gutters]:bg-transparent!"
+          />
         </div>
       </div>
     </aside>

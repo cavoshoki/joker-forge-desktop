@@ -41,6 +41,15 @@ export interface UserVariable {
   initialText?: string;
 }
 
+export interface CustomCodeState {
+  // The user's edited code (clean, no JF markers)
+  fullCode: string;
+  // The last clean generated code (markers stripped)
+  lastGeneratedCode: string;
+  // Ordered section map from the last generation (id + clean content)
+  sections: Array<{ id: string; content: string }>;
+}
+
 export interface BaseGameObject {
   id: string;
   objectType: string;
@@ -57,6 +66,7 @@ export interface BaseGameObject {
   discovered: boolean;
   rules?: Rule[];
   userVariables?: UserVariable[];
+  customCode?: CustomCodeState;
 }
 
 export interface UnlockProperty {

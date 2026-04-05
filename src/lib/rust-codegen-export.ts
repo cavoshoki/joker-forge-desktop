@@ -222,12 +222,15 @@ export const compileSingleJokerLua = async (
 
 /**
  * Compile a single joker and trigger a browser download.
+ * Uses custom code when available.
  */
 export const exportSingleJokerRust = async (
   joker: JokerData,
   modPrefix: string,
 ): Promise<void> => {
-  const code = await compileSingleJokerLua(joker, modPrefix);
+  const code = joker.customCode?.fullCode
+    ? joker.customCode.fullCode
+    : await compileSingleJokerLua(joker, modPrefix);
   downloadBlob(
     `${joker.objectKey}.lua`,
     new Blob([code], { type: "text/plain" }),
@@ -267,6 +270,7 @@ export const exportModRust = async (
       pos: atlas1x?.positionsById[joker.id] ?? { x: 0, y: 0 },
       soulPos: atlas1x?.soulPositionsById[joker.id] ?? null,
       fileName: `${joker.objectKey}.lua`,
+      customLua: joker.customCode?.fullCode ?? null,
     })),
     includeLocTxt: !useLocalizationFile,
     useLocalizationFile,

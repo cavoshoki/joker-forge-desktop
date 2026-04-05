@@ -99,6 +99,8 @@ pub enum TableEntry {
     IndexValue(Expr, Expr),
     /// Positional value.
     Value(Expr),
+    /// `-- comment` inside a table body (used for section markers).
+    Comment(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -335,6 +337,26 @@ pub fn lua_path(segments: &[&str]) -> Expr {
 /// `func { entries }`: table-call syntax.
 pub fn lua_table_call(func: Expr, entries: Vec<TableEntry>) -> Expr {
     Expr::TableCall(Box::new(func), entries)
+}
+
+/// Section marker comment for inside table bodies: `-- [JF:id] begin`
+pub fn jf_section_begin(section_id: &str) -> TableEntry {
+    TableEntry::Comment(format!("[JF:{}] begin", section_id))
+}
+
+/// Section marker comment for inside table bodies: `-- [JF:id] end`
+pub fn jf_section_end(section_id: &str) -> TableEntry {
+    TableEntry::Comment(format!("[JF:{}] end", section_id))
+}
+
+/// Section marker statement: `-- [JF:id] begin`
+pub fn jf_stmt_begin(section_id: &str) -> Stmt {
+    Stmt::Comment(format!("[JF:{}] begin", section_id))
+}
+
+/// Section marker statement: `-- [JF:id] end`
+pub fn jf_stmt_end(section_id: &str) -> Stmt {
+    Stmt::Comment(format!("[JF:{}] end", section_id))
 }
 
 /// Expression as statement (for function / method calls).
@@ -672,8 +694,9 @@ impl Emitter {
                     self.buf.push_str("{}");
                     return;
                 }
-                // Single simple entry → inline
-                if entries.len() == 1 && is_simple_entry(&entries[0]) {
+                // Single simple entry → inline (skip comments for inline check)
+                let non_comment: Vec<&TableEntry> = entries.iter().filter(|e| !matches!(e, TableEntry::Comment(_))).collect();
+                if non_comment.len() == 1 && is_simple_entry(non_comment[0]) && entries.len() == 1 {
                     self.buf.push_str("{ ");
                     self.emit_table_entry(&entries[0]);
                     self.buf.push_str(" }");
@@ -685,8 +708,13 @@ impl Emitter {
                 for (i, entry) in entries.iter().enumerate() {
                     self.write_indent();
                     self.emit_table_entry(entry);
-                    if i < entries.len() - 1 {
-                        self.buf.push(',');
+                    // No comma after comment entries
+                    if !matches!(entry, TableEntry::Comment(_)) {
+                        // Add comma if the next non-comment entry exists
+                        let has_next_value = entries[i + 1..].iter().any(|e| !matches!(e, TableEntry::Comment(_)));
+                        if has_next_value {
+                            self.buf.push(',');
+                        }
                     }
                     self.buf.push('\n');
                 }
@@ -718,8 +746,11 @@ impl Emitter {
                 for (i, entry) in entries.iter().enumerate() {
                     self.write_indent();
                     self.emit_table_entry(entry);
-                    if i < entries.len() - 1 {
-                        self.buf.push(',');
+                    if !matches!(entry, TableEntry::Comment(_)) {
+                        let has_next_value = entries[i + 1..].iter().any(|e| !matches!(e, TableEntry::Comment(_)));
+                        if has_next_value {
+                            self.buf.push(',');
+                        }
                     }
                     self.buf.push('\n');
                 }
@@ -752,6 +783,10 @@ impl Emitter {
             }
             TableEntry::Value(val) => {
                 self.emit_expr(val);
+            }
+            TableEntry::Comment(text) => {
+                self.buf.push_str("-- ");
+                self.buf.push_str(text);
             }
         }
     }
@@ -869,7 +904,7 @@ fn is_simple_entry(entry: &TableEntry) -> bool {
                 | Expr::Ident(_)
                 | Expr::Nil
         ),
-        TableEntry::IndexValue(_, _) => false,
+        TableEntry::IndexValue(_, _) | TableEntry::Comment(_) => false,
     }
 }
 
