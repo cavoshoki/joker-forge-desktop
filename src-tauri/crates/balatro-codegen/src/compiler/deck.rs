@@ -170,14 +170,7 @@ fn build_apply_function(rule_outputs: &[RuleOutput]) -> Option<Expr> {
     }
 
     let mut body: Vec<Stmt> = Vec::new();
-    for ro in &apply_rules {
-        let stmts = ro.effect_stmts.clone();
-        if let Some(cond) = &ro.condition_expr {
-            body.push(lua_if(cond.clone(), stmts));
-        } else {
-            body.extend(stmts);
-        }
-    }
+    super::append_rule_chain_with_fallback(&mut body, &apply_rules, |ro| ro.effect_stmts.clone());
 
     Some(Expr::Function {
         params: vec!["self".into(), "back".into()],

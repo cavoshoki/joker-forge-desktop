@@ -7,10 +7,12 @@
 //! updating Rust, not both the TypeScript mapper and the Rust codegen.
 
 use balatro_codegen::types::{
-    AppearanceDef, AtlasPos, ConditionDef, ConditionGroupDef, DisplaySize, EffectDef, JokerDef,
-    LogicOp, LoopGroupDef, ParamValue, RandomGroupDef, RuleDef, TypedValue, UnlockDef, UserVarType,
-    UserVariableDef,
+    AppearanceDef, AtlasPos, ConditionDef, ConditionGroupDef, ConsumableDef, DeckDef, DisplaySize,
+    EditionDef, EffectDef, EnhancementDef, JokerDef, LogicOp, LoopGroupDef, ParamValue,
+    RandomGroupDef, RuleDef, SealDef, TypedValue, UnlockDef, UserVarType, UserVariableDef,
+    VoucherDef,
 };
+use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -89,6 +91,191 @@ pub struct JokerDataInput {
     pub unlock_description: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ConsumableDataInput {
+    #[serde(rename = "objectKey")]
+    pub object_key: String,
+    pub name: String,
+    pub description: String,
+    pub set: String,
+    #[serde(default)]
+    pub cost: Option<i32>,
+    #[serde(default)]
+    pub unlocked: Option<bool>,
+    #[serde(default)]
+    pub discovered: Option<bool>,
+    #[serde(default)]
+    pub hidden: Option<bool>,
+    #[serde(default)]
+    pub can_repeat_soul: Option<bool>,
+    #[serde(default)]
+    pub rules: Vec<RuleInput>,
+    #[serde(rename = "userVariables", default)]
+    pub user_variables: Vec<UserVariableInput>,
+    #[serde(default)]
+    pub atlas: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EnhancementDataInput {
+    #[serde(rename = "objectKey")]
+    pub object_key: String,
+    pub name: String,
+    pub description: String,
+    #[serde(default)]
+    pub rules: Vec<RuleInput>,
+    #[serde(rename = "userVariables", default)]
+    pub user_variables: Vec<UserVariableInput>,
+    #[serde(default)]
+    pub any_suit: Option<bool>,
+    #[serde(default)]
+    pub replace_base_card: Option<bool>,
+    #[serde(default)]
+    pub no_rank: Option<bool>,
+    #[serde(default)]
+    pub no_suit: Option<bool>,
+    #[serde(default)]
+    pub always_scores: Option<bool>,
+    #[serde(default)]
+    pub unlocked: Option<bool>,
+    #[serde(default)]
+    pub discovered: Option<bool>,
+    #[serde(default)]
+    pub no_collection: Option<bool>,
+    #[serde(default)]
+    pub weight: Option<f64>,
+    #[serde(default)]
+    pub atlas: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SealDataInput {
+    #[serde(rename = "objectKey")]
+    pub object_key: String,
+    pub name: String,
+    pub description: String,
+    #[serde(default)]
+    pub rules: Vec<RuleInput>,
+    #[serde(rename = "userVariables", default)]
+    pub user_variables: Vec<UserVariableInput>,
+    #[serde(default)]
+    pub badge_colour: Option<String>,
+    #[serde(default)]
+    pub unlocked: Option<bool>,
+    #[serde(default)]
+    pub discovered: Option<bool>,
+    #[serde(default)]
+    pub no_collection: Option<bool>,
+    #[serde(default)]
+    pub sound: Option<String>,
+    #[serde(default)]
+    pub pitch: Option<f64>,
+    #[serde(default)]
+    pub volume: Option<f64>,
+    #[serde(default)]
+    pub atlas: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EditionDataInput {
+    #[serde(rename = "objectKey")]
+    pub object_key: String,
+    pub name: String,
+    pub description: String,
+    #[serde(default)]
+    pub rules: Vec<RuleInput>,
+    #[serde(rename = "userVariables", default)]
+    pub user_variables: Vec<UserVariableInput>,
+    #[serde(default)]
+    pub shader: Option<Value>,
+    #[serde(default)]
+    pub in_shop: Option<bool>,
+    #[serde(default)]
+    pub weight: Option<f64>,
+    #[serde(default)]
+    pub extra_cost: Option<i32>,
+    #[serde(default)]
+    pub apply_to_float: Option<bool>,
+    #[serde(default)]
+    pub badge_colour: Option<String>,
+    #[serde(default)]
+    pub sound: Option<String>,
+    #[serde(default)]
+    pub pitch: Option<f64>,
+    #[serde(default)]
+    pub volume: Option<f64>,
+    #[serde(default)]
+    pub disable_shadow: Option<bool>,
+    #[serde(default)]
+    pub disable_base_shader: Option<bool>,
+    #[serde(default)]
+    pub unlocked: Option<bool>,
+    #[serde(default)]
+    pub discovered: Option<bool>,
+    #[serde(default)]
+    pub no_collection: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct VoucherDataInput {
+    #[serde(rename = "objectKey")]
+    pub object_key: String,
+    pub name: String,
+    pub description: String,
+    #[serde(default, rename = "unlockDescription")]
+    pub unlock_description: Option<String>,
+    #[serde(default)]
+    pub cost: Option<i32>,
+    #[serde(default)]
+    pub unlocked: Option<bool>,
+    #[serde(default)]
+    pub discovered: Option<bool>,
+    #[serde(default)]
+    pub no_collection: Option<bool>,
+    #[serde(default)]
+    pub can_repeat_soul: Option<bool>,
+    #[serde(default)]
+    pub requires: Option<String>,
+    #[serde(default)]
+    pub rules: Vec<RuleInput>,
+    #[serde(rename = "userVariables", default)]
+    pub user_variables: Vec<UserVariableInput>,
+    #[serde(default)]
+    pub draw_shader_sprite: Option<Value>,
+    #[serde(default)]
+    pub atlas: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DeckDataInput {
+    #[serde(rename = "objectKey")]
+    pub object_key: String,
+    pub name: String,
+    pub description: String,
+    #[serde(default)]
+    pub rules: Vec<RuleInput>,
+    #[serde(rename = "userVariables", default)]
+    pub user_variables: Vec<UserVariableInput>,
+    #[serde(default)]
+    pub unlocked: Option<bool>,
+    #[serde(default)]
+    pub discovered: Option<bool>,
+    #[serde(default)]
+    pub no_collection: Option<bool>,
+    #[serde(default, rename = "Config_vouchers")]
+    pub config_vouchers: Vec<String>,
+    #[serde(default, rename = "Config_consumables")]
+    pub config_consumables: Vec<String>,
+    #[serde(default)]
+    pub no_interest: bool,
+    #[serde(default)]
+    pub no_faces: bool,
+    #[serde(default)]
+    pub erratic_deck: bool,
+    #[serde(default)]
+    pub atlas: Option<String>,
+}
+
 /// Mirrors the TypeScript `Rule` interface.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -162,11 +349,36 @@ pub struct LoopGroupInput {
 /// The TypeScript frontend stores all effect/condition params in this
 /// wrapped form. `valueType` is present only for dynamic values
 /// (game variables, user variables, ranges: etc.).
-#[derive(Debug, Deserialize)]
+#[derive(Debug)]
 pub struct WrappedParamInput {
     pub value: Value,
-    #[serde(rename = "valueType", default)]
     pub value_type: Option<String>,
+}
+
+impl<'de> Deserialize<'de> for WrappedParamInput {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum WrappedOrRaw {
+            Wrapped {
+                value: Value,
+                #[serde(rename = "valueType", default)]
+                value_type: Option<String>,
+            },
+            Raw(Value),
+        }
+
+        match WrappedOrRaw::deserialize(deserializer)? {
+            WrappedOrRaw::Wrapped { value, value_type } => Ok(Self { value, value_type }),
+            WrappedOrRaw::Raw(value) => Ok(Self {
+                value,
+                value_type: None,
+            }),
+        }
+    }
 }
 
 /// Mirrors the TypeScript `UserVariable` interface.
@@ -262,6 +474,147 @@ pub fn joker_data_to_def(
         force_negative: input.force_negative,
         ignore_slot_limit: input.ignore_slot_limit,
         info_queues: input.info_queues.clone(),
+    }
+}
+
+pub fn consumable_data_to_def(
+    input: &ConsumableDataInput,
+    pos: AtlasPosInput,
+    soul_pos: Option<AtlasPosInput>,
+) -> ConsumableDef {
+    ConsumableDef {
+        key: input.object_key.clone(),
+        name: input.name.clone(),
+        description: split_description(&input.description),
+        set: input.set.clone(),
+        cost: input.cost,
+        unlocked: input.unlocked,
+        discovered: input.discovered,
+        hidden: input.hidden,
+        can_repeat_soul: input.can_repeat_soul,
+        atlas: input
+            .atlas
+            .clone()
+            .unwrap_or_else(|| "Consumables".to_string()),
+        pos: AtlasPos { x: pos.x, y: pos.y },
+        soul_pos: soul_pos.map(|sp| AtlasPos { x: sp.x, y: sp.y }),
+        rules: input.rules.iter().map(map_rule).collect(),
+        user_variables: input.user_variables.iter().map(map_user_variable).collect(),
+    }
+}
+
+pub fn enhancement_data_to_def(input: &EnhancementDataInput, pos: AtlasPosInput) -> EnhancementDef {
+    EnhancementDef {
+        key: input.object_key.clone(),
+        name: input.name.clone(),
+        description: split_description(&input.description),
+        atlas: input.atlas.clone().unwrap_or_else(|| "centers".to_string()),
+        pos: AtlasPos { x: pos.x, y: pos.y },
+        rules: input.rules.iter().map(map_rule).collect(),
+        user_variables: input.user_variables.iter().map(map_user_variable).collect(),
+        any_suit: input.any_suit,
+        replace_base_card: input.replace_base_card,
+        no_rank: input.no_rank,
+        no_suit: input.no_suit,
+        always_scores: input.always_scores,
+        unlocked: input.unlocked,
+        discovered: input.discovered,
+        no_collection: input.no_collection,
+        weight: input.weight,
+    }
+}
+
+pub fn seal_data_to_def(input: &SealDataInput, pos: AtlasPosInput) -> SealDef {
+    SealDef {
+        key: input.object_key.clone(),
+        name: input.name.clone(),
+        description: split_description(&input.description),
+        atlas: input.atlas.clone().unwrap_or_else(|| "centers".to_string()),
+        pos: AtlasPos { x: pos.x, y: pos.y },
+        rules: input.rules.iter().map(map_rule).collect(),
+        user_variables: input.user_variables.iter().map(map_user_variable).collect(),
+        badge_colour: input.badge_colour.clone(),
+        unlocked: input.unlocked,
+        discovered: input.discovered,
+        no_collection: input.no_collection,
+        sound: input
+            .sound
+            .clone()
+            .unwrap_or_else(|| "gold_seal".to_string()),
+        pitch: input.pitch,
+        volume: input.volume,
+    }
+}
+
+pub fn edition_data_to_def(input: &EditionDataInput) -> EditionDef {
+    EditionDef {
+        key: input.object_key.clone(),
+        name: input.name.clone(),
+        description: split_description(&input.description),
+        rules: input.rules.iter().map(map_rule).collect(),
+        user_variables: input.user_variables.iter().map(map_user_variable).collect(),
+        shader: option_value_to_string(input.shader.as_ref()),
+        in_shop: input.in_shop,
+        weight: input.weight,
+        extra_cost: input.extra_cost,
+        apply_to_float: input.apply_to_float,
+        badge_colour: input.badge_colour.clone(),
+        sound: input.sound.clone(),
+        pitch: input.pitch,
+        volume: input.volume,
+        disable_shadow: input.disable_shadow,
+        disable_base_shader: input.disable_base_shader,
+        unlocked: input.unlocked,
+        discovered: input.discovered,
+        no_collection: input.no_collection,
+    }
+}
+
+pub fn voucher_data_to_def(
+    input: &VoucherDataInput,
+    pos: AtlasPosInput,
+    soul_pos: Option<AtlasPosInput>,
+) -> VoucherDef {
+    VoucherDef {
+        key: input.object_key.clone(),
+        name: input.name.clone(),
+        description: split_description(&input.description),
+        unlock_description: split_description(input.unlock_description.as_deref().unwrap_or("")),
+        cost: input.cost,
+        unlocked: input.unlocked,
+        discovered: input.discovered,
+        no_collection: input.no_collection,
+        can_repeat_soul: input.can_repeat_soul,
+        requires: input.requires.clone(),
+        atlas: input.atlas.clone().unwrap_or_else(|| "Voucher".to_string()),
+        pos: AtlasPos { x: pos.x, y: pos.y },
+        soul_pos: soul_pos.map(|sp| AtlasPos { x: sp.x, y: sp.y }),
+        rules: input.rules.iter().map(map_rule).collect(),
+        user_variables: input.user_variables.iter().map(map_user_variable).collect(),
+        draw_shader_sprite: option_value_to_string(input.draw_shader_sprite.as_ref()),
+    }
+}
+
+pub fn deck_data_to_def(input: &DeckDataInput, pos: AtlasPosInput) -> DeckDef {
+    DeckDef {
+        key: input.object_key.clone(),
+        name: input.name.clone(),
+        description: split_description(&input.description),
+        atlas: input
+            .atlas
+            .clone()
+            .unwrap_or_else(|| "Enhancers".to_string()),
+        pos: AtlasPos { x: pos.x, y: pos.y },
+        rules: input.rules.iter().map(map_rule).collect(),
+        user_variables: input.user_variables.iter().map(map_user_variable).collect(),
+        unlocked: input.unlocked,
+        discovered: input.discovered,
+        no_collection: input.no_collection,
+        config_vouchers: input.config_vouchers.clone(),
+        config_consumables: input.config_consumables.clone(),
+        no_interest: input.no_interest,
+        no_faces: input.no_faces,
+        erratic_deck: input.erratic_deck,
     }
 }
 
@@ -398,6 +751,13 @@ fn json_value_to_param(v: &Value) -> ParamValue {
         Value::Bool(b) => ParamValue::Bool(*b),
         Value::String(s) => ParamValue::Str(s.clone()),
         _ => ParamValue::Str(v.to_string()),
+    }
+}
+
+fn option_value_to_string(v: Option<&Value>) -> Option<String> {
+    match v {
+        Some(Value::String(s)) => Some(s.clone()),
+        _ => None,
     }
 }
 
@@ -682,3 +1042,68 @@ pub fn build_mod_json(metadata: &ModMetadataInput) -> Result<String, String> {
         .map_err(|e| format!("Failed to serialize mod metadata: {}", e))
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wrapped_param_input_accepts_wrapped_shape() {
+        let parsed: WrappedParamInput =
+            serde_json::from_str(r#"{"value": 7, "valueType": "number"}"#)
+                .expect("wrapped param should deserialize");
+
+        assert_eq!(parsed.value, serde_json::json!(7));
+        assert_eq!(parsed.value_type.as_deref(), Some("number"));
+    }
+
+    #[test]
+    fn wrapped_param_input_accepts_raw_number_shape() {
+        let parsed: WrappedParamInput =
+            serde_json::from_str("12").expect("raw number param should deserialize");
+
+        assert_eq!(parsed.value, serde_json::json!(12));
+        assert_eq!(parsed.value_type, None);
+    }
+
+    #[test]
+    fn wrapped_param_input_accepts_raw_string_shape() {
+        let parsed: WrappedParamInput =
+            serde_json::from_str(r#""hello""#).expect("raw string param should deserialize");
+
+        assert_eq!(parsed.value, serde_json::json!("hello"));
+        assert_eq!(parsed.value_type, None);
+    }
+
+    #[test]
+    fn mixed_wrapped_and_raw_params_map_correctly() {
+        let effect: EffectInput = serde_json::from_value(serde_json::json!({
+            "type": "add_chips",
+            "params": {
+                "raw_num": 5,
+                "wrapped_num": { "value": 10 },
+                "wrapped_typed": { "value": "$money", "valueType": "game_variable" }
+            }
+        }))
+        .expect("effect should deserialize with mixed param shapes");
+
+        let mapped = map_params(&effect.params);
+
+        match mapped.get("raw_num") {
+            Some(ParamValue::Int(5)) => {}
+            other => panic!("expected raw_num Int(5), got {other:?}"),
+        }
+
+        match mapped.get("wrapped_num") {
+            Some(ParamValue::Int(10)) => {}
+            other => panic!("expected wrapped_num Int(10), got {other:?}"),
+        }
+
+        match mapped.get("wrapped_typed") {
+            Some(ParamValue::Typed(tv)) => {
+                assert_eq!(tv.value, serde_json::json!("$money"));
+                assert_eq!(tv.value_type, "game_variable");
+            }
+            other => panic!("expected wrapped_typed Typed(...), got {other:?}"),
+        }
+    }
+}

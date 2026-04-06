@@ -5,28 +5,28 @@ pub mod triggers;
 pub mod values;
 
 // Game object compiler modules
-pub mod consumable;
-pub mod enhancement;
-pub mod seal;
-pub mod edition;
-pub mod voucher;
-pub mod deck;
-pub mod rarity;
 pub mod booster;
+pub mod consumable;
+pub mod deck;
+pub mod edition;
+pub mod enhancement;
+pub mod rarity;
+pub mod seal;
+pub mod voucher;
 
 use crate::lua_ast::*;
 use crate::types::*;
 use context::CompileContext;
 
 // Re-export compile functions for each game object type
-pub use consumable::{compile_consumable, compile_consumable_type};
-pub use enhancement::compile_enhancement;
-pub use seal::compile_seal;
-pub use edition::compile_edition;
-pub use voucher::compile_voucher;
-pub use deck::compile_deck;
-pub use rarity::compile_rarity;
 pub use booster::compile_booster;
+pub use consumable::{compile_consumable, compile_consumable_type};
+pub use deck::compile_deck;
+pub use edition::compile_edition;
+pub use enhancement::compile_enhancement;
+pub use rarity::compile_rarity;
+pub use seal::compile_seal;
+pub use voucher::compile_voucher;
 
 /// Compile a complete joker definition into a Lua chunk.
 pub fn compile_joker(joker: &JokerDef, mod_prefix: &str) -> Chunk {
@@ -501,7 +501,10 @@ fn build_joker_table(
 
     // set_ability hook for forced stickers/editions and user-variable state initialization
     if let Some(set_ability_fn) = build_set_ability(joker) {
-        entries.push(TableEntry::KeyValue("set_ability".to_string(), set_ability_fn));
+        entries.push(TableEntry::KeyValue(
+            "set_ability".to_string(),
+            set_ability_fn,
+        ));
     }
 
     // Loc vars function
@@ -581,8 +584,9 @@ fn build_calculate_function(rule_outputs: &[RuleOutput], ctx: &CompileContext) -
     }
 
     for trigger in &triggers_seen {
-        let rules_for_trigger: Vec<&&RuleOutput> = non_passive
+        let rules_for_trigger: Vec<&RuleOutput> = non_passive
             .iter()
+            .copied()
             .filter(|r| r.trigger == *trigger)
             .collect();
 
@@ -606,7 +610,7 @@ fn build_calculate_function(rule_outputs: &[RuleOutput], ctx: &CompileContext) -
             ));
         }
 
-        for ro in &rules_for_trigger {
+        append_rule_chain_with_fallback(&mut trigger_body, &rules_for_trigger, |ro| {
             let mut rule_stmts = ro.effect_stmts.clone();
             if ro.has_destroy && trigger.as_str() != "card_discarded" {
                 rule_stmts.insert(
@@ -619,16 +623,11 @@ fn build_calculate_function(rule_outputs: &[RuleOutput], ctx: &CompileContext) -
             }
 
             let section_id = format!("rule:{}", ro.rule_id);
-            trigger_body.push(jf_stmt_begin(&section_id));
-            if let Some(cond) = &ro.condition_expr {
-                // Wrap effects in condition check
-                trigger_body.push(lua_if(cond.clone(), rule_stmts));
-            } else {
-                // No conditions, effects execute directly
-                trigger_body.extend(rule_stmts);
-            }
-            trigger_body.push(jf_stmt_end(&section_id));
-        }
+            let mut wrapped = vec![jf_stmt_begin(&section_id)];
+            wrapped.extend(rule_stmts);
+            wrapped.push(jf_stmt_end(&section_id));
+            wrapped
+        });
 
         if !trigger_body.is_empty() {
             body.push(lua_if(trigger_ctx, trigger_body));
@@ -723,9 +722,7 @@ fn build_loc_vars(
     let mut var_refs: Vec<TableEntry> = vars
         .iter()
         .filter(|v| !v.name.starts_with("odds_") && !v.name.starts_with("numerator_"))
-        .map(|v| {
-            TableEntry::Value(lua_field(lua_raw_expr("self.config.extra"), &v.name))
-        })
+        .map(|v| TableEntry::Value(lua_field(lua_raw_expr("self.config.extra"), &v.name)))
         .collect();
 
     let mut colour_refs: Vec<TableEntry> = Vec::new();
@@ -791,11 +788,20 @@ fn build_loc_vars(
             den = den,
             key = ctx.smods_key(),
         )));
-        var_refs.push(TableEntry::Value(lua_ident(format!("new_numerator{}", suffix))));
-        var_refs.push(TableEntry::Value(lua_ident(format!("new_denominator{}", suffix))));
+        var_refs.push(TableEntry::Value(lua_ident(format!(
+            "new_numerator{}",
+            suffix
+        ))));
+        var_refs.push(TableEntry::Value(lua_ident(format!(
+            "new_denominator{}",
+            suffix
+        ))));
     }
 
-    let mut return_entries = vec![TableEntry::KeyValue("vars".to_string(), lua_table_raw(var_refs))];
+    let mut return_entries = vec![TableEntry::KeyValue(
+        "vars".to_string(),
+        lua_table_raw(var_refs),
+    )];
     if !colour_refs.is_empty() {
         return_entries.push(TableEntry::KeyValue(
             "colours".to_string(),
@@ -873,7 +879,10 @@ fn build_set_ability(joker: &JokerDef) -> Option<Expr> {
     }
 
     if needs_round_guard {
-        body.insert(0, lua_raw_stmt("if not G.GAME or not G.GAME.current_round then return end"));
+        body.insert(
+            0,
+            lua_raw_stmt("if not G.GAME or not G.GAME.current_round then return end"),
+        );
     }
 
     Some(Expr::Function {
@@ -936,7 +945,10 @@ fn build_calc_dollar_bonus(rule_outputs: &[RuleOutput]) -> Option<Expr> {
                 boss_body.push(add_stmt);
             }
         }
-        body.push(lua_if(lua_raw_expr("G.GAME.blind and G.GAME.blind.boss"), boss_body));
+        body.push(lua_if(
+            lua_raw_expr("G.GAME.blind and G.GAME.blind.boss"),
+            boss_body,
+        ));
     }
 
     for reward in &regular {
@@ -965,7 +977,10 @@ fn build_calc_dollar_bonus(rule_outputs: &[RuleOutput]) -> Option<Expr> {
     })
 }
 
-fn passive_hook_from_effect(effect: &EffectDef, ctx: &mut CompileContext) -> Option<PassiveHookSpec> {
+fn passive_hook_from_effect(
+    effect: &EffectDef,
+    ctx: &mut CompileContext,
+) -> Option<PassiveHookSpec> {
     let joker_key = ctx.smods_key();
     match effect.effect_type.as_str() {
         "discount_items" => {
@@ -1092,9 +1107,8 @@ fn build_global_hook_stmts(rule_outputs: &[RuleOutput], _ctx: &CompileContext) -
     if !shortcut_keys.is_empty() {
         shortcut_keys.sort();
         shortcut_keys.dedup();
-        let mut code = String::from(
-            "local smods_shortcut_ref = SMODS.shortcut\nfunction SMODS.shortcut()",
-        );
+        let mut code =
+            String::from("local smods_shortcut_ref = SMODS.shortcut\nfunction SMODS.shortcut()");
         for key in &shortcut_keys {
             code.push_str(&format!(
                 "\n    if next(SMODS.find_card(\"{}\")) then\n        return true\n    end",
@@ -1233,22 +1247,18 @@ pub(crate) fn build_shared_calculate_function(
     }
 
     for trigger in &triggers_seen {
-        let rules_for_trigger: Vec<&&RuleOutput> = non_passive
+        let rules_for_trigger: Vec<&RuleOutput> = non_passive
             .iter()
+            .copied()
             .filter(|r| r.trigger == *trigger)
             .collect();
 
         let trigger_ctx = triggers::trigger_context(ctx.object_type, trigger, false);
 
         let mut trigger_body: Vec<Stmt> = Vec::new();
-        for ro in &rules_for_trigger {
-            let stmts = ro.effect_stmts.clone();
-            if let Some(cond) = &ro.condition_expr {
-                trigger_body.push(lua_if(cond.clone(), stmts));
-            } else {
-                trigger_body.extend(stmts);
-            }
-        }
+        append_rule_chain_with_fallback(&mut trigger_body, &rules_for_trigger, |ro| {
+            ro.effect_stmts.clone()
+        });
 
         if !trigger_body.is_empty() {
             body.push(lua_if(trigger_ctx, trigger_body));
@@ -1263,6 +1273,64 @@ pub(crate) fn build_shared_calculate_function(
         params: vec!["self".into(), "card".into(), "context".into()],
         body,
     })
+}
+
+/// Emits trigger rules as a condition chain with unconditional fallback.
+///
+/// For rules that share the same trigger, conditional rules are emitted first,
+/// and unconditional rules are emitted last as the fallback path. This prevents
+/// unconditional early returns from shadowing conditional branches.
+pub(crate) fn append_rule_chain_with_fallback<F>(
+    out: &mut Vec<Stmt>,
+    rules_for_trigger: &[&RuleOutput],
+    mut build_rule_stmts: F,
+) where
+    F: FnMut(&RuleOutput) -> Vec<Stmt>,
+{
+    let mut conditional_rules: Vec<&RuleOutput> = Vec::new();
+    let mut unconditional_rules: Vec<&RuleOutput> = Vec::new();
+
+    for ro in rules_for_trigger {
+        if ro.condition_expr.is_some() {
+            conditional_rules.push(*ro);
+        } else {
+            unconditional_rules.push(*ro);
+        }
+    }
+
+    if conditional_rules.is_empty() {
+        for ro in unconditional_rules {
+            out.extend(build_rule_stmts(ro));
+        }
+        return;
+    }
+
+    let mut fallback_tail: Option<Vec<Stmt>> = if unconditional_rules.is_empty() {
+        None
+    } else {
+        let mut tail = Vec::new();
+        for ro in unconditional_rules {
+            tail.extend(build_rule_stmts(ro));
+        }
+        Some(tail)
+    };
+
+    for ro in conditional_rules.into_iter().rev() {
+        let cond = ro
+            .condition_expr
+            .clone()
+            .expect("condition_expr should exist for conditional rule chain");
+        let then_body = build_rule_stmts(ro);
+        let next = Stmt::If {
+            branches: vec![(cond, then_body)],
+            else_body: fallback_tail,
+        };
+        fallback_tail = Some(vec![next]);
+    }
+
+    if let Some(stmts) = fallback_tail {
+        out.extend(stmts);
+    }
 }
 
 /// Build a shared `loc_vars` function suitable for consumables, vouchers, decks: etc.
@@ -1397,3 +1465,5 @@ fn convert_params(
         .collect()
 }
 
+#[cfg(test)]
+mod tests;

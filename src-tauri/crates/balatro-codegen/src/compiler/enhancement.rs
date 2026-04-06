@@ -296,8 +296,9 @@ pub(crate) fn build_card_calculate_function(
     }
 
     for trigger in &triggers_seen {
-        let rules_for_trigger: Vec<&&RuleOutput> = non_passive
+        let rules_for_trigger: Vec<&RuleOutput> = non_passive
             .iter()
+            .copied()
             .filter(|r| r.trigger == *trigger)
             .collect();
 
@@ -326,7 +327,7 @@ pub(crate) fn build_card_calculate_function(
             ));
         }
 
-        for ro in &rules_for_trigger {
+        super::append_rule_chain_with_fallback(&mut trigger_body, &rules_for_trigger, |ro| {
             let mut stmts = ro.effect_stmts.clone();
             if ro.has_destroy && trigger.as_str() != "card_discarded" {
                 stmts.insert(
@@ -334,13 +335,8 @@ pub(crate) fn build_card_calculate_function(
                     lua_assign(lua_path(&["card", "should_destroy"]), lua_bool(true)),
                 );
             }
-
-            if let Some(cond) = &ro.condition_expr {
-                trigger_body.push(lua_if(cond.clone(), stmts));
-            } else {
-                trigger_body.extend(stmts);
-            }
-        }
+            stmts
+        });
 
         if !trigger_body.is_empty() {
             body.push(lua_if(trigger_ctx, trigger_body));

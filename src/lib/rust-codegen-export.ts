@@ -11,6 +11,15 @@ interface CompileSingleJokerOptions {
   includeLocTxt?: boolean;
 }
 
+export type PreviewCompileItemType =
+  | "joker"
+  | "consumable"
+  | "voucher"
+  | "deck"
+  | "enhancement"
+  | "seal"
+  | "edition";
+
 interface ExportModRustOptions {
   useLocalizationFile?: boolean;
   localizationLocale?: string;
@@ -203,21 +212,30 @@ const resolveExportRootPath = async (
 /**
  * Compile a single joker to Lua.
  *
- * Sends the raw `JokerData` to Rust via `compile_joker_from_data`.
- * No TypeScript-side mapping required.
+ * Kept as a convenience wrapper for joker-only call sites.
  */
+export const compileSingleItemLua = async (
+  item: unknown,
+  itemType: PreviewCompileItemType,
+  modPrefix: string,
+  options: CompileSingleJokerOptions = {},
+): Promise<string> => {
+  return invoke<string>("compile_item_from_data", {
+    itemType,
+    itemData: item,
+    pos: null,
+    soulPos: null,
+    modPrefix,
+    includeLocTxt: options.includeLocTxt ?? true,
+  });
+};
+
 export const compileSingleJokerLua = async (
   joker: JokerData,
   modPrefix: string,
   options: CompileSingleJokerOptions = {},
 ): Promise<string> => {
-  return invoke<string>("compile_joker_from_data", {
-    jokerData: joker,
-    pos: { x: 0, y: 0 },
-    soulPos: null,
-    modPrefix,
-    includeLocTxt: options.includeLocTxt ?? true,
-  });
+  return compileSingleItemLua(joker, "joker", modPrefix, options);
 };
 
 /**

@@ -205,14 +205,7 @@ fn build_use_function(rule_outputs: &[super::RuleOutput]) -> Option<Expr> {
         Some(lua_or(lua_ident("copier"), lua_ident("card"))),
     )];
 
-    for ro in &use_rules {
-        let stmts = ro.effect_stmts.clone();
-        if let Some(cond) = &ro.condition_expr {
-            body.push(lua_if(cond.clone(), stmts));
-        } else {
-            body.extend(stmts);
-        }
-    }
+    super::append_rule_chain_with_fallback(&mut body, &use_rules, |ro| ro.effect_stmts.clone());
 
     Some(Expr::Function {
         params: vec!["self".into(), "card".into(), "area".into(), "copier".into()],

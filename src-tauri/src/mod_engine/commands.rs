@@ -1,15 +1,19 @@
 use std::{collections::HashMap, fs, path::Path};
 
 use balatro_codegen::{
-    compile_joker_with_options, compile_node_snippet, format_lua_source,
-    Emitter as LuaEmitter, JokerDef, ObjectType,
+    compile_consumable, compile_deck, compile_edition, compile_enhancement,
+    compile_joker_with_options, compile_node_snippet, compile_seal, compile_voucher,
+    format_lua_source, Emitter as LuaEmitter, JokerDef, ObjectType,
 };
 use serde_json::Value;
 use tauri::{Emitter, State, Window};
 
 use super::{
     compiler::Compiler,
-    export::{AtlasPosInput, BatchJokerEntry, JokerDataInput, ModMetadataInput},
+    export::{
+        AtlasPosInput, BatchJokerEntry, ConsumableDataInput, DeckDataInput, EditionDataInput,
+        EnhancementDataInput, JokerDataInput, ModMetadataInput, SealDataInput, VoucherDataInput,
+    },
     state::AppState,
     types::{Edge, EntityState, Node, RuleCatalogPayload, SnippetResponse, StateSyncPayload},
 };
@@ -331,6 +335,75 @@ pub fn compile_joker_from_data(
     Ok(format_lua_source(&LuaEmitter::new().emit_chunk(&chunk)))
 }
 
+#[tauri::command]
+pub fn compile_item_from_data(
+    item_type: String,
+    item_data: Value,
+    pos: Option<AtlasPosInput>,
+    soul_pos: Option<AtlasPosInput>,
+    mod_prefix: String,
+    include_loc_txt: bool,
+) -> Result<String, String> {
+    let base_pos = pos.unwrap_or(AtlasPosInput { x: 0, y: 0 });
+
+    let lua = match item_type.as_str() {
+        "joker" => {
+            let parsed: JokerDataInput = serde_json::from_value(item_data)
+                .map_err(|e| format!("Invalid joker data: {}", e))?;
+            let def = super::export::joker_data_to_def(&parsed, base_pos, soul_pos);
+            let chunk = compile_joker_with_options(&def, &mod_prefix, include_loc_txt);
+            format_lua_source(&LuaEmitter::new().emit_chunk(&chunk))
+        }
+        "consumable" => {
+            let parsed: ConsumableDataInput = serde_json::from_value(item_data)
+                .map_err(|e| format!("Invalid consumable data: {}", e))?;
+            let def = super::export::consumable_data_to_def(&parsed, base_pos, soul_pos);
+            let chunk = compile_consumable(&def, &mod_prefix);
+            format_lua_source(&LuaEmitter::new().emit_chunk(&chunk))
+        }
+        "voucher" => {
+            let parsed: VoucherDataInput = serde_json::from_value(item_data)
+                .map_err(|e| format!("Invalid voucher data: {}", e))?;
+            let def = super::export::voucher_data_to_def(&parsed, base_pos, soul_pos);
+            let chunk = compile_voucher(&def, &mod_prefix);
+            format_lua_source(&LuaEmitter::new().emit_chunk(&chunk))
+        }
+        "deck" => {
+            let parsed: DeckDataInput = serde_json::from_value(item_data)
+                .map_err(|e| format!("Invalid deck data: {}", e))?;
+            let def = super::export::deck_data_to_def(&parsed, base_pos);
+            let chunk = compile_deck(&def, &mod_prefix);
+            format_lua_source(&LuaEmitter::new().emit_chunk(&chunk))
+        }
+        "enhancement" => {
+            let parsed: EnhancementDataInput = serde_json::from_value(item_data)
+                .map_err(|e| format!("Invalid enhancement data: {}", e))?;
+            let def = super::export::enhancement_data_to_def(&parsed, base_pos);
+            let chunk = compile_enhancement(&def, &mod_prefix);
+            format_lua_source(&LuaEmitter::new().emit_chunk(&chunk))
+        }
+        "seal" => {
+            let parsed: SealDataInput = serde_json::from_value(item_data)
+                .map_err(|e| format!("Invalid seal data: {}", e))?;
+            let def = super::export::seal_data_to_def(&parsed, base_pos);
+            let chunk = compile_seal(&def, &mod_prefix);
+            format_lua_source(&LuaEmitter::new().emit_chunk(&chunk))
+        }
+        "edition" => {
+            let parsed: EditionDataInput = serde_json::from_value(item_data)
+                .map_err(|e| format!("Invalid edition data: {}", e))?;
+            let def = super::export::edition_data_to_def(&parsed);
+            let chunk = compile_edition(&def, &mod_prefix);
+            format_lua_source(&LuaEmitter::new().emit_chunk(&chunk))
+        }
+        _ => {
+            return Err(format!("Unsupported item type: {}", item_type));
+        }
+    };
+
+    Ok(lua)
+}
+
 /// Compile and write a batch of jokers to disk in a single IPC call.
 ///
 /// Replaces the TypeScript `for (const joker of sorted)` loop that called
@@ -356,8 +429,11 @@ pub fn batch_export_jokers(
         let lua = if let Some(custom) = &entry.custom_lua {
             custom.clone()
         } else {
-            let joker_def =
-                super::export::joker_data_to_def(&entry.joker_data, entry.pos.clone(), entry.soul_pos.clone());
+            let joker_def = super::export::joker_data_to_def(
+                &entry.joker_data,
+                entry.pos.clone(),
+                entry.soul_pos.clone(),
+            );
             let chunk = compile_joker_with_options(&joker_def, &mod_prefix, include_loc_txt);
             format_lua_source(&LuaEmitter::new().emit_chunk(&chunk))
         };
@@ -432,8 +508,11 @@ pub fn export_mod_package(
         let lua = if let Some(custom) = &entry.custom_lua {
             custom.clone()
         } else {
-            let joker_def =
-                super::export::joker_data_to_def(&entry.joker_data, entry.pos.clone(), entry.soul_pos.clone());
+            let joker_def = super::export::joker_data_to_def(
+                &entry.joker_data,
+                entry.pos.clone(),
+                entry.soul_pos.clone(),
+            );
             let chunk = compile_joker_with_options(&joker_def, &metadata.prefix, include_loc_txt);
             format_lua_source(&LuaEmitter::new().emit_chunk(&chunk))
         };
@@ -450,7 +529,10 @@ pub fn export_mod_package(
         fs::create_dir_all(&localization_dir)
             .map_err(|e| format!("Failed to create {}: {}", localization_dir.display(), e))?;
         let loc_path = localization_dir.join(format!("{}.lua", locale));
-        let loc_lua = format_lua_source(&super::export::build_localization_lua(&metadata.prefix, &jokers));
+        let loc_lua = format_lua_source(&super::export::build_localization_lua(
+            &metadata.prefix,
+            &jokers,
+        ));
         fs::write(&loc_path, loc_lua.as_bytes())
             .map_err(|e| format!("Failed to write {}: {}", loc_path.display(), e))?;
         file_count += 1;
@@ -458,4 +540,3 @@ pub fn export_mod_package(
 
     Ok(file_count)
 }
-

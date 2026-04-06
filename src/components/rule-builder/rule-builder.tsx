@@ -43,7 +43,10 @@ import Variables from "./variables";
 import Inspector from "./inspector";
 import LiveCodePanel from "./live-code-panel";
 import HistoryPanel from "./history-panel";
-import { compileSingleJokerLua } from "@/lib/rust-codegen-export";
+import {
+  compileSingleItemLua,
+  type PreviewCompileItemType,
+} from "@/lib/rust-codegen-export";
 import { extractSections, mergeWithGenerated } from "@/lib/code-sections";
 import type { SectionInfo } from "@/lib/code-sections";
 import type { CustomCodeState } from "@/lib/types";
@@ -290,6 +293,35 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
     return rest;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemCodegenKey]);
+
+  const previewItemType = useMemo<PreviewCompileItemType>(() => {
+    const objectType = String(itemWithoutCustomCode?.objectType || "")
+      .trim()
+      .toLowerCase();
+
+    if (
+      objectType === "enhancement" ||
+      objectType === "seal" ||
+      objectType === "edition"
+    ) {
+      return objectType;
+    }
+
+    if (
+      objectType === "joker" ||
+      objectType === "consumable" ||
+      objectType === "voucher" ||
+      objectType === "deck"
+    ) {
+      return objectType;
+    }
+
+    if (itemType === "card") {
+      return "enhancement";
+    }
+
+    return itemType;
+  }, [itemType, itemWithoutCustomCode]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -3170,7 +3202,7 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
           const snippetCode = await invoke<string>(
             "compile_rulebuilder_node_snippet",
             {
-              itemType,
+              itemType: previewItemType,
               nodeType,
               params,
             },
@@ -3199,8 +3231,9 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
           `Item Preview: ${itemWithoutCustomCode.name || "Current Item"}`,
         );
 
-        const freshGenerated = await compileSingleJokerLua(
+        const freshGenerated = await compileSingleItemLua(
           { ...(itemWithoutCustomCode as any), rules },
+          previewItemType,
           "mod",
           { includeLocTxt: true },
         );
@@ -3336,9 +3369,9 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
     getConditionType,
     getEffectType,
     itemWithoutCustomCode,
+    previewItemType,
     formatLiveCodeErrorDetails,
     isOpen,
-    itemType,
     liveCodeIsVisible,
     liveCodePreviewTarget,
     rules,
