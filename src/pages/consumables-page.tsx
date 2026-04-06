@@ -13,6 +13,7 @@ import {
   Lock,
   Eye,
   EyeSlash,
+  VideoCamera,
 } from "@phosphor-icons/react";
 import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import { Badge } from "@/components/ui/badge";
@@ -32,12 +33,16 @@ import { getRandomPlaceholder } from "@/lib/placeholder-assets.ts";
 import { PlaceholderPickerDialog } from "@/components/pages/placeholder-picker-dialog";
 import { RuleBuilder } from "@/components/rule-builder";
 import { processBalatroCardImage } from "@/lib/media/image-processing-utils";
+import { ItemShowcaseDialog } from "@/components/pages/item-showcase-dialog";
 
 export default function ConsumablesPage() {
   const { data, updateConsumables } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<ConsumableData | null>(null);
   const [ruleEditingItem, setRuleEditingItem] = useState<ConsumableData | null>(
+    null,
+  );
+  const [showcaseItem, setShowcaseItem] = useState<ConsumableData | null>(
     null,
   );
   const [isPlaceholderPickerOpen, setIsPlaceholderPickerOpen] = useState(false);
@@ -366,6 +371,12 @@ export default function ConsumablesPage() {
             },
           },
           {
+            id: "showcase",
+            label: "Showcase",
+            icon: <VideoCamera className="h-4 w-4" />,
+            onClick: () => setShowcaseItem(item),
+          },
+          {
             id: "delete",
             label: "Delete",
             icon: <Trash className="h-4 w-4" />,
@@ -458,6 +469,28 @@ export default function ConsumablesPage() {
         confirmVariant="destructive"
         onConfirm={confirmDelete}
       />
+
+      <ItemShowcaseDialog
+        open={!!showcaseItem}
+        title={showcaseItem?.name || "Consumable"}
+        fileNameBase={showcaseItem?.name || "consumable"}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowcaseItem(null);
+          }
+        }}
+      >
+        {showcaseItem && (
+          <BalatroCard
+            type="consumable"
+            data={showcaseItem}
+            size="lg"
+            setName={getCurrentSetName(showcaseItem.set)}
+            setColor={getCurrentSetColor(showcaseItem.set)}
+            showCost
+          />
+        )}
+      </ItemShowcaseDialog>
     </>
   );
 }

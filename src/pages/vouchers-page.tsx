@@ -16,6 +16,7 @@ import {
   EyeSlash,
   Bookmark,
   Prohibit,
+  VideoCamera,
 } from "@phosphor-icons/react";
 import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ import { getRandomPlaceholder } from "@/lib/placeholder-assets.ts";
 import { PlaceholderPickerDialog } from "@/components/pages/placeholder-picker-dialog";
 import { RuleBuilder } from "@/components/rule-builder";
 import { processBalatroCardImage } from "@/lib/media/image-processing-utils";
+import { ItemShowcaseDialog } from "@/components/pages/item-showcase-dialog";
 
 export default function VouchersPage() {
   const { data, updateVouchers } = useProjectData();
@@ -47,6 +49,7 @@ export default function VouchersPage() {
   const [ruleEditingItem, setRuleEditingItem] = useState<VoucherData | null>(
     null,
   );
+  const [showcaseItem, setShowcaseItem] = useState<VoucherData | null>(null);
   const [isPlaceholderPickerOpen, setIsPlaceholderPickerOpen] = useState(false);
   const [placeholderTargetId, setPlaceholderTargetId] = useState<string | null>(
     null,
@@ -526,6 +529,12 @@ export default function VouchersPage() {
             },
           },
           {
+            id: "showcase",
+            label: "Showcase",
+            icon: <VideoCamera className="h-4 w-4" />,
+            onClick: () => setShowcaseItem(item),
+          },
+          {
             id: "delete",
             label: "Delete",
             icon: <Trash className="h-4 w-4" />,
@@ -612,6 +621,21 @@ export default function VouchersPage() {
         confirmVariant="destructive"
         onConfirm={confirmDelete}
       />
+
+      <ItemShowcaseDialog
+        open={!!showcaseItem}
+        title={showcaseItem?.name || "Voucher"}
+        fileNameBase={showcaseItem?.name || "voucher"}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowcaseItem(null);
+          }
+        }}
+      >
+        {showcaseItem && (
+          <BalatroCard type="voucher" data={showcaseItem} size="lg" showCost />
+        )}
+      </ItemShowcaseDialog>
     </>
   );
 }

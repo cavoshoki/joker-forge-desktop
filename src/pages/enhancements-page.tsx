@@ -25,6 +25,7 @@ import {
   ShieldCheck,
   Hash,
   X,
+  VideoCamera,
 } from "@phosphor-icons/react";
 import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import { BalatroCard } from "@/components/balatro/balatro-card";
@@ -32,12 +33,15 @@ import { getRandomPlaceholder } from "@/lib/placeholder-assets.ts";
 import { PlaceholderPickerDialog } from "@/components/pages/placeholder-picker-dialog";
 import { RuleBuilder } from "@/components/rule-builder";
 import { processBalatroCardImage } from "@/lib/media/image-processing-utils";
+import { ItemShowcaseDialog } from "@/components/pages/item-showcase-dialog";
 
 export default function EnhancementsPage() {
   const { data, updateEnhancements } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<EnhancementData | null>(null);
   const [ruleEditingItem, setRuleEditingItem] =
+    useState<EnhancementData | null>(null);
+  const [showcaseItem, setShowcaseItem] =
     useState<EnhancementData | null>(null);
   const [isPlaceholderPickerOpen, setIsPlaceholderPickerOpen] = useState(false);
   const [placeholderTargetId, setPlaceholderTargetId] = useState<string | null>(
@@ -385,6 +389,12 @@ export default function EnhancementsPage() {
             },
           },
           {
+            id: "showcase",
+            label: "Showcase",
+            icon: <VideoCamera className="h-4 w-4" />,
+            onClick: () => setShowcaseItem(item),
+          },
+          {
             id: "delete",
             label: "Delete",
             icon: <Trash className="h-4 w-4" />,
@@ -483,6 +493,26 @@ export default function EnhancementsPage() {
         confirmVariant="destructive"
         onConfirm={confirmDelete}
       />
+
+      <ItemShowcaseDialog
+        open={!!showcaseItem}
+        title={showcaseItem?.name || "Enhancement"}
+        fileNameBase={showcaseItem?.name || "enhancement"}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowcaseItem(null);
+          }
+        }}
+      >
+        {showcaseItem && (
+          <BalatroCard
+            type="card"
+            data={showcaseItem}
+            enhancementReplaceBase={showcaseItem.replace_base_card === true}
+            size="lg"
+          />
+        )}
+      </ItemShowcaseDialog>
     </>
   );
 }

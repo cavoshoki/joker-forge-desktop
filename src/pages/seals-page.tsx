@@ -15,6 +15,7 @@ import {
   Eye,
   EyeSlash,
   Prohibit,
+  VideoCamera,
 } from "@phosphor-icons/react";
 import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import {
@@ -30,12 +31,14 @@ import { getRandomPlaceholder } from "@/lib/placeholder-assets.ts";
 import { PlaceholderPickerDialog } from "@/components/pages/placeholder-picker-dialog";
 import { RuleBuilder } from "@/components/rule-builder";
 import { processBalatroCardImage } from "@/lib/media/image-processing-utils";
+import { ItemShowcaseDialog } from "@/components/pages/item-showcase-dialog";
 
 export default function SealsPage() {
   const { data, updateSeals } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<SealData | null>(null);
   const [ruleEditingItem, setRuleEditingItem] = useState<SealData | null>(null);
+  const [showcaseItem, setShowcaseItem] = useState<SealData | null>(null);
   const [isPlaceholderPickerOpen, setIsPlaceholderPickerOpen] = useState(false);
   const [placeholderTargetId, setPlaceholderTargetId] = useState<string | null>(
     null,
@@ -341,6 +344,12 @@ export default function SealsPage() {
             },
           },
           {
+            id: "showcase",
+            label: "Showcase",
+            icon: <VideoCamera className="h-4 w-4" />,
+            onClick: () => setShowcaseItem(item),
+          },
+          {
             id: "delete",
             label: "Delete",
             icon: <Trash className="h-4 w-4" />,
@@ -427,6 +436,27 @@ export default function SealsPage() {
         confirmVariant="destructive"
         onConfirm={confirmDelete}
       />
+
+      <ItemShowcaseDialog
+        open={!!showcaseItem}
+        title={showcaseItem?.name || "Seal"}
+        fileNameBase={showcaseItem?.name || "seal"}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowcaseItem(null);
+          }
+        }}
+      >
+        {showcaseItem && (
+          <BalatroCard
+            type="card"
+            data={showcaseItem}
+            isSeal={true}
+            sealBadgeColor={showcaseItem.badge_colour}
+            size="lg"
+          />
+        )}
+      </ItemShowcaseDialog>
     </>
   );
 }

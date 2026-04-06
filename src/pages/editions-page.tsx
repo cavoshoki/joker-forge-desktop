@@ -24,11 +24,13 @@ import {
   EyeSlash,
   Prohibit,
   ShoppingBag,
+  VideoCamera,
 } from "@phosphor-icons/react";
 import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import { BalatroCard } from "@/components/balatro/balatro-card";
 import { CUSTOM_SHADERS, SOUNDS, VANILLA_SHADERS } from "@/lib/balatro-utils";
 import { RuleBuilder } from "@/components/rule-builder";
+import { ItemShowcaseDialog } from "@/components/pages/item-showcase-dialog";
 
 export default function EditionsPage() {
   const { data, updateEditions } = useProjectData();
@@ -37,6 +39,7 @@ export default function EditionsPage() {
   const [ruleEditingItem, setRuleEditingItem] = useState<EditionData | null>(
     null,
   );
+  const [showcaseItem, setShowcaseItem] = useState<EditionData | null>(null);
 
   const handleUpdate = useCallback(
     (id: string, updates: Partial<EditionData>) => {
@@ -402,6 +405,12 @@ export default function EditionsPage() {
             },
           },
           {
+            id: "showcase",
+            label: "Showcase",
+            icon: <VideoCamera className="h-4 w-4" />,
+            onClick: () => setShowcaseItem(item),
+          },
+          {
             id: "delete",
             label: "Delete",
             icon: <Trash className="h-4 w-4" />,
@@ -483,6 +492,29 @@ export default function EditionsPage() {
         confirmVariant="destructive"
         onConfirm={confirmDelete}
       />
+
+      <ItemShowcaseDialog
+        open={!!showcaseItem}
+        title={showcaseItem?.name || "Edition"}
+        fileNameBase={showcaseItem?.name || "edition"}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowcaseItem(null);
+          }
+        }}
+      >
+        {showcaseItem && (
+          <BalatroCard
+            type="edition"
+            data={{
+              ...showcaseItem,
+              shader: showcaseItem.shader === "" ? undefined : showcaseItem.shader,
+            }}
+            editionBadgeColor={showcaseItem.badge_colour}
+            size="lg"
+          />
+        )}
+      </ItemShowcaseDialog>
     </>
   );
 }

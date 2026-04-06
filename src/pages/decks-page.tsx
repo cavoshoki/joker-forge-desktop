@@ -19,6 +19,7 @@ import {
   Smiley,
   SmileySad,
   Shuffle,
+  VideoCamera,
 } from "@phosphor-icons/react";
 import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import {
@@ -33,12 +34,14 @@ import { getRandomPlaceholder } from "@/lib/placeholder-assets.ts";
 import { PlaceholderPickerDialog } from "@/components/pages/placeholder-picker-dialog";
 import { RuleBuilder } from "@/components/rule-builder";
 import { processBalatroCardImage } from "@/lib/media/image-processing-utils";
+import { ItemShowcaseDialog } from "@/components/pages/item-showcase-dialog";
 
 export default function DecksPage() {
   const { data, updateDecks } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<DeckData | null>(null);
   const [ruleEditingItem, setRuleEditingItem] = useState<DeckData | null>(null);
+  const [showcaseItem, setShowcaseItem] = useState<DeckData | null>(null);
   const [isPlaceholderPickerOpen, setIsPlaceholderPickerOpen] = useState(false);
   const [placeholderTargetId, setPlaceholderTargetId] = useState<string | null>(
     null,
@@ -385,6 +388,12 @@ export default function DecksPage() {
             },
           },
           {
+            id: "showcase",
+            label: "Showcase",
+            icon: <VideoCamera className="h-4 w-4" />,
+            onClick: () => setShowcaseItem(deck),
+          },
+          {
             id: "delete",
             label: "Delete",
             icon: <Trash className="h-4 w-4" />,
@@ -471,6 +480,19 @@ export default function DecksPage() {
         confirmVariant="destructive"
         onConfirm={confirmDelete}
       />
+
+      <ItemShowcaseDialog
+        open={!!showcaseItem}
+        title={showcaseItem?.name || "Deck"}
+        fileNameBase={showcaseItem?.name || "deck"}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowcaseItem(null);
+          }
+        }}
+      >
+        {showcaseItem && <BalatroCard type="deck" data={showcaseItem} size="lg" />}
+      </ItemShowcaseDialog>
     </>
   );
 }

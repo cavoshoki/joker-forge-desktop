@@ -20,17 +20,20 @@ import {
   Image as ImageIcon,
   TextT,
   Gear,
+  VideoCamera,
 } from "@phosphor-icons/react";
 import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import { BalatroCard } from "@/components/balatro/balatro-card";
 import { getRandomPlaceholder } from "@/lib/placeholder-assets.ts";
 import { PlaceholderPickerDialog } from "@/components/pages/placeholder-picker-dialog";
 import { processBalatroCardImage } from "@/lib/media/image-processing-utils";
+import { ItemShowcaseDialog } from "@/components/pages/item-showcase-dialog";
 
 export default function BoostersPage() {
   const { data, updateBoosters } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<BoosterData | null>(null);
+  const [showcaseItem, setShowcaseItem] = useState<BoosterData | null>(null);
   const [isPlaceholderPickerOpen, setIsPlaceholderPickerOpen] = useState(false);
   const [placeholderTargetId, setPlaceholderTargetId] = useState<string | null>(
     null,
@@ -379,6 +382,12 @@ export default function BoostersPage() {
             onClick: () => setEditingItem(item),
           },
           {
+            id: "showcase",
+            label: "Showcase",
+            icon: <VideoCamera className="h-4 w-4" />,
+            onClick: () => setShowcaseItem(item),
+          },
+          {
             id: "delete",
             label: "Delete",
             icon: <Trash className="h-4 w-4" />,
@@ -447,6 +456,21 @@ export default function BoostersPage() {
         confirmVariant="destructive"
         onConfirm={confirmDelete}
       />
+
+      <ItemShowcaseDialog
+        open={!!showcaseItem}
+        title={showcaseItem?.name || "Booster"}
+        fileNameBase={showcaseItem?.name || "booster"}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowcaseItem(null);
+          }
+        }}
+      >
+        {showcaseItem && (
+          <BalatroCard type="booster" data={showcaseItem} size="lg" showCost />
+        )}
+      </ItemShowcaseDialog>
     </>
   );
 }

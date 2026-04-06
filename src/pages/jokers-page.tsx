@@ -8,7 +8,7 @@ import {
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useConfirmDelete } from "@/hooks/use-confirm-delete";
 import { useProjectData, useModName } from "@/lib/storage";
-import { JokerData, Rule } from "@/lib/types";
+import { JokerData, Rule, UserVariable } from "@/lib/types";
 import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import {
   COMPARISON_OPERATORS,
@@ -56,6 +56,19 @@ import {
   getUnsupportedRuleParts,
 } from "@/lib/export-compiler-support";
 import { processBalatroCardImage } from "@/lib/media/image-processing-utils";
+import { getAllVariables } from "@/lib/user-variable-utils";
+import { ItemShowcaseDialog } from "@/components/pages/item-showcase-dialog";
+
+const getVariableDisplayValue = (variable: UserVariable): string => {
+  if (variable.type === "suit") return variable.initialSuit || "Spades";
+  if (variable.type === "rank") return variable.initialRank || "Ace";
+  if (variable.type === "key") return variable.initialKey || "none";
+  if (variable.type === "text") return variable.initialText || "Hello";
+  if (variable.type === "pokerhand") {
+    return variable.initialPokerHand || "High Card";
+  }
+  return variable.initialValue?.toString() || "0";
+};
 
 export default function JokersPage() {
   const { data, updateJokers } = useProjectData();
@@ -64,6 +77,7 @@ export default function JokersPage() {
   const [ruleEditingItem, setRuleEditingItem] = useState<JokerData | null>(
     null,
   );
+  const [showcaseItem, setShowcaseItem] = useState<JokerData | null>(null);
   const [isPlaceholderPickerOpen, setIsPlaceholderPickerOpen] = useState(false);
   const [placeholderTargetId, setPlaceholderTargetId] = useState<string | null>(
     null,
@@ -159,6 +173,20 @@ export default function JokersPage() {
   }, []);
 
   const rarityOptions = useMemo(() => getRarityDropdownOptions(), []);
+  const showcasePreviewJoker = useMemo(() => {
+    if (!showcaseItem) {
+      return null;
+    }
+
+    const locVars = getAllVariables(showcaseItem).map(getVariableDisplayValue);
+    return {
+      ...showcaseItem,
+      locVars: {
+        vars: locVars,
+      },
+    } as JokerData;
+  }, [showcaseItem]);
+
   const unlockOperatorOptions = useMemo(
     () =>
       COMPARISON_OPERATORS.map((op) => ({
@@ -885,7 +913,7 @@ export default function JokersPage() {
             id: "showcase",
             label: "Showcase",
             icon: <VideoCamera className="h-5 w-5" weight="regular" />,
-            onClick: () => {},
+            onClick: () => setShowcaseItem(joker),
             variant: "ghost",
           },
           {
@@ -991,6 +1019,28 @@ export default function JokersPage() {
         confirmVariant="destructive"
         onConfirm={confirmDelete}
       />
+
+      <ItemShowcaseDialog
+        open={!!showcaseItem}
+        title={showcaseItem?.name || "Joker"}
+        fileNameBase={showcaseItem?.name || "joker"}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowcaseItem(null);
+          }
+        }}
+      >
+        {showcasePreviewJoker && (
+          <BalatroCard
+            type="joker"
+            data={showcasePreviewJoker}
+            size="lg"
+            rarityName={getRarityDisplayName(showcasePreviewJoker.rarity)}
+            rarityColor={getRarityBadgeColor(showcasePreviewJoker.rarity)}
+            showCost
+          />
+        )}
+      </ItemShowcaseDialog>
     </>
   );
 }
