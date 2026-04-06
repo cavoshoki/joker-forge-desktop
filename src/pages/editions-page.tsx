@@ -508,7 +508,8 @@ export default function EditionsPage() {
             type="edition"
             data={{
               ...showcaseItem,
-              shader: showcaseItem.shader === "" ? undefined : showcaseItem.shader,
+              shader:
+                showcaseItem.shader === "" ? undefined : showcaseItem.shader,
             }}
             editionBadgeColor={showcaseItem.badge_colour}
             size="lg"

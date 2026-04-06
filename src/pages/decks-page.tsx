@@ -491,7 +491,9 @@ export default function DecksPage() {
           }
         }}
       >
-        {showcaseItem && <BalatroCard type="deck" data={showcaseItem} size="lg" />}
+        {showcaseItem && (
+          <BalatroCard type="deck" data={showcaseItem} size="lg" />
+        )}
       </ItemShowcaseDialog>
     </>
   );

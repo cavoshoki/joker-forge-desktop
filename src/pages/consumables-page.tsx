@@ -42,9 +42,7 @@ export default function ConsumablesPage() {
   const [ruleEditingItem, setRuleEditingItem] = useState<ConsumableData | null>(
     null,
   );
-  const [showcaseItem, setShowcaseItem] = useState<ConsumableData | null>(
-    null,
-  );
+  const [showcaseItem, setShowcaseItem] = useState<ConsumableData | null>(null);
   const [isPlaceholderPickerOpen, setIsPlaceholderPickerOpen] = useState(false);
   const [placeholderTargetId, setPlaceholderTargetId] = useState<string | null>(
     null,

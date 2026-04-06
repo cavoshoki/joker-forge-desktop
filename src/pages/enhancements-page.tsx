@@ -41,8 +41,9 @@ export default function EnhancementsPage() {
   const [editingItem, setEditingItem] = useState<EnhancementData | null>(null);
   const [ruleEditingItem, setRuleEditingItem] =
     useState<EnhancementData | null>(null);
-  const [showcaseItem, setShowcaseItem] =
-    useState<EnhancementData | null>(null);
+  const [showcaseItem, setShowcaseItem] = useState<EnhancementData | null>(
+    null,
+  );
   const [isPlaceholderPickerOpen, setIsPlaceholderPickerOpen] = useState(false);
   const [placeholderTargetId, setPlaceholderTargetId] = useState<string | null>(
     null,
