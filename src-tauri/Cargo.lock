@@ -695,7 +695,7 @@ checksum = "e01a3366d27ee9890022452ee61b2b63a67e6f13f58900b651ff5665f0bb1fab"
 dependencies = [
  "libc",
  "option-ext",
-version = "2.0.0-beta"
+ "redox_users",
  "windows-sys 0.61.2",
 ]
 
