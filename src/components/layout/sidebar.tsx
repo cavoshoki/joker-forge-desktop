@@ -19,6 +19,7 @@ import {
   Star,
   Sparkle,
   CaretDown,
+  Gear,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,12 @@ const PROJECT_MAIN = [
     label: "Mod Metadata",
     icon: FileText,
     href: "/metadata",
+    color: "text-foreground",
+  },
+  {
+    label: "Settings",
+    icon: Gear,
+    href: "/settings",
     color: "text-foreground",
   },
 ];

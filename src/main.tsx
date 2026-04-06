@@ -3,12 +3,15 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./index.css";
 import { initializeRuleCatalogFromRust } from "@/components/rule-builder/rule-catalog";
+import { applyThemeFromStorage } from "./lib/theme-manager";
 
 const root = ReactDOM.createRoot(
   document.getElementById("root") as HTMLElement,
 );
 
 async function bootstrap() {
+  applyThemeFromStorage();
+
   try {
     await initializeRuleCatalogFromRust();
   } catch (error) {

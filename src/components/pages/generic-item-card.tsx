@@ -148,7 +148,7 @@ export function GenericItemCard({
     (a) => a.id === "delete" || a.variant === "destructive",
   );
   const duplicateAction = actions.find((a) => a.id === "duplicate");
-  const textActionIds = new Set(["edit", "rules"]);
+  const textActionIds = new Set(["rules"]);
   const textActions = actions.filter(
     (a) => a !== deleteAction && textActionIds.has(a.id),
   );
@@ -156,6 +156,8 @@ export function GenericItemCard({
     (a) =>
       a !== deleteAction && a !== duplicateAction && !textActionIds.has(a.id),
   );
+  const rightAlignedIconActions = iconActions.filter((a) => a.id === "edit");
+  const leadingIconActions = iconActions.filter((a) => a.id !== "edit");
 
   const getPropertyStyles = (
     isActive: boolean,
@@ -487,7 +489,7 @@ export function GenericItemCard({
                   </Tooltip>
                 )}
 
-              {iconActions.map((action) => (
+              {leadingIconActions.map((action) => (
                 <Tooltip key={action.id}>
                   <TooltipTrigger asChild>
                     <Button
@@ -512,8 +514,31 @@ export function GenericItemCard({
               ))}
             </div>
 
-            {textActions.length > 0 && (
+            {(rightAlignedIconActions.length > 0 || textActions.length > 0) && (
               <div className="ml-auto flex items-center gap-2">
+                {rightAlignedIconActions.map((action) => (
+                  <Tooltip key={action.id}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={action.variant || "ghost"}
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          action.onClick();
+                        }}
+                        onPointerDown={(e) => e.preventDefault()}
+                        className={cn(
+                          "h-9 w-9 transition-all hover:scale-110 rounded-lg cursor-pointer",
+                        )}
+                      >
+                        {action.icon}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent className="font-bold">
+                      {action.label}
+                    </TooltipContent>
+                  </Tooltip>
+                ))}
                 {textActions.map((action) => (
                   <Button
                     key={action.id}

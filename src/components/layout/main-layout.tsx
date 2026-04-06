@@ -51,8 +51,7 @@ export function MainLayout({ children, pageTitle }: MainLayoutProps) {
 
     const handleMouseMove = (event: MouseEvent) => {
       const isInEdgeZone =
-        event.clientX <= EDGE_TRIGGER_WIDTH &&
-        event.clientY >= TITLEBAR_HEIGHT;
+        event.clientX <= EDGE_TRIGGER_WIDTH && event.clientY >= TITLEBAR_HEIGHT;
 
       if (isInEdgeZone) {
         if (hoverTimeoutRef.current) {
@@ -114,7 +113,7 @@ export function MainLayout({ children, pageTitle }: MainLayoutProps) {
   }, [pushAlerts]);
 
   return (
-    <div className="flex h-screen w-full bg-background overflow-hidden font-lexend text-foreground transition-colors duration-300">
+    <div className="flex h-screen w-full bg-background overflow-hidden text-foreground transition-colors duration-300">
       <TitleBar />
 
       <div className="pt-9 z-50 relative">

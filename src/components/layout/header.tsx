@@ -1,8 +1,14 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "react-router-dom";
-import { FloppyDisk, Upload, Export, Sun, Moon } from "@phosphor-icons/react";
+import { Link, useLocation } from "react-router-dom";
+import {
+  FloppyDisk,
+  Upload,
+  Export,
+  Sun,
+  Moon,
+  Gear,
+} from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
-import { SettingsPopover } from "@/components/settings/settings-popover";
 import { ExportSuccessDialog } from "@/components/layout/export-success-dialog";
 import {
   getBalatroInstallPath,
@@ -23,6 +29,10 @@ import {
   formatUnsupportedRulesError,
   getUnsupportedRuleParts,
 } from "@/lib/export-compiler-support";
+import {
+  applyThemeFromStorage,
+  subscribeThemeChanges,
+} from "../../lib/theme-manager";
 
 interface HeaderProps {
   title?: string;
@@ -40,13 +50,15 @@ export function Header({ title }: HeaderProps) {
   const { data } = useProjectData();
 
   useEffect(() => {
-    if (theme === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
     setThemePreference(theme);
+    applyThemeFromStorage();
   }, [theme]);
+
+  useEffect(() => {
+    return subscribeThemeChanges(() => {
+      setTheme(getThemePreference());
+    });
+  }, []);
 
   const toggleTheme = () => {
     const newTheme = theme === "light" ? "dark" : "light";
@@ -93,6 +105,8 @@ export function Header({ title }: HeaderProps) {
         return "Vanilla Vouchers";
       case "/vanilla-reforged/decks":
         return "Vanilla Decks";
+      case "/settings":
+        return "Settings";
       default:
         return "Joker Forge";
     }
@@ -157,7 +171,16 @@ export function Header({ title }: HeaderProps) {
         </div>
 
         <div className="flex items-center gap-2">
-          <SettingsPopover />
+          <Button
+            asChild
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer"
+          >
+            <Link to="/settings" aria-label="Open settings">
+              <Gear className="h-5 w-5" weight="duotone" />
+            </Link>
+          </Button>
           <Button
             variant="ghost"
             size="icon"

@@ -14,6 +14,7 @@ import {
   ModMetadata,
 } from "@/lib/types";
 import { updateDataRegistry } from "@/lib/balatro-utils";
+import { clearThemeStorage } from "./theme-manager";
 
 export interface ProjectStats {
   jokers: number;
@@ -63,6 +64,7 @@ const SPLIT_LOCALIZATION_EXPORT_KEY = "joker_forge_split_localization_export";
 const EXPORT_DESTINATION_MODE_KEY = "joker_forge_export_destination_mode";
 const JOKERFORGE_EXPORT_AS_JSON_KEY = "joker_forge_export_as_json";
 const THEME_PREFERENCE_KEY = "joker_forge_theme_preference";
+const THEME_CHANGE_EVENT = "joker_forge_theme_change";
 
 export type ExportDestinationMode = "downloads" | "balatro-mods";
 export type ThemePreference = "light" | "dark";
@@ -487,7 +489,31 @@ export const resetProjectData = () => {
   window.localStorage.removeItem(EXPORT_DESTINATION_MODE_KEY);
   window.localStorage.removeItem(JOKERFORGE_EXPORT_AS_JSON_KEY);
   window.localStorage.removeItem(THEME_PREFERENCE_KEY);
+  clearThemeStorage();
   window.dispatchEvent(new Event(EVENT_KEY));
+};
+
+export const getUiScalePreference = (): string => {
+  if (typeof window === "undefined") return "1";
+  return window.localStorage.getItem(UI_SCALE_KEY) || "1";
+};
+
+export const applyUiScalePreference = (value: string) => {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  const parsed = Number.parseFloat(value);
+  const safeScale = Number.isFinite(parsed) ? parsed : 1;
+  root.style.fontSize = `${safeScale * 16}px`;
+  document.body.style.transform = "";
+  document.body.style.width = "";
+  document.body.style.height = "";
+  document.body.style.transformOrigin = "";
+};
+
+export const setUiScalePreference = (value: string) => {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(UI_SCALE_KEY, value);
+  applyUiScalePreference(value);
 };
 
 export const getThemePreference = (): ThemePreference => {
@@ -500,6 +526,7 @@ export const getThemePreference = (): ThemePreference => {
 export const setThemePreference = (value: ThemePreference) => {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(THEME_PREFERENCE_KEY, value);
+  window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
 };
 
 export const getConfirmDeleteEnabled = (): boolean => {

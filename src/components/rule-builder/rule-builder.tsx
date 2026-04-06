@@ -3368,7 +3368,7 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div
-          className="fixed inset-x-0 bottom-0 top-9 flex bg-background items-center justify-center z-120 font-lexend"
+          className="fixed inset-x-0 bottom-0 top-9 flex bg-background items-center justify-center z-120"
           onContextMenuCapture={handleRuleBuilderContextMenuCapture}
         >
           <div

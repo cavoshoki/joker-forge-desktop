@@ -13,6 +13,7 @@ import BoostersPage from "@/pages/boosters-page";
 import VouchersPage from "@/pages/vouchers-page";
 import SoundsPage from "@/pages/sounds-page";
 import MetadataPage from "@/pages/metadata-page";
+import SettingsPage from "@/pages/settings-page";
 import VanillaReforgedJokersPage from "@/pages/vanilla-reforged/vanilla-reforged-jokers-page";
 import VanillaReforgedConsumablesPage from "@/pages/vanilla-reforged/vanilla-reforged-consumables-page";
 import VanillaReforgedBoostersPage from "@/pages/vanilla-reforged/vanilla-reforged-boosters-page";
@@ -55,6 +56,7 @@ function App() {
                 <Route path="/vouchers" element={<VouchersPage />} />
                 <Route path="/sounds" element={<SoundsPage />} />
                 <Route path="/metadata" element={<MetadataPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
                 <Route
                   path="/vanilla-reforged/jokers"
                   element={<VanillaReforgedJokersPage />}
