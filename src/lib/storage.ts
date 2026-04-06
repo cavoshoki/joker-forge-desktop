@@ -74,6 +74,9 @@ const STORAGE_ERROR_ALERT_THROTTLE_MS = 4000;
 let lastStorageErrorAlertAt = 0;
 let tauriStorePathPromise: Promise<string> | null = null;
 let persistQueue: Promise<void> = Promise.resolve();
+// Tracks whether the next EVENT_KEY dispatch originated locally so we can skip
+// the redundant async re-read in handleStorageChange (state is already in sync).
+let localSavePending = false;
 
 const isTauriRuntime = (): boolean => {
   if (typeof window === "undefined") return false;
@@ -352,6 +355,12 @@ export const useProjectData = () => {
 
   useEffect(() => {
     const handleStorageChange = () => {
+      // Skip if this event was dispatched by our own save — state is already
+      // up-to-date from the synchronous setStore call in updateCollection.
+      if (localSavePending) {
+        localSavePending = false;
+        return;
+      }
       void loadStoredStore().then((nextStore) => {
         setStore(nextStore);
       });
@@ -401,6 +410,7 @@ export const useProjectData = () => {
             const path = await getTauriStorePath();
             await ensureTauriStoreDirectory();
             await writeTextFile(path, JSON.stringify(nextStore));
+            localSavePending = true;
             setTimeout(() => {
               window.dispatchEvent(new Event(EVENT_KEY));
             }, 0);
@@ -413,6 +423,7 @@ export const useProjectData = () => {
 
         try {
           window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextStore));
+          localSavePending = true;
           setTimeout(() => {
             window.dispatchEvent(new Event(EVENT_KEY));
           }, 0);

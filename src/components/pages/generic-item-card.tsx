@@ -1,5 +1,10 @@
-import { useState, useRef, useEffect, ReactNode } from "react";
-import { CurrencyDollar, Image, Trash } from "@phosphor-icons/react";
+import { useState, useRef, useEffect, ReactNode, isValidElement } from "react";
+import {
+  CurrencyDollar,
+  Image,
+  PaintBrush,
+  Trash,
+} from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -7,6 +12,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { PixelArtEditorDialog } from "@/components/pages/pixel-art-editor-dialog";
 import { cn } from "@/lib/utils";
 import { slugify } from "@/lib/balatro-utils";
 import { RaritySelect } from "@/components/balatro/rarity-select";
@@ -55,13 +61,40 @@ interface GenericItemCardProps {
     cost?: number;
     idValue?: number;
     objectKey?: string;
+    image?: string;
+    placeholderCreditIndex?: number | undefined;
+    placeholderCategory?: string | undefined;
     rarity?: number | string;
     set?: string;
   }) => void;
   onDuplicate?: () => void;
+  editableImageSrc?: string;
   showPlaceholderPickerButton?: boolean;
   onOpenPlaceholderPicker?: () => void;
 }
+
+const extractFirstImageSrc = (node: ReactNode): string | undefined => {
+  if (!node) return undefined;
+  if (!isValidElement(node)) return undefined;
+
+  if (typeof node.type === "string" && node.type.toLowerCase() === "img") {
+    const src = (node.props as { src?: unknown }).src;
+    return typeof src === "string" ? src : undefined;
+  }
+
+  const children = (node.props as { children?: ReactNode }).children;
+  if (!children) return undefined;
+
+  if (Array.isArray(children)) {
+    for (const child of children) {
+      const found = extractFirstImageSrc(child);
+      if (found) return found;
+    }
+    return undefined;
+  }
+
+  return extractFirstImageSrc(children);
+};
 
 export function GenericItemCard({
   image,
@@ -78,10 +111,14 @@ export function GenericItemCard({
   reforged = false,
   onUpdate,
   onDuplicate,
+  editableImageSrc,
   showPlaceholderPickerButton = false,
   onOpenPlaceholderPicker,
 }: GenericItemCardProps) {
   const isReadOnly = reforged;
+  const resolvedEditableImageSrc =
+    editableImageSrc || extractFirstImageSrc(image);
+  const [isPixelEditorOpen, setIsPixelEditorOpen] = useState(false);
   const [editingField, setEditingField] = useState<
     "none" | "name" | "desc" | "cost" | "id"
   >("none");
@@ -499,6 +536,28 @@ export function GenericItemCard({
                   </Tooltip>
                 )}
 
+              {showPlaceholderPickerButton && !isReadOnly && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsPixelEditorOpen(true);
+                      }}
+                      onPointerDown={(e) => e.preventDefault()}
+                      className="h-9 w-9 transition-all hover:scale-110 rounded-lg cursor-pointer"
+                    >
+                      <PaintBrush className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent className="font-bold">
+                    Pixel Editor
+                  </TooltipContent>
+                </Tooltip>
+              )}
+
               {leadingIconActions.map((action) => (
                 <Tooltip key={action.id}>
                   <TooltipTrigger asChild>
@@ -579,6 +638,20 @@ export function GenericItemCard({
           </div>
         </div>
       </div>
+
+      <PixelArtEditorDialog
+        open={isPixelEditorOpen}
+        onOpenChange={setIsPixelEditorOpen}
+        itemName={name}
+        sourceImage={resolvedEditableImageSrc}
+        onSaveToItem={(imageDataUrl) =>
+          onUpdate({
+            image: imageDataUrl,
+            placeholderCreditIndex: undefined,
+            placeholderCategory: undefined,
+          })
+        }
+      />
     </div>
   );
 }
