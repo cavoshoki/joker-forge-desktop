@@ -37,7 +37,7 @@ import { processBalatroCardImage } from "@/lib/media/image-processing-utils";
 import { ItemShowcaseDialog } from "@/components/pages/item-showcase-dialog";
 
 export default function DecksPage() {
-  const { data, updateDecks } = useProjectData();
+  const { data, updateDecks, isHydrating } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<DeckData | null>(null);
   const [ruleEditingItem, setRuleEditingItem] = useState<DeckData | null>(null);
@@ -412,6 +412,7 @@ export default function DecksPage() {
         title="Decks"
         subtitle={modName}
         items={data.decks}
+        isLoading={isHydrating}
         onAddNew={handleCreate}
         addNewLabel="Create Deck"
         searchProps={searchProps}

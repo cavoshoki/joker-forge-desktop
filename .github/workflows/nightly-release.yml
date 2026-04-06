@@ -122,11 +122,14 @@ jobs:
       - name: Sync app version
         run: npm run version:sync
 
+      - name: Prepare nightly app identity and version
+        run: node scripts/prepare-release-channel.cjs --channel nightly --version "${{ needs.prepare.outputs.nightly_version }}"
+
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build Tauri bundle
-        run: npm run tauri build -- ${{ matrix.bundle_args }}
+        run: npx tauri build ${{ matrix.bundle_args }}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4

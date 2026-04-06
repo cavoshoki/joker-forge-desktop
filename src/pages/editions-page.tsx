@@ -33,7 +33,7 @@ import { RuleBuilder } from "@/components/rule-builder";
 import { ItemShowcaseDialog } from "@/components/pages/item-showcase-dialog";
 
 export default function EditionsPage() {
-  const { data, updateEditions } = useProjectData();
+  const { data, updateEditions, isHydrating } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<EditionData | null>(null);
   const [ruleEditingItem, setRuleEditingItem] = useState<EditionData | null>(
@@ -429,6 +429,7 @@ export default function EditionsPage() {
         title="Editions"
         subtitle={modName}
         items={data.editions}
+        isLoading={isHydrating}
         onAddNew={handleCreate}
         addNewLabel="Create Edition"
         searchProps={searchProps}

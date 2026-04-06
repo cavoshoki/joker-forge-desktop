@@ -35,7 +35,7 @@ const normalizeHex = (value: string | undefined | null): string => {
 };
 
 export default function RaritiesPage() {
-  const { data, updateRarities } = useProjectData();
+  const { data, updateRarities, isHydrating } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<RarityData | null>(null);
 
@@ -327,6 +327,7 @@ export default function RaritiesPage() {
         title="Rarities"
         subtitle={modName}
         items={data.rarities}
+        isLoading={isHydrating}
         onAddNew={handleCreate}
         addNewLabel="Create Rarity"
         searchProps={searchProps}

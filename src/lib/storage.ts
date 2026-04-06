@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
+import { appDataDir, dirname, join } from "@tauri-apps/api/path";
+import { mkdir, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import {
   JokerData,
   ConsumableData,
@@ -14,6 +16,7 @@ import {
   ModMetadata,
 } from "@/lib/types";
 import { updateDataRegistry } from "@/lib/balatro-utils";
+import { pushGlobalAlert } from "@/lib/global-alerts-bus";
 import { clearThemeStorage } from "./theme-manager";
 
 export interface ProjectStats {
@@ -54,6 +57,7 @@ interface ProjectStore {
 }
 
 const STORAGE_KEY = "joker_forge_project_data";
+const STORAGE_FILE_NAME = "joker_forge_project_data.json";
 const EVENT_KEY = "joker_forge_update";
 const CONFIRM_DELETE_KEY = "joker_forge_confirm_delete";
 const UI_SCALE_KEY = "app-ui-scale";
@@ -65,6 +69,66 @@ const EXPORT_DESTINATION_MODE_KEY = "joker_forge_export_destination_mode";
 const JOKERFORGE_EXPORT_AS_JSON_KEY = "joker_forge_export_as_json";
 const THEME_PREFERENCE_KEY = "joker_forge_theme_preference";
 const THEME_CHANGE_EVENT = "joker_forge_theme_change";
+const STORAGE_ERROR_ALERT_THROTTLE_MS = 4000;
+
+let lastStorageErrorAlertAt = 0;
+let tauriStorePathPromise: Promise<string> | null = null;
+let persistQueue: Promise<void> = Promise.resolve();
+
+const isTauriRuntime = (): boolean => {
+  if (typeof window === "undefined") return false;
+  const tauriWindow = window as Window & {
+    __TAURI_INTERNALS__?: unknown;
+    __TAURI__?: unknown;
+  };
+  return Boolean(tauriWindow.__TAURI_INTERNALS__ || tauriWindow.__TAURI__);
+};
+
+const getTauriStorePath = async (): Promise<string> => {
+  if (!tauriStorePathPromise) {
+    tauriStorePathPromise = appDataDir().then((dir) =>
+      join(dir, STORAGE_FILE_NAME),
+    );
+  }
+  return tauriStorePathPromise;
+};
+
+const ensureTauriStoreDirectory = async (): Promise<void> => {
+  const storePath = await getTauriStorePath();
+  const parentDir = await dirname(storePath);
+  await mkdir(parentDir, { recursive: true });
+};
+
+const isQuotaExceededError = (error: unknown): boolean => {
+  if (!(error instanceof DOMException)) return false;
+  return error.name === "QuotaExceededError" || error.code === 22;
+};
+
+const maybeShowStorageErrorAlert = (error: unknown) => {
+  if (typeof window === "undefined") return;
+
+  const now = Date.now();
+  if (now - lastStorageErrorAlertAt < STORAGE_ERROR_ALERT_THROTTLE_MS) {
+    return;
+  }
+  lastStorageErrorAlertAt = now;
+
+  if (isQuotaExceededError(error)) {
+    pushGlobalAlert({
+      type: "danger",
+      title: "Save Failed",
+      message:
+        "Project data is too large for browser storage. Import could not be fully saved. Remove large embedded assets or reduce project size and try again.",
+    });
+    return;
+  }
+
+  pushGlobalAlert({
+    type: "danger",
+    title: "Save Failed",
+    message: "Failed to save project data to local storage.",
+  });
+};
 
 export type ExportDestinationMode = "downloads" | "balatro-mods";
 export type ThemePreference = "light" | "dark";
@@ -120,6 +184,12 @@ const DEFAULT_DATA: ProjectData = {
   enhancements: [],
   sounds: [],
 };
+
+const createDefaultStore = (): ProjectStore => ({
+  version: 2,
+  currentProjectId: DEFAULT_METADATA.id,
+  projects: { [DEFAULT_METADATA.id]: DEFAULT_DATA },
+});
 
 // --- Sanitization Logic ---
 
@@ -187,89 +257,118 @@ const ensureUniqueProjectId = (
   return nextId;
 };
 
-const getStoredStore = (): ProjectStore => {
-  if (typeof window === "undefined") {
+const sanitizeStoreFromUnknown = (parsed: unknown): ProjectStore => {
+  if (!parsed || typeof parsed !== "object") return createDefaultStore();
+
+  const parsedObject = parsed as {
+    version?: unknown;
+    projects?: unknown;
+    currentProjectId?: unknown;
+    metadata?: unknown;
+  };
+
+  if (
+    parsedObject.version === 2 &&
+    parsedObject.projects &&
+    typeof parsedObject.currentProjectId === "string"
+  ) {
+    const sanitizedProjects: Record<string, ProjectData> = {};
+    Object.entries(
+      parsedObject.projects as Record<string, ProjectData>,
+    ).forEach(([key, value]) => {
+      const sanitized = sanitizeProjectData(value);
+      sanitizedProjects[key] = {
+        ...sanitized,
+        metadata: { ...sanitized.metadata, id: key },
+      };
+    });
+
+    const fallbackId = Object.keys(sanitizedProjects)[0];
     return {
       version: 2,
-      currentProjectId: DEFAULT_METADATA.id,
-      projects: { [DEFAULT_METADATA.id]: DEFAULT_DATA },
+      currentProjectId:
+        parsedObject.currentProjectId &&
+        sanitizedProjects[parsedObject.currentProjectId]
+          ? parsedObject.currentProjectId
+          : fallbackId || DEFAULT_METADATA.id,
+      projects:
+        Object.keys(sanitizedProjects).length > 0
+          ? sanitizedProjects
+          : { [DEFAULT_METADATA.id]: DEFAULT_DATA },
     };
   }
+
+  if (parsedObject.metadata) {
+    const legacyProject = sanitizeProjectData(parsedObject);
+    const legacyId = legacyProject.metadata.id || DEFAULT_METADATA.id;
+    return {
+      version: 2,
+      currentProjectId: legacyId,
+      projects: { [legacyId]: legacyProject },
+    };
+  }
+
+  return createDefaultStore();
+};
+
+const loadStoreFromLocalStorage = (): ProjectStore => {
+  if (typeof window === "undefined") {
+    return createDefaultStore();
+  }
+
   try {
     const item = window.localStorage.getItem(STORAGE_KEY);
-    if (!item) {
-      return {
-        version: 2,
-        currentProjectId: DEFAULT_METADATA.id,
-        projects: { [DEFAULT_METADATA.id]: DEFAULT_DATA },
-      };
-    }
-
-    const parsed = JSON.parse(item);
-
-    if (parsed?.version === 2 && parsed.projects && parsed.currentProjectId) {
-      const sanitizedProjects: Record<string, ProjectData> = {};
-      Object.entries(parsed.projects as Record<string, ProjectData>).forEach(
-        ([key, value]) => {
-          const sanitized = sanitizeProjectData(value);
-          sanitizedProjects[key] = {
-            ...sanitized,
-            metadata: { ...sanitized.metadata, id: key },
-          };
-        },
-      );
-
-      const fallbackId = Object.keys(sanitizedProjects)[0];
-      return {
-        version: 2,
-        currentProjectId:
-          parsed.currentProjectId && sanitizedProjects[parsed.currentProjectId]
-            ? parsed.currentProjectId
-            : fallbackId || DEFAULT_METADATA.id,
-        projects:
-          Object.keys(sanitizedProjects).length > 0
-            ? sanitizedProjects
-            : { [DEFAULT_METADATA.id]: DEFAULT_DATA },
-      };
-    }
-
-    if (parsed?.metadata) {
-      const legacyProject = sanitizeProjectData(parsed);
-      const legacyId = legacyProject.metadata.id || DEFAULT_METADATA.id;
-      return {
-        version: 2,
-        currentProjectId: legacyId,
-        projects: { [legacyId]: legacyProject },
-      };
-    }
-
-    return {
-      version: 2,
-      currentProjectId: DEFAULT_METADATA.id,
-      projects: { [DEFAULT_METADATA.id]: DEFAULT_DATA },
-    };
+    if (!item) return createDefaultStore();
+    return sanitizeStoreFromUnknown(JSON.parse(item));
   } catch (error) {
     console.warn("Error reading/sanitizing localStorage", error);
-    return {
-      version: 2,
-      currentProjectId: DEFAULT_METADATA.id,
-      projects: { [DEFAULT_METADATA.id]: DEFAULT_DATA },
-    };
+    return createDefaultStore();
   }
 };
 
+const loadStoreFromTauriFile = async (): Promise<ProjectStore | null> => {
+  if (!isTauriRuntime()) return null;
+
+  try {
+    const path = await getTauriStorePath();
+    const raw = await readTextFile(path);
+    return sanitizeStoreFromUnknown(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+};
+
+const loadStoredStore = async (): Promise<ProjectStore> => {
+  const tauriStore = await loadStoreFromTauriFile();
+  if (tauriStore) return tauriStore;
+  return loadStoreFromLocalStorage();
+};
+
+const getStoredStore = (): ProjectStore => loadStoreFromLocalStorage();
+
 export const useProjectData = () => {
   const [store, setStore] = useState<ProjectStore>(getStoredStore());
+  const [isHydrating, setIsHydrating] = useState<boolean>(isTauriRuntime());
 
   useEffect(() => {
     const handleStorageChange = () => {
-      setStore(getStoredStore());
+      void loadStoredStore().then((nextStore) => {
+        setStore(nextStore);
+      });
     };
+
+    let isMounted = true;
+    void loadStoredStore().then((nextStore) => {
+      if (!isMounted) return;
+      setStore(nextStore);
+      setIsHydrating(false);
+    });
 
     window.addEventListener(EVENT_KEY, handleStorageChange);
     window.addEventListener("storage", handleStorageChange);
 
     return () => {
+      isMounted = false;
       window.removeEventListener(EVENT_KEY, handleStorageChange);
       window.removeEventListener("storage", handleStorageChange);
     };
@@ -294,47 +393,72 @@ export const useProjectData = () => {
     );
   }, [currentProject]);
 
-  const saveStore = (nextStore: ProjectStore) => {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextStore));
-      setTimeout(() => {
-        window.dispatchEvent(new Event(EVENT_KEY));
-      }, 0);
-    } catch (error) {
-      console.warn("Error saving to localStorage", error);
-    }
-  };
+  const saveStore = useCallback((nextStore: ProjectStore) => {
+    persistQueue = persistQueue
+      .then(async () => {
+        if (isTauriRuntime()) {
+          try {
+            const path = await getTauriStorePath();
+            await ensureTauriStoreDirectory();
+            await writeTextFile(path, JSON.stringify(nextStore));
+            setTimeout(() => {
+              window.dispatchEvent(new Event(EVENT_KEY));
+            }, 0);
+            return;
+          } catch (error) {
+            console.warn("Error saving store to file", error);
+            maybeShowStorageErrorAlert(error);
+          }
+        }
 
-  const updateMetadata = useCallback((updates: Partial<ModMetadata>) => {
-    setStore((prev) => {
-      const currentId = prev.currentProjectId;
-      const current = prev.projects[currentId] || DEFAULT_DATA;
-      const updatedProject: ProjectData = {
-        ...current,
-        metadata: { ...current.metadata, ...updates },
-      };
+        try {
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextStore));
+          setTimeout(() => {
+            window.dispatchEvent(new Event(EVENT_KEY));
+          }, 0);
+        } catch (error) {
+          console.warn("Error saving to localStorage", error);
+          maybeShowStorageErrorAlert(error);
+        }
+      })
+      .catch((error) => {
+        console.warn("Unhandled persistence error", error);
+      });
+  }, []);
 
-      if (updates.id && updates.id !== currentId) {
-        const { [currentId]: _removed, ...remaining } = prev.projects;
-        const uniqueId = ensureUniqueProjectId(updates.id, remaining);
-        updatedProject.metadata.id = uniqueId;
+  const updateMetadata = useCallback(
+    (updates: Partial<ModMetadata>) => {
+      setStore((prev) => {
+        const currentId = prev.currentProjectId;
+        const current = prev.projects[currentId] || DEFAULT_DATA;
+        const updatedProject: ProjectData = {
+          ...current,
+          metadata: { ...current.metadata, ...updates },
+        };
+
+        if (updates.id && updates.id !== currentId) {
+          const { [currentId]: _removed, ...remaining } = prev.projects;
+          const uniqueId = ensureUniqueProjectId(updates.id, remaining);
+          updatedProject.metadata.id = uniqueId;
+          const nextStore = {
+            ...prev,
+            currentProjectId: uniqueId,
+            projects: { ...remaining, [uniqueId]: updatedProject },
+          };
+          saveStore(nextStore);
+          return nextStore;
+        }
+
         const nextStore = {
           ...prev,
-          currentProjectId: uniqueId,
-          projects: { ...remaining, [uniqueId]: updatedProject },
+          projects: { ...prev.projects, [currentId]: updatedProject },
         };
         saveStore(nextStore);
         return nextStore;
-      }
-
-      const nextStore = {
-        ...prev,
-        projects: { ...prev.projects, [currentId]: updatedProject },
-      };
-      saveStore(nextStore);
-      return nextStore;
-    });
-  }, []);
+      });
+    },
+    [saveStore],
+  );
 
   const updateCollection = useCallback(
     <K extends keyof ProjectData>(key: K, items: ProjectData[K]) => {
@@ -359,17 +483,20 @@ export const useProjectData = () => {
         return nextStore;
       });
     },
-    [],
+    [saveStore],
   );
 
-  const switchProject = useCallback((projectId: string) => {
-    setStore((prev) => {
-      if (!prev.projects[projectId]) return prev;
-      const nextStore = { ...prev, currentProjectId: projectId };
-      saveStore(nextStore);
-      return nextStore;
-    });
-  }, []);
+  const switchProject = useCallback(
+    (projectId: string) => {
+      setStore((prev) => {
+        if (!prev.projects[projectId]) return prev;
+        const nextStore = { ...prev, currentProjectId: projectId };
+        saveStore(nextStore);
+        return nextStore;
+      });
+    },
+    [saveStore],
+  );
 
   const createProject = useCallback(
     (metadataOverrides: Partial<ModMetadata> = {}) => {
@@ -402,45 +529,48 @@ export const useProjectData = () => {
       });
       return createdId;
     },
-    [],
+    [saveStore],
   );
 
-  const deleteProject = useCallback((projectId: string) => {
-    setStore((prev) => {
-      if (!prev.projects[projectId]) return prev;
+  const deleteProject = useCallback(
+    (projectId: string) => {
+      setStore((prev) => {
+        if (!prev.projects[projectId]) return prev;
 
-      const { [projectId]: _removed, ...remaining } = prev.projects;
-      const remainingIds = Object.keys(remaining);
+        const { [projectId]: _removed, ...remaining } = prev.projects;
+        const remainingIds = Object.keys(remaining);
 
-      if (remainingIds.length === 0) {
-        const fallbackId = DEFAULT_METADATA.id;
-        const fallbackProject: ProjectData = {
-          ...DEFAULT_DATA,
-          metadata: { ...DEFAULT_METADATA, id: fallbackId },
-        };
+        if (remainingIds.length === 0) {
+          const fallbackId = DEFAULT_METADATA.id;
+          const fallbackProject: ProjectData = {
+            ...DEFAULT_DATA,
+            metadata: { ...DEFAULT_METADATA, id: fallbackId },
+          };
+          const nextStore: ProjectStore = {
+            version: 2,
+            currentProjectId: fallbackId,
+            projects: { [fallbackId]: fallbackProject },
+          };
+          saveStore(nextStore);
+          return nextStore;
+        }
+
+        const nextCurrentId =
+          prev.currentProjectId === projectId
+            ? remainingIds[0]
+            : prev.currentProjectId;
+
         const nextStore: ProjectStore = {
-          version: 2,
-          currentProjectId: fallbackId,
-          projects: { [fallbackId]: fallbackProject },
+          ...prev,
+          currentProjectId: nextCurrentId,
+          projects: remaining,
         };
         saveStore(nextStore);
         return nextStore;
-      }
-
-      const nextCurrentId =
-        prev.currentProjectId === projectId
-          ? remainingIds[0]
-          : prev.currentProjectId;
-
-      const nextStore: ProjectStore = {
-        ...prev,
-        currentProjectId: nextCurrentId,
-        projects: remaining,
-      };
-      saveStore(nextStore);
-      return nextStore;
-    });
-  }, []);
+      });
+    },
+    [saveStore],
+  );
 
   const projects = Object.values(store.projects).map((project) => ({
     id: project.metadata.id,
@@ -449,6 +579,7 @@ export const useProjectData = () => {
   }));
 
   return {
+    isHydrating,
     data: currentProject,
     projects,
     currentProjectId: store.currentProjectId,
@@ -490,6 +621,22 @@ export const resetProjectData = () => {
   window.localStorage.removeItem(JOKERFORGE_EXPORT_AS_JSON_KEY);
   window.localStorage.removeItem(THEME_PREFERENCE_KEY);
   clearThemeStorage();
+  if (isTauriRuntime()) {
+    const defaultStore = createDefaultStore();
+    persistQueue = persistQueue
+      .then(async () => {
+        try {
+          const path = await getTauriStorePath();
+          await ensureTauriStoreDirectory();
+          await writeTextFile(path, JSON.stringify(defaultStore));
+        } catch (error) {
+          console.warn("Error resetting file-backed store", error);
+        }
+      })
+      .catch((error) => {
+        console.warn("Unhandled reset persistence error", error);
+      });
+  }
   window.dispatchEvent(new Event(EVENT_KEY));
 };
 

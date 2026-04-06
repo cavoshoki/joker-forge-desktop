@@ -36,7 +36,7 @@ import { processBalatroCardImage } from "@/lib/media/image-processing-utils";
 import { ItemShowcaseDialog } from "@/components/pages/item-showcase-dialog";
 
 export default function EnhancementsPage() {
-  const { data, updateEnhancements } = useProjectData();
+  const { data, updateEnhancements, isHydrating } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<EnhancementData | null>(null);
   const [ruleEditingItem, setRuleEditingItem] =
@@ -414,6 +414,7 @@ export default function EnhancementsPage() {
         title="Enhancements"
         subtitle={modName}
         items={data.enhancements}
+        isLoading={isHydrating}
         onAddNew={handleCreate}
         addNewLabel="Create Enhancement"
         searchProps={searchProps}

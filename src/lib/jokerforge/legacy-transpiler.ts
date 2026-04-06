@@ -514,6 +514,98 @@ const resolveLegacyRoot = (payload: unknown): Record<string, unknown> => {
   return obj;
 };
 
+const LEGACY_COLLECTION_TO_PROJECT_KEY = {
+  jokers: "jokers",
+  sounds: "sounds",
+  consumables: "consumables",
+  customRarities: "rarities",
+  rarities: "rarities",
+  consumableSets: "consumableSets",
+  boosters: "boosters",
+  enhancements: "enhancements",
+  seals: "seals",
+  editions: "editions",
+  vouchers: "vouchers",
+  decks: "decks",
+} as const;
+
+type ProjectCollectionKey =
+  (typeof LEGACY_COLLECTION_TO_PROJECT_KEY)[keyof typeof LEGACY_COLLECTION_TO_PROJECT_KEY];
+
+const getLegacyExpectedCounts = (
+  legacyPayload: unknown,
+): Partial<Record<ProjectCollectionKey, number>> => {
+  const root = resolveLegacyRoot(legacyPayload);
+  const expected: Partial<Record<ProjectCollectionKey, number>> = {};
+
+  LEGACY_COLLECTION_KEYS.forEach((legacyKey) => {
+    const value = root[legacyKey];
+    if (!Array.isArray(value)) return;
+
+    if (legacyKey === "rarities" && Array.isArray(root.customRarities)) {
+      return;
+    }
+
+    const projectKey = LEGACY_COLLECTION_TO_PROJECT_KEY[legacyKey];
+    expected[projectKey] = value.length;
+  });
+
+  return expected;
+};
+
+const getProjectCollectionCounts = (
+  project: ProjectData,
+): Record<ProjectCollectionKey, number> => {
+  return {
+    jokers: project.jokers.length,
+    sounds: project.sounds.length,
+    consumables: project.consumables.length,
+    rarities: project.rarities.length,
+    consumableSets: project.consumableSets.length,
+    boosters: project.boosters.length,
+    enhancements: project.enhancements.length,
+    seals: project.seals.length,
+    editions: project.editions.length,
+    vouchers: project.vouchers.length,
+    decks: project.decks.length,
+  };
+};
+
+const formatCollectionName = (key: ProjectCollectionKey): string => {
+  switch (key) {
+    case "consumableSets":
+      return "consumable sets";
+    default:
+      return key;
+  }
+};
+
+const assertLegacyImportCompleteness = (
+  legacyPayload: unknown,
+  project: ProjectData,
+): void => {
+  const expected = getLegacyExpectedCounts(legacyPayload);
+  const actual = getProjectCollectionCounts(project);
+
+  const missingCollections = (Object.keys(expected) as ProjectCollectionKey[])
+    .map((key) => {
+      const expectedCount = expected[key];
+      if (typeof expectedCount !== "number") return null;
+
+      const actualCount = actual[key];
+      if (actualCount >= expectedCount) return null;
+
+      return `${formatCollectionName(key)} ${actualCount}/${expectedCount}`;
+    })
+    .filter((value): value is string => value !== null);
+
+  if (missingCollections.length === 0) return;
+
+  throw new Error(
+    `Legacy import appears incomplete. Missing items detected: ${missingCollections.join(", ")}.`,
+  );
+};
+
 export const isLegacyJokerforgePayload = (payload: unknown): boolean => {
   const obj = resolveLegacyRoot(payload);
   if (!asObject(obj.metadata)) return false;
@@ -587,5 +679,7 @@ export const normalizeProjectData = (payload: unknown): ProjectData => {
 export const transpileLegacyJokerforge = (
   legacyPayload: unknown,
 ): ProjectData => {
-  return normalizeProjectData(legacyPayload);
+  const project = normalizeProjectData(legacyPayload);
+  assertLegacyImportCompleteness(legacyPayload, project);
+  return project;
 };

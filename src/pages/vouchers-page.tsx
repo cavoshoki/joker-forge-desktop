@@ -43,7 +43,7 @@ import { processBalatroCardImage } from "@/lib/media/image-processing-utils";
 import { ItemShowcaseDialog } from "@/components/pages/item-showcase-dialog";
 
 export default function VouchersPage() {
-  const { data, updateVouchers } = useProjectData();
+  const { data, updateVouchers, isHydrating } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<VoucherData | null>(null);
   const [ruleEditingItem, setRuleEditingItem] = useState<VoucherData | null>(
@@ -553,6 +553,7 @@ export default function VouchersPage() {
         title="Vouchers"
         subtitle={modName}
         items={data.vouchers}
+        isLoading={isHydrating}
         onAddNew={handleCreate}
         addNewLabel="Create Voucher"
         searchProps={searchProps}

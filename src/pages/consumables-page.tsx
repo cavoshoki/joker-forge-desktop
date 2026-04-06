@@ -36,7 +36,7 @@ import { processBalatroCardImage } from "@/lib/media/image-processing-utils";
 import { ItemShowcaseDialog } from "@/components/pages/item-showcase-dialog";
 
 export default function ConsumablesPage() {
-  const { data, updateConsumables } = useProjectData();
+  const { data, updateConsumables, isHydrating } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<ConsumableData | null>(null);
   const [ruleEditingItem, setRuleEditingItem] = useState<ConsumableData | null>(
@@ -393,6 +393,7 @@ export default function ConsumablesPage() {
         title="Consumables"
         subtitle={modName}
         items={data.consumables}
+        isLoading={isHydrating}
         onAddNew={handleCreate}
         addNewLabel="Create Consumable"
         searchProps={searchProps}

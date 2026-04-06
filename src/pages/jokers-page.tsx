@@ -71,7 +71,7 @@ const getVariableDisplayValue = (variable: UserVariable): string => {
 };
 
 export default function JokersPage() {
-  const { data, updateJokers } = useProjectData();
+  const { data, updateJokers, isHydrating } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<JokerData | null>(null);
   const [ruleEditingItem, setRuleEditingItem] = useState<JokerData | null>(
@@ -949,6 +949,7 @@ export default function JokersPage() {
         title="Jokers"
         subtitle={modName}
         items={data.jokers}
+        isLoading={isHydrating}
         onAddNew={handleCreate}
         addNewLabel="Create Joker"
         searchProps={searchProps}

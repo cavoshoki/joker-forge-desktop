@@ -34,7 +34,7 @@ import { processBalatroCardImage } from "@/lib/media/image-processing-utils";
 import { ItemShowcaseDialog } from "@/components/pages/item-showcase-dialog";
 
 export default function SealsPage() {
-  const { data, updateSeals } = useProjectData();
+  const { data, updateSeals, isHydrating } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<SealData | null>(null);
   const [ruleEditingItem, setRuleEditingItem] = useState<SealData | null>(null);
@@ -368,6 +368,7 @@ export default function SealsPage() {
         title="Seals"
         subtitle={modName}
         items={data.seals}
+        isLoading={isHydrating}
         onAddNew={handleCreate}
         addNewLabel="Create Seal"
         searchProps={searchProps}

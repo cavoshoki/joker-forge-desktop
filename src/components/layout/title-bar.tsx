@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type MouseEvent } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
 import { getVersion } from "@tauri-apps/api/app";
@@ -12,15 +12,18 @@ import {
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { useModName } from "@/lib/storage";
+import { detectNightlyChannel } from "@/lib/app-channel";
 
 export function TitleBar() {
   const [isMaximized, setIsMaximized] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [appVersion, setAppVersion] = useState("");
+  const [isNightly, setIsNightly] = useState(false);
   const f11LockRef = useRef(false);
   const f11UnlockTimeoutRef = useRef<number | null>(null);
   const appWindow = getCurrentWindow();
   const modName = useModName();
+  const appLabel = isNightly ? "Joker Forge Nightly" : "Joker Forge";
 
   useEffect(() => {
     const init = async () => {
@@ -34,7 +37,15 @@ export function TitleBar() {
         const v = await getVersion();
         setAppVersion(v);
       } catch (e) {
-        setAppVersion("2.0.0");
+        setAppVersion("2.0.0-beta");
+      }
+      try {
+        const nightly = await detectNightlyChannel("title-bar");
+        setIsNightly(nightly);
+        console.log("[nightly-detect:title-bar] state", { nightly });
+      } catch (e) {
+        setIsNightly(false);
+        console.log("[nightly-detect:title-bar] failed", e);
       }
     };
 
@@ -105,6 +116,19 @@ export function TitleBar() {
     } catch (e) {}
   };
 
+  const handleTitleBarDoubleClick = async (
+    event: MouseEvent<HTMLDivElement>,
+  ) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("button")) return;
+    if (isFullscreen) return;
+
+    try {
+      await appWindow.toggleMaximize();
+      setIsMaximized(await appWindow.isMaximized());
+    } catch (e) {}
+  };
+
   const handleFullscreen = async () => {
     try {
       const next = !isFullscreen;
@@ -122,6 +146,7 @@ export function TitleBar() {
   return (
     <div
       data-tauri-drag-region
+      onDoubleClick={handleTitleBarDoubleClick}
       className={cn(
         "h-9 flex items-center justify-between fixed top-0 left-0 right-0 z-50",
         "bg-background/95 backdrop-blur-md border-b border-border",
@@ -133,10 +158,15 @@ export function TitleBar() {
         data-tauri-drag-region
       >
         <span className="text-xs font-bold tracking-widest text-muted-foreground uppercase flex items-center gap-1.5">
-          Joker Forge
+          {appLabel}
           <span className="bg-primary/10 text-primary px-1.5 rounded text-[10px] tracking-normal">
             v{appVersion}
           </span>
+          {isNightly ? (
+            <span className="bg-blue-900/70 text-blue-100 px-1.5 rounded text-[10px] tracking-normal">
+              Nightly
+            </span>
+          ) : null}
         </span>
       </div>
 

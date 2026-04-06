@@ -1,4 +1,12 @@
-import { useState, useMemo, ReactNode, memo } from "react";
+import {
+  useState,
+  useMemo,
+  useEffect,
+  useDeferredValue,
+  useRef,
+  ReactNode,
+  memo,
+} from "react";
 import {
   Plus,
   MagnifyingGlass,
@@ -19,8 +27,13 @@ import {
   DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+
+const INITIAL_VISIBLE_ITEMS = 24;
+const VISIBLE_ITEMS_BATCH_SIZE = 24;
+const MAX_ANIMATED_ITEM_COUNT = 80;
 
 export interface SortOption<T> {
   label: string;
@@ -51,6 +64,7 @@ interface GenericItemPageProps<T> {
   renderCard: (item: T) => ReactNode;
   headerContent?: ReactNode; // For extra custom stats/info if needed
   reforged?: boolean;
+  isLoading?: boolean;
 }
 
 function GenericItemPageInternal<T extends { id: string }>({
@@ -66,19 +80,22 @@ function GenericItemPageInternal<T extends { id: string }>({
   renderCard,
   headerContent,
   reforged = false,
+  isLoading = false,
 }: GenericItemPageProps<T>) {
   const [searchTerm, setSearchTerm] = useState("");
+  const deferredSearchTerm = useDeferredValue(searchTerm);
   const [currentSort, setCurrentSort] = useState(
     defaultSort || sortOptions[0]?.value,
   );
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [activeFilters, setActiveFilters] = useState<Record<string, any>>({});
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_ITEMS);
 
   const processedItems = useMemo(() => {
     let result = [...items];
 
-    if (searchTerm && searchProps) {
-      const lowerTerm = searchTerm.toLowerCase();
+    if (deferredSearchTerm && searchProps) {
+      const lowerTerm = deferredSearchTerm.toLowerCase();
       result = result.filter((item) => searchProps.searchFn(item, lowerTerm));
     }
 
@@ -102,7 +119,7 @@ function GenericItemPageInternal<T extends { id: string }>({
     return result;
   }, [
     items,
-    searchTerm,
+    deferredSearchTerm,
     currentSort,
     sortDirection,
     activeFilters,
@@ -114,6 +131,78 @@ function GenericItemPageInternal<T extends { id: string }>({
   const activeFilterCount = Object.values(activeFilters).filter(
     (v) => v !== null,
   ).length;
+  const processedItemIdsKey = useMemo(
+    () => processedItems.map((item) => item.id).join("|"),
+    [processedItems],
+  );
+  const previousProcessedItemIdsKeyRef = useRef("");
+  const hasActiveSearch = deferredSearchTerm.trim().length > 0;
+  const isShowingLoadingState =
+    isLoading && items.length === 0 && !hasActiveSearch && activeFilterCount === 0;
+
+  useEffect(() => {
+    if (isShowingLoadingState) {
+      setVisibleCount(INITIAL_VISIBLE_ITEMS);
+      return;
+    }
+
+    const hasOrderOrSetChanged =
+      previousProcessedItemIdsKeyRef.current !== processedItemIdsKey;
+    previousProcessedItemIdsKeyRef.current = processedItemIdsKey;
+
+    if (!hasOrderOrSetChanged) {
+      setVisibleCount((prev) => Math.min(prev, processedItems.length));
+      return;
+    }
+
+    if (processedItems.length <= INITIAL_VISIBLE_ITEMS) {
+      setVisibleCount(processedItems.length);
+      return;
+    }
+
+    setVisibleCount(INITIAL_VISIBLE_ITEMS);
+
+    let frameId = 0;
+    const step = () => {
+      setVisibleCount((prev) => {
+        const next = Math.min(prev + VISIBLE_ITEMS_BATCH_SIZE, processedItems.length);
+        if (next < processedItems.length) {
+          frameId = window.requestAnimationFrame(step);
+        }
+        return next;
+      });
+    };
+
+    frameId = window.requestAnimationFrame(step);
+    return () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId);
+      }
+    };
+  }, [processedItemIdsKey, processedItems.length, isShowingLoadingState]);
+
+  const visibleItems = processedItems.slice(0, visibleCount);
+  const isStillRenderingItems = visibleCount < processedItems.length;
+  const shouldAnimateCards = visibleItems.length <= MAX_ANIMATED_ITEM_COUNT;
+
+  const skeletonCards = Array.from({ length: 6 }, (_, index) => (
+    <div
+      key={`skeleton-${index}`}
+      className="rounded-3xl bg-card p-6 h-90 flex flex-col gap-4"
+    >
+      <div className="flex items-center gap-3">
+        <Skeleton className="h-10 w-10 rounded-xl" />
+        <Skeleton className="h-6 w-2/5" />
+      </div>
+      <Skeleton className="h-48 w-full rounded-2xl" />
+      <Skeleton className="h-4 w-3/4" />
+      <Skeleton className="h-4 w-1/2" />
+      <div className="flex gap-2 mt-auto">
+        <Skeleton className="h-9 w-24 rounded-xl" />
+        <Skeleton className="h-9 w-24 rounded-xl" />
+      </div>
+    </div>
+  ));
 
   return (
     <div className="space-y-10 max-w-7xl mx-auto pb-20">
@@ -138,7 +227,9 @@ function GenericItemPageInternal<T extends { id: string }>({
             <span className="text-foreground">{subtitle}</span>
             <div className="h-1 w-1 rounded-full bg-border" />
             <span>
-              {processedItems.length} of {items.length} items
+              {isShowingLoadingState
+                ? "Loading items..."
+                : `${processedItems.length} of ${items.length} items`}
             </span>
           </div>
         </div>
@@ -318,7 +409,9 @@ function GenericItemPageInternal<T extends { id: string }>({
       {headerContent && <div className="py-2">{headerContent}</div>}
 
       {/* Grid Content */}
-      {processedItems.length === 0 ? (
+      {isShowingLoadingState ? (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">{skeletonCards}</div>
+      ) : processedItems.length === 0 ? (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -347,22 +440,33 @@ function GenericItemPageInternal<T extends { id: string }>({
           </Button>
         </motion.div>
       ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <AnimatePresence mode="popLayout">
-            {processedItems.map((item) => (
-              <motion.div
-                key={item.id}
-                layout
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.98 }}
-                transition={{ duration: 0.2 }}
-              >
-                {renderCard(item)}
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
+        <>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            {shouldAnimateCards ? (
+              <AnimatePresence mode="popLayout">
+                {visibleItems.map((item) => (
+                  <motion.div
+                    key={item.id}
+                    layout
+                    initial={{ opacity: 0, scale: 0.98 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.98 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    {renderCard(item)}
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            ) : (
+              visibleItems.map((item) => <div key={item.id}>{renderCard(item)}</div>)
+            )}
+          </div>
+          {isStillRenderingItems && (
+            <div className="pt-2">
+              <Skeleton className="h-8 w-40 rounded-xl" />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -6,6 +6,11 @@
   "scripts": {
     "dev": "vite",
     "version:sync": "node scripts/sync-app-version.cjs",
+    "prepare:stable": "node scripts/prepare-release-channel.cjs --channel stable --version 2.0.0-beta",
+    "prepare:nightly": "node scripts/prepare-release-channel.cjs --channel nightly --version 2.0.0-beta-nightly.local",
+    "stable": "npm run prepare:stable && npx tauri dev",
+    "nightly": "npm run prepare:nightly && npx tauri dev",
+    "tauri:dev:nightly": "npm run prepare:nightly && npx tauri dev",
     "build": "npm run version:sync && tsc && vite build",
     "preview": "vite preview",
     "tauri": "npm run version:sync && tauri"
@@ -79,6 +84,7 @@
     "react-router-dom": "^7.13.0",
     "react-zoom-pan-pinch": "^3.7.0",
     "recharts": "^2.15.4",
+    "semver": "^7.7.4",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.1.18",
@@ -89,6 +95,7 @@
     "@tauri-apps/cli": "^2",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "@types/semver": "^7.7.1",
     "@vitejs/plugin-react": "^4.6.0",
     "tw-animate-css": "^1.4.0",
     "typescript": "~5.8.3",

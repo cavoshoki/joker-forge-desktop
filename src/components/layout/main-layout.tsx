@@ -46,7 +46,7 @@ export function MainLayout({ children, pageTitle }: MainLayoutProps) {
   useEffect(() => {
     if (isPinned) return;
 
-    const EDGE_TRIGGER_WIDTH = 520;
+    const EDGE_TRIGGER_WIDTH = 260;
     const TITLEBAR_HEIGHT = 36;
 
     const handleMouseMove = (event: MouseEvent) => {

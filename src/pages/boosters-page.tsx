@@ -30,7 +30,7 @@ import { processBalatroCardImage } from "@/lib/media/image-processing-utils";
 import { ItemShowcaseDialog } from "@/components/pages/item-showcase-dialog";
 
 export default function BoostersPage() {
-  const { data, updateBoosters } = useProjectData();
+  const { data, updateBoosters, isHydrating } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<BoosterData | null>(null);
   const [showcaseItem, setShowcaseItem] = useState<BoosterData | null>(null);
@@ -406,6 +406,7 @@ export default function BoostersPage() {
         title="Boosters"
         subtitle={modName}
         items={data.boosters}
+        isLoading={isHydrating}
         onAddNew={handleCreate}
         addNewLabel="Create Pack"
         searchProps={searchProps}

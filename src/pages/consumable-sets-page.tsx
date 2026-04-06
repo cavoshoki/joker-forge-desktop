@@ -29,7 +29,7 @@ const normalizeHex = (value: string | undefined | null): string => {
 };
 
 export default function ConsumableSetsPage() {
-  const { data, updateConsumableSets } = useProjectData();
+  const { data, updateConsumableSets, isHydrating } = useProjectData();
   const modName = useModName();
   const [editingItem, setEditingItem] = useState<ConsumableSetData | null>(
     null,
@@ -354,6 +354,7 @@ export default function ConsumableSetsPage() {
         title="Consumable Sets"
         subtitle={modName}
         items={data.consumableSets}
+        isLoading={isHydrating}
         onAddNew={handleCreate}
         addNewLabel="Create Set"
         searchProps={searchProps}

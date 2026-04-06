@@ -7,7 +7,7 @@ import { SoundData } from "@/lib/types";
 import { SpeakerHigh, PencilSimple, Trash } from "@phosphor-icons/react";
 
 export default function SoundsPage() {
-  const { data, updateSounds } = useProjectData();
+  const { data, updateSounds, isHydrating } = useProjectData();
   const modName = useModName();
 
   const handleUpdate = (id: string, updates: Partial<SoundData>) => {
@@ -44,6 +44,7 @@ export default function SoundsPage() {
         title="Sounds"
         subtitle={modName}
         items={data.sounds}
+        isLoading={isHydrating}
         onAddNew={handleCreate}
         addNewLabel="Create Sound"
         searchProps={{

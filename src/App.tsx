@@ -30,8 +30,14 @@ import {
   ContextMenuShortcut,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { useEffect } from "react";
+import { checkForReleaseUpdateOnLaunch } from "@/lib/release-updater";
 
 function App() {
+  useEffect(() => {
+    void checkForReleaseUpdateOnLaunch();
+  }, []);
+
   return (
     <Router>
       <EntityBridgeListener />

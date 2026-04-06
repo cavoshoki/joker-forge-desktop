@@ -6,6 +6,12 @@ const appVersionFile = path.join(root, "app-version.json");
 const packageFile = path.join(root, "package.json");
 const tauriConfigFile = path.join(root, "src-tauri", "tauri.conf.json");
 const cargoTomlFile = path.join(root, "src-tauri", "Cargo.toml");
+const releaseChannelFile = path.join(
+  root,
+  "src",
+  "generated",
+  "release-channel.ts",
+);
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -13,6 +19,22 @@ function readJson(filePath) {
 
 function writeJson(filePath, data) {
   fs.writeFileSync(filePath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+}
+
+function syncReleaseChannelStable() {
+  const stableChannelContents =
+    'export const RELEASE_CHANNEL: "stable" | "nightly" = "stable";\n';
+  if (!fs.existsSync(path.dirname(releaseChannelFile))) {
+    fs.mkdirSync(path.dirname(releaseChannelFile), { recursive: true });
+  }
+  const existing = fs.existsSync(releaseChannelFile)
+    ? fs.readFileSync(releaseChannelFile, "utf8")
+    : "";
+  if (existing !== stableChannelContents) {
+    fs.writeFileSync(releaseChannelFile, stableChannelContents, "utf8");
+    return true;
+  }
+  return false;
 }
 
 function syncPackageVersion(version) {
@@ -57,6 +79,7 @@ const changes = [
   ["package.json", syncPackageVersion(version)],
   ["src-tauri/tauri.conf.json", syncTauriVersion(version)],
   ["src-tauri/Cargo.toml", syncCargoVersion(version)],
+  ["src/generated/release-channel.ts", syncReleaseChannelStable()],
 ].filter(([, changed]) => changed);
 
 if (changes.length === 0) {
