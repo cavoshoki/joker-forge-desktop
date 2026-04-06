@@ -6,7 +6,7 @@ use balatro_codegen::{
     format_lua_source, Emitter as LuaEmitter, JokerDef, ObjectType,
 };
 use serde_json::Value;
-use tauri::{Emitter, State, Window};
+use tauri::{AppHandle, Emitter, Manager, State, Window};
 
 use super::{
     compiler::Compiler,
@@ -539,4 +539,48 @@ pub fn export_mod_package(
     }
 
     Ok(file_count)
+}
+
+#[tauri::command]
+pub async fn download_release_asset(
+    url: String,
+    file_name: String,
+    app: AppHandle,
+) -> Result<String, String> {
+    if !url.starts_with("https://github.com/") {
+        return Err("Unsupported download host".to_string());
+    }
+
+    let sanitized_file_name = Path::new(&file_name)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "Invalid file name".to_string())?
+        .to_string();
+
+    let response = reqwest::get(&url)
+        .await
+        .map_err(|e| format!("Failed to fetch installer: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!(
+            "Failed to fetch installer (status {})",
+            response.status()
+        ));
+    }
+
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read installer bytes: {}", e))?;
+
+    let download_dir = app
+        .path()
+        .download_dir()
+        .map_err(|e| format!("Failed to resolve download directory: {}", e))?;
+
+    let target_path = download_dir.join(sanitized_file_name);
+    fs::write(&target_path, &bytes)
+        .map_err(|e| format!("Failed to write installer to disk: {}", e))?;
+
+    Ok(target_path.to_string_lossy().to_string())
 }

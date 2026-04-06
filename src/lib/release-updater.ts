@@ -1,8 +1,10 @@
 import { getVersion } from "@tauri-apps/api/app";
-import { downloadDir, join } from "@tauri-apps/api/path";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { confirm } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
-import { writeFile } from "@tauri-apps/plugin-fs";
+import { invoke } from "@tauri-apps/api/core";
 import { valid, gt } from "semver";
+import { RELEASE_CHANNEL } from "@/generated/release-channel";
 
 type ReleaseChannel = "stable" | "nightly";
 type Platform = "windows" | "linux" | "unsupported";
@@ -26,6 +28,21 @@ const REPO_NAME = "joker-forge-desktop";
 const API_BASE = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}`;
 
 const isNightlyVersion = (version: string) => version.includes("-nightly.");
+const isNightlyTag = (value: string) => /^nightly-/i.test(value);
+const isNightlyNamedRelease = (release: GitHubRelease) =>
+  isNightlyTag(release.tag_name) || /nightly/i.test(release.name);
+
+const UPDATE_CHECK_DEV_OVERRIDE =
+  import.meta.env.VITE_ENABLE_UPDATE_CHECK_IN_DEV === "true";
+const UPDATE_TEST_CHANNEL =
+  import.meta.env.VITE_UPDATE_TEST_CHANNEL === "nightly" ||
+  import.meta.env.VITE_UPDATE_TEST_CHANNEL === "stable"
+    ? (import.meta.env.VITE_UPDATE_TEST_CHANNEL as ReleaseChannel)
+    : null;
+const UPDATE_TEST_CURRENT_VERSION =
+  import.meta.env.VITE_UPDATE_TEST_CURRENT_VERSION?.trim() || null;
+
+let hasCheckedForUpdateOnLaunch = false;
 
 const getCurrentPlatform = (): Platform => {
   const ua = navigator.userAgent.toLowerCase();
@@ -65,36 +82,40 @@ const selectInstallerAsset = (
   return null;
 };
 
-const getLatestStableRelease = async (): Promise<GitHubRelease | null> => {
-  const response = await fetch(`${API_BASE}/releases/latest`, {
-    headers: { Accept: "application/vnd.github+json" },
-  });
-
-  if (!response.ok) {
-    return null;
-  }
-
-  const release = (await response.json()) as GitHubRelease;
-  if (release.draft) return null;
-  return release;
-};
-
-const getLatestNightlyRelease = async (): Promise<GitHubRelease | null> => {
+const getReleasesPage = async (): Promise<GitHubRelease[] | null> => {
   const response = await fetch(`${API_BASE}/releases?per_page=50`, {
     headers: { Accept: "application/vnd.github+json" },
   });
 
   if (!response.ok) {
+    console.warn("[release-updater] GitHub releases request failed", {
+      status: response.status,
+    });
     return null;
   }
 
-  const releases = (await response.json()) as GitHubRelease[];
+  return (await response.json()) as GitHubRelease[];
+};
+
+const getLatestStableRelease = async (): Promise<GitHubRelease | null> => {
+  const releases = await getReleasesPage();
+  if (!releases) return null;
+
+  return (
+    releases.find(
+      (release) => !release.draft && !isNightlyNamedRelease(release),
+    ) ?? null
+  );
+};
+
+const getLatestNightlyRelease = async (): Promise<GitHubRelease | null> => {
+  const releases = await getReleasesPage();
+  if (!releases) return null;
+
   return (
     releases.find(
       (release) =>
-        !release.draft &&
-        release.prerelease &&
-        release.tag_name.startsWith("nightly-"),
+        !release.draft && release.prerelease && isNightlyTag(release.tag_name),
     ) ?? null
   );
 };
@@ -108,77 +129,108 @@ const getLatestReleaseForChannel = async (
 };
 
 const downloadAndLaunchInstaller = async (asset: GitHubReleaseAsset) => {
-  const response = await fetch(asset.browser_download_url, {
-    headers: { Accept: "application/octet-stream" },
+  const localPath = await invoke<string>("download_release_asset", {
+    url: asset.browser_download_url,
+    fileName: asset.name,
   });
-
-  if (!response.ok) {
-    throw new Error(`Download failed with status ${response.status}`);
-  }
-
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  const downloadsPath = await downloadDir();
-  const localPath = await join(downloadsPath, asset.name);
-  await writeFile(localPath, bytes);
   await openPath(localPath);
+  try {
+    await getCurrentWindow().close();
+  } catch {
+    // If closing fails, installer is still launched so this is non-fatal.
+  }
 };
 
 export const checkForReleaseUpdateOnLaunch = async () => {
-  if (import.meta.env.DEV) return;
-
-  let currentVersion = "";
-  try {
-    currentVersion = await getVersion();
-  } catch {
+  if (hasCheckedForUpdateOnLaunch) {
     return;
   }
+  hasCheckedForUpdateOnLaunch = true;
 
-  const channel: ReleaseChannel = isNightlyVersion(currentVersion)
-    ? "nightly"
-    : "stable";
-
-  const latestRelease = await getLatestReleaseForChannel(channel);
-  if (!latestRelease) return;
-
-  const currentNormalized = normalizeVersion(currentVersion);
-  const latestNormalized = parseReleaseVersion(latestRelease);
-  if (!currentNormalized || !latestNormalized) return;
-
-  if (!gt(latestNormalized, currentNormalized)) {
-    return;
-  }
-
-  const platform = getCurrentPlatform();
-  const installerAsset = selectInstallerAsset(latestRelease, platform);
-
-  if (!installerAsset) {
-    window.alert(
-      `Update found (${latestNormalized}), but no installer was found for your platform.`,
-    );
-    return;
-  }
-
-  const approved = window.confirm(
-    [
-      `A new ${channel} version is available.`,
-      `Current: ${currentVersion}`,
-      `Latest: ${latestNormalized}`,
-      "",
-      "Install update now?",
-    ].join("\n"),
-  );
-
-  if (!approved) {
+  if (import.meta.env.DEV && !UPDATE_CHECK_DEV_OVERRIDE) {
     return;
   }
 
   try {
-    await downloadAndLaunchInstaller(installerAsset);
-    window.alert(
-      "Installer downloaded and launched. Complete the installer to finish updating.",
+    const resolvedCurrentVersion =
+      UPDATE_TEST_CURRENT_VERSION ?? (await getVersion());
+
+    const channel: ReleaseChannel =
+      UPDATE_TEST_CHANNEL ??
+      (RELEASE_CHANNEL === "nightly" || isNightlyVersion(resolvedCurrentVersion)
+        ? "nightly"
+        : "stable");
+
+    const latestRelease = await getLatestReleaseForChannel(channel);
+    if (!latestRelease) {
+      console.info("[release-updater] No candidate release found", {
+        channel,
+      });
+      return;
+    }
+
+    const currentNormalized = normalizeVersion(resolvedCurrentVersion);
+    const latestNormalized = parseReleaseVersion(latestRelease);
+    if (!currentNormalized || !latestNormalized) {
+      console.warn("[release-updater] Could not normalize versions", {
+        currentVersion: resolvedCurrentVersion,
+        latestTag: latestRelease.tag_name,
+        latestName: latestRelease.name,
+      });
+      return;
+    }
+
+    if (!gt(latestNormalized, currentNormalized)) {
+      console.info("[release-updater] Already up to date", {
+        channel,
+        currentNormalized,
+        latestNormalized,
+      });
+      return;
+    }
+
+    const platform = getCurrentPlatform();
+    const installerAsset = selectInstallerAsset(latestRelease, platform);
+
+    if (!installerAsset) {
+      window.alert(
+        `Update found (${latestNormalized}), but no installer was found for your platform.`,
+      );
+      return;
+    }
+
+    const approved = await confirm(
+      [
+        `A new ${channel} version is available.`,
+        `Current: ${resolvedCurrentVersion}`,
+        `Latest: ${latestNormalized}`,
+        "",
+        "Install update now?",
+      ].join("\n"),
+      {
+        title: "Update Available",
+        okLabel: "Auto Update",
+        cancelLabel: "Later",
+      },
     );
+
+    if (!approved) {
+      console.info("[release-updater] User declined update prompt", {
+        channel,
+        currentVersion: resolvedCurrentVersion,
+        latestVersion: latestNormalized,
+      });
+      return;
+    }
+
+    try {
+      await downloadAndLaunchInstaller(installerAsset);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      window.alert(`Failed to install update: ${message}`);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    window.alert(`Failed to install update: ${message}`);
+    console.error("[release-updater] Update check failed", message);
   }
 };

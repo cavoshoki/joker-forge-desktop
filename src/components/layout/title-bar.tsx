@@ -24,6 +24,7 @@ export function TitleBar() {
   const appWindow = getCurrentWindow();
   const modName = useModName();
   const appLabel = isNightly ? "Joker Forge Nightly" : "Joker Forge";
+  const nightlyBuildLabel = appVersion.match(/-nightly\.(.+)$/i)?.[1] ?? null;
 
   useEffect(() => {
     const init = async () => {
@@ -164,7 +165,7 @@ export function TitleBar() {
           </span>
           {isNightly ? (
             <span className="bg-blue-900/70 text-blue-100 px-1.5 rounded text-[10px] tracking-normal">
-              Nightly
+              {nightlyBuildLabel ? `nightly.${nightlyBuildLabel}` : "nightly"}
             </span>
           ) : null}
         </span>
