@@ -446,6 +446,7 @@ export default function VouchersPage() {
         description={formatBalatroText(item.description)}
         cost={item.cost}
         idValue={item.orderValue}
+        overlayImage={item.overlayImage}
         onUpdate={(updates) => handleUpdate(item.id, updates)}
         image={
           item.image ? (

@@ -354,6 +354,7 @@ export const BalatroCard = memo(
     };
 
     const cost = (data as any).cost;
+    const hasOverlay = Boolean(data.overlayImage);
     const isCardType =
       type === "card" ||
       type === "edition" ||
@@ -371,7 +372,12 @@ export const BalatroCard = memo(
       >
         <div className="flex flex-col items-center">
           {showCost && cost !== undefined && (
-            <div className="bg-balatro-cost-bg border-4 border-balatro-cost-border rounded-t-2xl px-4 py-1 -mb-1 z-10 relative shadow-sm">
+            <div
+              className={cn(
+                "bg-balatro-cost-bg border-4 border-balatro-cost-border rounded-t-2xl px-4 py-1 -mb-1 relative shadow-sm",
+                hasOverlay ? "z-0" : "z-10",
+              )}
+            >
               <span className="text-balatro-cost-text font-bold text-shadow-cost text-2xl tracking-wider">
                 ${cost}
               </span>
@@ -403,7 +409,8 @@ export const BalatroCard = memo(
           <div
             className={cn(
               currentSize.image,
-              "mb-2 flex items-center justify-center overflow-hidden relative z-10",
+              "mb-2 flex items-center justify-center overflow-hidden relative",
+              hasOverlay ? "z-20" : "z-10",
               showCost && cost !== undefined ? "rounded-t-none" : "rounded-lg",
             )}
           >
@@ -413,7 +420,8 @@ export const BalatroCard = memo(
           <div
             className={cn(
               "w-fit min-w-48 max-w-none",
-              "shrink-0 absolute top-[95%] left-1/2 transform -translate-x-1/2 z-20 hover:z-30",
+              "shrink-0 absolute top-[95%] left-1/2 transform -translate-x-1/2 hover:z-30",
+              hasOverlay ? "z-10" : "z-20",
             )}
           >
             <div className="relative m-2 filter drop-shadow-lg">

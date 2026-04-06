@@ -298,6 +298,7 @@ export default function ConsumablesPage() {
         cost={item.cost}
         idValue={item.orderValue}
         consumableSet={item.set}
+        overlayImage={item.overlayImage}
         onUpdate={(updates) => handleUpdate(item.id, updates)}
         image={
           item.image ? (

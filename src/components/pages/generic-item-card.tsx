@@ -38,6 +38,7 @@ export interface ActionConfig {
 
 interface GenericItemCardProps {
   image: ReactNode;
+  overlayImage?: string;
   name: string;
   description: string;
   cost?: number;
@@ -64,6 +65,7 @@ interface GenericItemCardProps {
 
 export function GenericItemCard({
   image,
+  overlayImage,
   name,
   description,
   cost,
@@ -253,6 +255,14 @@ export function GenericItemCard({
 
         <div className="relative w-55 h-90 [image-rendering:pixelated] -mt-8 flex items-center justify-center">
           {image}
+          {overlayImage && (
+            <img
+              src={overlayImage}
+              alt="Overlay"
+              className="absolute inset-0 w-full h-full object-contain [image-rendering:pixelated] pointer-events-none z-10"
+              draggable="false"
+            />
+          )}
         </div>
 
         <div className="relative z-10 -mt-20 w-full flex justify-center">

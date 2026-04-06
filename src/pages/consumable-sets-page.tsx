@@ -1,9 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { GenericItemPage } from "@/components/pages/generic-item-page";
 import { GenericItemCardMini } from "@/components/pages/generic-item-card-mini";
-import {
-  DialogTab,
-} from "@/components/pages/generic-item-dialog";
+import { DialogTab } from "@/components/pages/generic-item-dialog";
 import { GenericItemDialogMini } from "@/components/pages/generic-item-dialog-mini";
 import { GenericDialogColorPicker } from "@/components/ui/generic-dialog-color-picker";
 import { BadgePreview } from "@/components/balatro/badge-preview";

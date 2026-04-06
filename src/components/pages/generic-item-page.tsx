@@ -31,9 +31,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
-const INITIAL_VISIBLE_ITEMS = 24;
-const VISIBLE_ITEMS_BATCH_SIZE = 24;
 const MAX_ANIMATED_ITEM_COUNT = 80;
+const VIRTUALIZATION_THRESHOLD = 120;
+const ESTIMATED_ROW_HEIGHT = 384;
+const VIRTUAL_OVERSCAN_ROWS = 2;
 
 export interface SortOption<T> {
   label: string;
@@ -89,7 +90,11 @@ function GenericItemPageInternal<T extends { id: string }>({
   );
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [activeFilters, setActiveFilters] = useState<Record<string, any>>({});
-  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_ITEMS);
+  const [isXlLayout, setIsXlLayout] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth >= 1280 : true,
+  );
+  const [virtualRows, setVirtualRows] = useState({ start: 0, end: 0 });
+  const listContainerRef = useRef<HTMLDivElement | null>(null);
 
   const processedItems = useMemo(() => {
     let result = [...items];
@@ -131,59 +136,133 @@ function GenericItemPageInternal<T extends { id: string }>({
   const activeFilterCount = Object.values(activeFilters).filter(
     (v) => v !== null,
   ).length;
-  const processedItemIdsKey = useMemo(
-    () => processedItems.map((item) => item.id).join("|"),
-    [processedItems],
-  );
-  const previousProcessedItemIdsKeyRef = useRef("");
   const hasActiveSearch = deferredSearchTerm.trim().length > 0;
   const isShowingLoadingState =
-    isLoading && items.length === 0 && !hasActiveSearch && activeFilterCount === 0;
+    isLoading &&
+    items.length === 0 &&
+    !hasActiveSearch &&
+    activeFilterCount === 0;
+  const shouldAnimateCards = processedItems.length <= MAX_ANIMATED_ITEM_COUNT;
+  const shouldVirtualize =
+    !isShowingLoadingState &&
+    !shouldAnimateCards &&
+    processedItems.length >= VIRTUALIZATION_THRESHOLD;
+  const columnCount = isXlLayout ? 2 : 1;
+  const totalRows = Math.ceil(processedItems.length / columnCount);
 
   useEffect(() => {
-    if (isShowingLoadingState) {
-      setVisibleCount(INITIAL_VISIBLE_ITEMS);
+    if (typeof window === "undefined") {
       return;
     }
 
-    const hasOrderOrSetChanged =
-      previousProcessedItemIdsKeyRef.current !== processedItemIdsKey;
-    previousProcessedItemIdsKeyRef.current = processedItemIdsKey;
+    const onResize = () => {
+      setIsXlLayout(window.innerWidth >= 1280);
+    };
 
-    if (!hasOrderOrSetChanged) {
-      setVisibleCount((prev) => Math.min(prev, processedItems.length));
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useEffect(() => {
+    if (!shouldVirtualize) {
+      setVirtualRows({
+        start: 0,
+        end: Math.max(0, totalRows - 1),
+      });
       return;
     }
 
-    if (processedItems.length <= INITIAL_VISIBLE_ITEMS) {
-      setVisibleCount(processedItems.length);
-      return;
-    }
+    const updateVirtualRows = () => {
+      const container = listContainerRef.current;
+      if (!container) return;
 
-    setVisibleCount(INITIAL_VISIBLE_ITEMS);
+      const rect = container.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const viewportTop = window.scrollY;
+      const viewportBottom = viewportTop + viewportHeight;
+      const containerTop = viewportTop + rect.top;
+
+      const relativeTop = Math.max(0, viewportTop - containerTop);
+      const relativeBottom = Math.max(0, viewportBottom - containerTop);
+
+      const start = Math.max(
+        0,
+        Math.floor(relativeTop / ESTIMATED_ROW_HEIGHT) - VIRTUAL_OVERSCAN_ROWS,
+      );
+      const end = Math.min(
+        Math.max(0, totalRows - 1),
+        Math.ceil(relativeBottom / ESTIMATED_ROW_HEIGHT) +
+          VIRTUAL_OVERSCAN_ROWS,
+      );
+
+      setVirtualRows((prev) =>
+        prev.start === start && prev.end === end ? prev : { start, end },
+      );
+    };
 
     let frameId = 0;
-    const step = () => {
-      setVisibleCount((prev) => {
-        const next = Math.min(prev + VISIBLE_ITEMS_BATCH_SIZE, processedItems.length);
-        if (next < processedItems.length) {
-          frameId = window.requestAnimationFrame(step);
-        }
-        return next;
+    const scheduleUpdate = () => {
+      if (frameId) return;
+      frameId = window.requestAnimationFrame(() => {
+        frameId = 0;
+        updateVirtualRows();
       });
     };
 
-    frameId = window.requestAnimationFrame(step);
+    updateVirtualRows();
+
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleUpdate);
     return () => {
       if (frameId) {
         window.cancelAnimationFrame(frameId);
       }
+      window.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
     };
-  }, [processedItemIdsKey, processedItems.length, isShowingLoadingState]);
+  }, [shouldVirtualize, totalRows]);
 
-  const visibleItems = processedItems.slice(0, visibleCount);
-  const isStillRenderingItems = visibleCount < processedItems.length;
-  const shouldAnimateCards = visibleItems.length <= MAX_ANIMATED_ITEM_COUNT;
+  const { startIndex, endIndex, topSpacerHeight, bottomSpacerHeight } =
+    useMemo(() => {
+      if (!shouldVirtualize) {
+        return {
+          startIndex: 0,
+          endIndex: processedItems.length,
+          topSpacerHeight: 0,
+          bottomSpacerHeight: 0,
+        };
+      }
+
+      const startIndex = virtualRows.start * columnCount;
+      const endIndex = Math.min(
+        processedItems.length,
+        (virtualRows.end + 1) * columnCount,
+      );
+      const topSpacerHeight = virtualRows.start * ESTIMATED_ROW_HEIGHT;
+      const bottomSpacerHeight = Math.max(
+        0,
+        (totalRows - virtualRows.end - 1) * ESTIMATED_ROW_HEIGHT,
+      );
+
+      return {
+        startIndex,
+        endIndex,
+        topSpacerHeight,
+        bottomSpacerHeight,
+      };
+    }, [
+      shouldVirtualize,
+      virtualRows.start,
+      virtualRows.end,
+      columnCount,
+      processedItems.length,
+      totalRows,
+    ]);
+
+  const renderedItems = useMemo(
+    () => processedItems.slice(startIndex, endIndex),
+    [processedItems, startIndex, endIndex],
+  );
 
   const skeletonCards = Array.from({ length: 6 }, (_, index) => (
     <div
@@ -410,7 +489,9 @@ function GenericItemPageInternal<T extends { id: string }>({
 
       {/* Grid Content */}
       {isShowingLoadingState ? (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">{skeletonCards}</div>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          {skeletonCards}
+        </div>
       ) : processedItems.length === 0 ? (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -441,31 +522,38 @@ function GenericItemPageInternal<T extends { id: string }>({
         </motion.div>
       ) : (
         <>
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            {shouldAnimateCards ? (
-              <AnimatePresence mode="popLayout">
-                {visibleItems.map((item) => (
-                  <motion.div
-                    key={item.id}
-                    layout
-                    initial={{ opacity: 0, scale: 0.98 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.98 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    {renderCard(item)}
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            ) : (
-              visibleItems.map((item) => <div key={item.id}>{renderCard(item)}</div>)
+          <div ref={listContainerRef}>
+            {topSpacerHeight > 0 && (
+              <div style={{ height: topSpacerHeight }} aria-hidden="true" />
+            )}
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              {shouldAnimateCards && !shouldVirtualize ? (
+                <AnimatePresence mode="popLayout">
+                  {renderedItems.map((item) => (
+                    <motion.div
+                      key={item.id}
+                      layout
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.98 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      {renderCard(item)}
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              ) : (
+                renderedItems.map((item) => (
+                  <div key={item.id}>{renderCard(item)}</div>
+                ))
+              )}
+            </div>
+
+            {bottomSpacerHeight > 0 && (
+              <div style={{ height: bottomSpacerHeight }} aria-hidden="true" />
             )}
           </div>
-          {isStillRenderingItems && (
-            <div className="pt-2">
-              <Skeleton className="h-8 w-40 rounded-xl" />
-            </div>
-          )}
         </>
       )}
     </div>
