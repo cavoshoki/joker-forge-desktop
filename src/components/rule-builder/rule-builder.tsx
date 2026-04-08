@@ -1171,14 +1171,18 @@ const RuleBuilder: React.FC<RuleBuilderProps> = ({
     const additionalParams: string[] = [];
 
     Object.entries(params).forEach(([key, value]) => {
-      if (
-        processedParams.has(key) ||
-        !value ||
-        skipValues.includes(value as string)
-      ) {
+      if (processedParams.has(key) || value === undefined || value === null) {
         return;
       }
-      const stringValue = value as string;
+      const stringValue =
+        typeof value === "string"
+          ? value
+          : typeof value === "number" || typeof value === "boolean"
+            ? String(value)
+            : "";
+      if (!stringValue || skipValues.includes(stringValue)) {
+        return;
+      }
       if (
         key === "suit" ||
         key === "rank" ||

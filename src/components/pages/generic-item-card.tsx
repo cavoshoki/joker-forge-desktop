@@ -1,4 +1,12 @@
-import { useState, useRef, useEffect, ReactNode, isValidElement } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  ReactNode,
+  isValidElement,
+  memo,
+} from "react";
 import {
   CurrencyDollar,
   Image,
@@ -17,6 +25,8 @@ import { cn } from "@/lib/utils";
 import { slugify } from "@/lib/balatro-utils";
 import { RaritySelect } from "@/components/balatro/rarity-select";
 import { ConsumableSetSelect } from "@/components/balatro/consumable-set-select";
+import { formatBalatroText } from "@/lib/balatro-text-formatter";
+import { sanitizeDescription } from "@/lib/description-sanitizer";
 
 export interface CardProperty {
   id: string;
@@ -96,7 +106,7 @@ const extractFirstImageSrc = (node: ReactNode): string | undefined => {
   return extractFirstImageSrc(children);
 };
 
-export function GenericItemCard({
+export const GenericItemCard = memo(function GenericItemCard({
   image,
   overlayImage,
   name,
@@ -123,17 +133,43 @@ export function GenericItemCard({
     "none" | "name" | "desc" | "cost" | "id"
   >("none");
   const [tempValue, setTempValue] = useState("");
-  const [tooltipStates, setTooltipStates] = useState<Record<string, boolean>>(
-    {},
-  );
+  const [isThin, setIsThin] = useState(false);
+  const [useTextActionButtons, setUseTextActionButtons] = useState(true);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+  const sanitizedDescription = useMemo(
+    () => sanitizeDescription(description),
+    [description],
+  );
+  const renderedDescriptionHtml = useMemo(
+    () => formatBalatroText(sanitizedDescription || "No description provided..."),
+    [sanitizedDescription],
+  );
 
   useEffect(() => {
     if (editingField !== "none" && inputRef.current) {
       inputRef.current.focus();
     }
   }, [editingField]);
+
+  useEffect(() => {
+    if (!cardRef.current || typeof window === "undefined") return;
+
+    const observer = new window.ResizeObserver((entries) => {
+      const nextWidth = entries[0]?.contentRect.width ?? 0;
+      const nextIsThin = nextWidth > 0 && nextWidth < 560;
+      const nextUseTextActionButtons = nextWidth >= 940;
+
+      setIsThin((prev) => (prev === nextIsThin ? prev : nextIsThin));
+      setUseTextActionButtons((prev) =>
+        prev === nextUseTextActionButtons ? prev : nextUseTextActionButtons,
+      );
+    });
+
+    observer.observe(cardRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   const startEdit = (
     field: "name" | "desc" | "cost" | "id",
@@ -187,26 +223,26 @@ export function GenericItemCard({
     (a) => a.id === "delete" || a.variant === "destructive",
   );
   const duplicateAction = actions.find((a) => a.id === "duplicate");
-  const textActionIds = new Set(["rules"]);
+  const editAction = actions.find((a) => a.id === "edit");
+  const labeledActionIds = useMemo(() => new Set(["rules", "edit"]), []);
   const textActions = actions.filter(
-    (a) => a !== deleteAction && textActionIds.has(a.id),
+    (a) => a !== deleteAction && labeledActionIds.has(a.id),
   );
   const iconActions = actions.filter(
-    (a) =>
-      a !== deleteAction && a !== duplicateAction && !textActionIds.has(a.id),
+    (a) => a !== deleteAction && a !== duplicateAction && !labeledActionIds.has(a.id),
   );
-  const rightAlignedIconActions = iconActions.filter((a) => a.id === "edit");
-  const leadingIconActions = iconActions.filter((a) => a.id !== "edit");
 
   const getPropertyStyles = (
     isActive: boolean,
     variant: CardProperty["variant"],
   ) => {
+    const sizeClass = isThin ? "h-8 w-8 rounded-lg" : "h-10 w-10 rounded-xl";
     const base =
-      "flex items-center justify-center h-10 w-10 rounded-xl transition-all duration-200 cursor-pointer border-2 outline-none focus:outline-none";
+      "flex items-center justify-center transition-all duration-200 cursor-pointer border-2 outline-none focus:outline-none";
     if (!isActive)
       return cn(
         base,
+        sizeClass,
         "bg-muted/30 border-transparent text-muted-foreground/30 hover:bg-muted hover:text-muted-foreground hover:border-border",
       );
 
@@ -223,18 +259,26 @@ export function GenericItemCard({
       default:
         "bg-primary/10 text-primary border-primary/30 hover:bg-primary/20 hover:border-primary",
     };
-    return cn(base, variants[variant]);
+    return cn(base, sizeClass, variants[variant]);
   };
 
   return (
     <div
+      ref={cardRef}
       className={cn(
-        "group relative flex flex-col sm:flex-row gap-6 p-6 rounded-3xl bg-card transition-all duration-300 h-90",
+        "group relative flex gap-6 p-6 rounded-3xl bg-card transition-all duration-300 min-h-88 h-full w-full",
+        isThin ? "flex-col" : "flex-row",
+        isThin && "p-4 gap-4",
         isReadOnly && "bg-card/70",
       )}
     >
       {deleteAction && (
-        <div className="absolute top-4 right-4 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div
+          className={cn(
+            "absolute top-4 right-4 z-20 transition-opacity",
+            isThin ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+          )}
+        >
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -256,9 +300,19 @@ export function GenericItemCard({
         </div>
       )}
 
-      <div className="flex flex-col items-center gap-5 shrink-0 sm:w-56">
+      <div
+        className={cn(
+          "flex flex-col items-center gap-5 shrink-0 w-full sm:w-56",
+          isThin && "w-[15.5rem] max-w-[15.5rem] mx-auto self-center",
+        )}
+      >
         {cost !== undefined && (
-          <div className="relative z-10 -mb-12 w-full flex justify-center">
+          <div
+            className={cn(
+              "relative z-10 -mb-12 w-full flex justify-center",
+              isThin && "w-[15.5rem] mx-auto",
+            )}
+          >
             <Tooltip>
               <TooltipTrigger asChild>
                 <div
@@ -290,8 +344,25 @@ export function GenericItemCard({
           </div>
         )}
 
-        <div className="relative w-55 h-90 [image-rendering:pixelated] -mt-8 flex items-center justify-center">
-          {image}
+        <div
+          className={cn(
+            "relative w-55 h-90 [image-rendering:pixelated] -mt-8 flex items-center justify-center",
+            isThin && "mx-auto w-[15.5rem] h-[25rem]",
+          )}
+        >
+          <div
+            onClick={(e) => {
+              if (isReadOnly || !editAction) return;
+              e.stopPropagation();
+              editAction.onClick();
+            }}
+            className={cn(
+              "w-full h-full flex items-center justify-center rounded-lg",
+              !isReadOnly && editAction && "cursor-pointer",
+            )}
+          >
+            {image}
+          </div>
           {overlayImage && (
             <img
               src={overlayImage}
@@ -302,7 +373,12 @@ export function GenericItemCard({
           )}
         </div>
 
-        <div className="relative z-10 -mt-20 w-full flex justify-center">
+        <div
+          className={cn(
+            "relative z-10 -mt-20 w-full flex justify-center",
+            isThin && "w-[15.5rem] mx-auto",
+          )}
+        >
           {rarity !== undefined ? (
             isReadOnly ? (
               <Badge variant="secondary" className="font-bold uppercase">
@@ -311,6 +387,7 @@ export function GenericItemCard({
             ) : (
               <RaritySelect
                 value={String(rarity)}
+                className={isThin ? "w-[12.5rem] justify-center" : undefined}
                 onChange={(val) =>
                   onUpdate({
                     rarity: isNaN(Number(val)) ? val : Number(val),
@@ -326,6 +403,7 @@ export function GenericItemCard({
             ) : (
               <ConsumableSetSelect
                 value={consumableSet}
+                className={isThin ? "w-[12.5rem] justify-center" : undefined}
                 onChange={(val) =>
                   onUpdate({
                     set: val,
@@ -339,8 +417,18 @@ export function GenericItemCard({
         </div>
       </div>
 
-      <div className="flex-1 min-w-0 flex flex-col gap-3 relative h-full">
-        <div className="flex items-baseline gap-3 pb-2 border-b border-border/40 min-h-14 pr-8 shrink-0">
+      <div
+        className={cn(
+          "flex-1 min-w-0 sm:min-w-[16rem] flex flex-col gap-3 relative h-full w-full",
+          isThin && "gap-2",
+        )}
+      >
+        <div
+          className={cn(
+            "flex items-baseline gap-3 pb-2 min-h-14 pr-8 shrink-0",
+            !isThin && "border-b border-border/40",
+          )}
+        >
           {idValue !== undefined && (
             <div className="shrink-0 self-center">
               <span
@@ -389,7 +477,7 @@ export function GenericItemCard({
             ) : (
               <h3
                 className={cn(
-                  "text-3xl font-bold tracking-tight text-foreground truncate transition-opacity select-none",
+                  "text-3xl font-bold tracking-tight text-foreground truncate block w-full max-w-full transition-opacity select-none",
                   isReadOnly
                     ? "cursor-default"
                     : "cursor-pointer hover:opacity-70",
@@ -403,69 +491,61 @@ export function GenericItemCard({
           </div>
         </div>
 
-        <div className="flex-1 relative overflow-hidden">
-          {editingField === "desc" ? (
-            <textarea
-              ref={inputRef as React.RefObject<HTMLTextAreaElement>}
-              value={tempValue}
-              onChange={(e) => setTempValue(e.target.value)}
-              onBlur={saveEdit}
-              onKeyDown={handleKeyDown}
-              className="w-full h-full text-[13px] resize-none font-medium leading-relaxed text-muted-foreground bg-transparent border-none p-0 outline-none focus:outline-none"
-            />
-          ) : (
+        {!isThin && (
+          <div className="flex-1 relative overflow-hidden">
+            {editingField === "desc" ? (
+              <textarea
+                ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+                value={tempValue}
+                onChange={(e) => setTempValue(e.target.value)}
+                onBlur={saveEdit}
+                onKeyDown={handleKeyDown}
+                className="w-full h-full text-[13px] resize-none font-medium leading-relaxed text-muted-foreground bg-transparent border-none p-0 outline-none focus:outline-none"
+              />
+            ) : (
+              <div
+                className={cn(
+                  "w-full h-full text-[13px] leading-relaxed text-muted-foreground transition-colors wrap-break-word whitespace-pre-wrap overflow-y-auto pr-2",
+                  isReadOnly
+                    ? "cursor-default"
+                    : "cursor-pointer hover:text-foreground",
+                )}
+                onClick={
+                  isReadOnly
+                    ? undefined
+                    : () => startEdit("desc", sanitizedDescription)
+                }
+              >
+                <span dangerouslySetInnerHTML={{ __html: renderedDescriptionHtml }} />
+              </div>
+            )}
+          </div>
+        )}
+
+        <div
+          className={cn(
+            "shrink-0 flex flex-col",
+            isThin ? "mt-1 gap-2" : "mt-auto gap-4",
+          )}
+        >
+          {properties.length > 0 && (
             <div
               className={cn(
-                "w-full h-full text-[13px] leading-relaxed text-muted-foreground transition-colors wrap-break-word whitespace-pre-wrap overflow-y-auto pr-2",
-                isReadOnly
-                  ? "cursor-default"
-                  : "cursor-pointer hover:text-foreground",
+                "flex flex-wrap gap-2 pt-4",
+                "justify-start",
+                !isThin && "border-t border-border/40",
               )}
-              onClick={
-                isReadOnly ? undefined : () => startEdit("desc", description)
-              }
-              dangerouslySetInnerHTML={{
-                __html: description || "No description provided...",
-              }}
-            />
-          )}
-        </div>
-
-        <div className="mt-auto shrink-0 flex flex-col gap-4">
-          {properties.length > 0 && (
-            <div className="flex flex-wrap justify-between gap-2 pt-4 border-t border-border/40">
+            >
               {properties.map((prop) => (
-                <Tooltip
-                  key={prop.id}
-                  open={!!tooltipStates[prop.id]} // FIXED: Forced boolean
-                  onOpenChange={(open) =>
-                    setTooltipStates((prev) => ({ ...prev, [prop.id]: open }))
-                  }
-                >
+                <Tooltip key={prop.id}>
                   <TooltipTrigger asChild>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         if (isReadOnly) return;
                         prop.onClick();
-                        setTooltipStates((prev) => ({
-                          ...prev,
-                          [prop.id]: true,
-                        }));
                       }}
                       onPointerDown={(e) => e.preventDefault()}
-                      onMouseEnter={() =>
-                        setTooltipStates((prev) => ({
-                          ...prev,
-                          [prop.id]: true,
-                        }))
-                      }
-                      onMouseLeave={() =>
-                        setTooltipStates((prev) => ({
-                          ...prev,
-                          [prop.id]: false,
-                        }))
-                      }
                       disabled={isReadOnly}
                       aria-disabled={isReadOnly}
                       className={cn(
@@ -484,7 +564,14 @@ export function GenericItemCard({
             </div>
           )}
 
-          <div className="flex items-center justify-between gap-2 pt-2">
+          <div
+            className={cn(
+              "flex items-center gap-2 pt-2",
+              isThin
+                ? "flex-nowrap overflow-visible pb-1"
+                : "justify-between",
+            )}
+          >
             {duplicateAction && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -500,7 +587,10 @@ export function GenericItemCard({
                       }
                     }}
                     onPointerDown={(e) => e.preventDefault()}
-                    className="h-9 w-9 transition-all hover:scale-110 rounded-lg cursor-pointer"
+                    className={cn(
+                      "transition-all hover:scale-110 rounded-lg cursor-pointer",
+                      isThin ? "h-8 w-8" : "h-9 w-9",
+                    )}
                   >
                     {duplicateAction.icon}
                   </Button>
@@ -511,7 +601,12 @@ export function GenericItemCard({
               </Tooltip>
             )}
 
-            <div className="flex gap-2">
+            <div
+              className={cn(
+                "flex items-center gap-2",
+                isThin ? "flex-nowrap shrink-0" : "flex-wrap",
+              )}
+            >
               {showPlaceholderPickerButton &&
                 onOpenPlaceholderPicker &&
                 !isReadOnly && (
@@ -525,7 +620,10 @@ export function GenericItemCard({
                           onOpenPlaceholderPicker();
                         }}
                         onPointerDown={(e) => e.preventDefault()}
-                        className="h-9 w-9 transition-all hover:scale-110 rounded-lg cursor-pointer"
+                        className={cn(
+                          "transition-all hover:scale-110 rounded-lg cursor-pointer",
+                          isThin ? "h-8 w-8" : "h-9 w-9",
+                        )}
                       >
                         <Image className="h-4 w-4" />
                       </Button>
@@ -547,7 +645,10 @@ export function GenericItemCard({
                         setIsPixelEditorOpen(true);
                       }}
                       onPointerDown={(e) => e.preventDefault()}
-                      className="h-9 w-9 transition-all hover:scale-110 rounded-lg cursor-pointer"
+                      className={cn(
+                        "transition-all hover:scale-110 rounded-lg cursor-pointer",
+                        isThin ? "h-8 w-8" : "h-9 w-9",
+                      )}
                     >
                       <PaintBrush className="h-4 w-4" />
                     </Button>
@@ -558,7 +659,7 @@ export function GenericItemCard({
                 </Tooltip>
               )}
 
-              {leadingIconActions.map((action) => (
+              {iconActions.map((action) => (
                 <Tooltip key={action.id}>
                   <TooltipTrigger asChild>
                     <Button
@@ -570,7 +671,8 @@ export function GenericItemCard({
                       }}
                       onPointerDown={(e) => e.preventDefault()}
                       className={cn(
-                        "h-9 w-9 transition-all hover:scale-110 rounded-lg cursor-pointer",
+                        "transition-all hover:scale-110 rounded-lg cursor-pointer",
+                        isThin ? "h-8 w-8" : "h-9 w-9",
                       )}
                     >
                       {action.icon}
@@ -583,55 +685,55 @@ export function GenericItemCard({
               ))}
             </div>
 
-            {(rightAlignedIconActions.length > 0 || textActions.length > 0) && (
-              <div className="ml-auto flex items-center gap-2">
-                {rightAlignedIconActions.map((action) => (
+            {textActions.length > 0 && (
+              <div
+                className={cn(
+                  "flex items-center gap-2",
+                  isThin ? "shrink-0 ml-auto" : "ml-auto",
+                )}
+              >
+                {textActions.map((action) => (
                   <Tooltip key={action.id}>
                     <TooltipTrigger asChild>
                       <Button
-                        variant={action.variant || "ghost"}
-                        size="icon"
+                        variant={action.variant || "secondary"}
+                        size={useTextActionButtons ? "sm" : "icon"}
                         onClick={(e) => {
                           e.stopPropagation();
                           action.onClick();
                         }}
                         onPointerDown={(e) => e.preventDefault()}
                         className={cn(
-                          "h-9 w-9 transition-all hover:scale-110 rounded-lg cursor-pointer",
+                          "relative rounded-lg text-xs font-semibold uppercase tracking-wide cursor-pointer",
+                          isThin ? "h-8" : "h-9",
+                          useTextActionButtons
+                            ? isThin
+                              ? "px-2.5"
+                              : "px-3"
+                            : isThin
+                              ? "w-8 px-0"
+                              : "w-9 px-0",
                         )}
                       >
-                        {action.icon}
+                        <span className="flex items-center gap-2">
+                          <span className="flex h-4 w-4 items-center justify-center">
+                            {action.icon}
+                          </span>
+                          <span className={cn(!useTextActionButtons && "hidden")}>
+                            {action.id === "edit" ? "Edit" : "Rules"}
+                          </span>
+                        </span>
+                        {typeof action.badgeCount === "number" && (
+                          <span className="absolute -top-2 -right-2 h-5 min-w-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold leading-5 shadow-sm">
+                            {action.badgeCount}
+                          </span>
+                        )}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent className="font-bold">
                       {action.label}
                     </TooltipContent>
                   </Tooltip>
-                ))}
-                {textActions.map((action) => (
-                  <Button
-                    key={action.id}
-                    variant={action.variant || "secondary"}
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      action.onClick();
-                    }}
-                    onPointerDown={(e) => e.preventDefault()}
-                    className="relative h-9 px-3 rounded-lg text-xs font-semibold uppercase tracking-wide cursor-pointer"
-                  >
-                    <span className="flex items-center gap-2">
-                      <span className="flex h-4 w-4 items-center justify-center">
-                        {action.icon}
-                      </span>
-                      {action.id === "edit" ? "Edit" : "Rules"}
-                    </span>
-                    {typeof action.badgeCount === "number" && (
-                      <span className="absolute -top-2 -right-2 h-5 min-w-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold leading-5 shadow-sm">
-                        {action.badgeCount}
-                      </span>
-                    )}
-                  </Button>
                 ))}
               </div>
             )}
@@ -654,4 +756,4 @@ export function GenericItemCard({
       />
     </div>
   );
-}
+});

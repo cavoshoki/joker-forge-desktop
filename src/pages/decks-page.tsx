@@ -21,7 +21,6 @@ import {
   Shuffle,
   VideoCamera,
 } from "@phosphor-icons/react";
-import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import {
   GenericItemDialog,
   DialogTab,
@@ -285,7 +284,7 @@ export default function DecksPage() {
       <GenericItemCard
         key={deck.id}
         name={deck.name}
-        description={formatBalatroText(deck.description)}
+        description={deck.description}
         idValue={deck.orderValue}
         onUpdate={(updates) => handleUpdate(deck.id, updates)}
         image={

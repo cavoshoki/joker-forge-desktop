@@ -15,7 +15,6 @@ import {
   EyeSlash,
   VideoCamera,
 } from "@phosphor-icons/react";
-import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import { Badge } from "@/components/ui/badge";
 import {
   GenericItemDialog,
@@ -294,7 +293,7 @@ export default function ConsumablesPage() {
       <GenericItemCard
         key={item.id}
         name={item.name}
-        description={formatBalatroText(item.description)}
+        description={item.description}
         cost={item.cost}
         idValue={item.orderValue}
         consumableSet={item.set}

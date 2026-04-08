@@ -3,6 +3,7 @@ import {
   useMemo,
   useEffect,
   useDeferredValue,
+  useTransition,
   useRef,
   ReactNode,
   memo,
@@ -15,6 +16,7 @@ import {
   SquaresFour,
   X,
   CaretDown,
+  Rows,
 } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,13 +30,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Slider } from "@/components/ui/slider";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 
-const MAX_ANIMATED_ITEM_COUNT = 80;
-const VIRTUALIZATION_THRESHOLD = 120;
-const ESTIMATED_ROW_HEIGHT = 384;
+const ESTIMATED_REGULAR_ROW_HEIGHT = 384;
 const VIRTUAL_OVERSCAN_ROWS = 2;
+
+type ColumnMode = "auto" | "1" | "2" | "3";
 
 export interface SortOption<T> {
   label: string;
@@ -51,7 +55,7 @@ export interface FilterOption<T> {
 
 interface GenericItemPageProps<T> {
   title: string;
-  subtitle?: string; // Often the Mod Name
+  subtitle?: string;
   items: T[];
   searchProps?: {
     placeholder?: string;
@@ -63,10 +67,43 @@ interface GenericItemPageProps<T> {
   onAddNew?: () => void;
   addNewLabel?: string;
   renderCard: (item: T) => ReactNode;
-  headerContent?: ReactNode; // For extra custom stats/info if needed
+  renderCompactCard?: (item: T) => ReactNode;
+  headerContent?: ReactNode;
   reforged?: boolean;
   isLoading?: boolean;
+  defaultViewMode?: "regular" | "compact";
+  defaultColumnMode?: ColumnMode;
+  defaultCompactSize?: number;
 }
+
+interface CardRendererProps {
+  item: { id: string };
+  viewMode: "regular" | "compact";
+  renderCard: (item: any) => ReactNode;
+  renderCompactCard?: (item: any) => ReactNode;
+}
+
+const CardRenderer = memo(
+  function CardRendererInner({
+    item,
+    viewMode,
+    renderCard,
+    renderCompactCard,
+  }: CardRendererProps) {
+    return (
+      <>
+        {viewMode === "compact" && renderCompactCard
+          ? renderCompactCard(item)
+          : renderCard(item)}
+      </>
+    );
+  },
+  (prev: CardRendererProps, next: CardRendererProps) =>
+    prev.item === next.item &&
+    prev.viewMode === next.viewMode &&
+    prev.renderCard === next.renderCard &&
+    prev.renderCompactCard === next.renderCompactCard,
+);
 
 function GenericItemPageInternal<T extends { id: string }>({
   title,
@@ -79,9 +116,13 @@ function GenericItemPageInternal<T extends { id: string }>({
   onAddNew,
   addNewLabel = "Add New Item",
   renderCard,
+  renderCompactCard,
   headerContent,
   reforged = false,
   isLoading = false,
+  defaultViewMode = "regular",
+  defaultColumnMode = "auto",
+  defaultCompactSize = 140,
 }: GenericItemPageProps<T>) {
   const [searchTerm, setSearchTerm] = useState("");
   const deferredSearchTerm = useDeferredValue(searchTerm);
@@ -93,7 +134,13 @@ function GenericItemPageInternal<T extends { id: string }>({
   const [isXlLayout, setIsXlLayout] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth >= 1280 : true,
   );
+  const [viewMode, setViewMode] = useState<"regular" | "compact">(
+    defaultViewMode,
+  );
+  const [columnMode, setColumnMode] = useState<ColumnMode>(defaultColumnMode);
+  const [compactCardSize, setCompactCardSize] = useState(defaultCompactSize);
   const [virtualRows, setVirtualRows] = useState({ start: 0, end: 0 });
+  const [, startTransition] = useTransition();
   const listContainerRef = useRef<HTMLDivElement | null>(null);
 
   const processedItems = useMemo(() => {
@@ -116,9 +163,7 @@ function GenericItemPageInternal<T extends { id: string }>({
     const sortOpt = sortOptions.find((opt) => opt.value === currentSort);
     if (sortOpt) {
       result.sort(sortOpt.sortFn);
-      if (sortDirection === "desc") {
-        result.reverse();
-      }
+      if (sortDirection === "desc") result.reverse();
     }
 
     return result;
@@ -133,6 +178,30 @@ function GenericItemPageInternal<T extends { id: string }>({
     sortOptions,
   ]);
 
+  const [containerWidth, setContainerWidth] = useState(1200);
+  useEffect(() => {
+    if (!listContainerRef.current) return;
+    const observer = new window.ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const nextWidth = entry.contentRect.width;
+        setContainerWidth((prev) =>
+          Math.abs(prev - nextWidth) > 2 ? nextWidth : prev,
+        );
+      }
+    });
+    observer.observe(listContainerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  const effectiveColumnCount =
+    viewMode === "compact"
+      ? Math.max(1, Math.floor(containerWidth / compactCardSize))
+      : columnMode === "auto"
+        ? isXlLayout
+          ? 2
+          : 1
+        : parseInt(columnMode);
+
   const activeFilterCount = Object.values(activeFilters).filter(
     (v) => v !== null,
   ).length;
@@ -142,33 +211,23 @@ function GenericItemPageInternal<T extends { id: string }>({
     items.length === 0 &&
     !hasActiveSearch &&
     activeFilterCount === 0;
-  const shouldAnimateCards = processedItems.length <= MAX_ANIMATED_ITEM_COUNT;
-  const shouldVirtualize =
-    !isShowingLoadingState &&
-    !shouldAnimateCards &&
-    processedItems.length >= VIRTUALIZATION_THRESHOLD;
-  const columnCount = isXlLayout ? 2 : 1;
-  const totalRows = Math.ceil(processedItems.length / columnCount);
+  const shouldVirtualize = false;
+  const totalRows = Math.ceil(processedItems.length / effectiveColumnCount);
+  const estimatedRowHeight =
+    viewMode === "compact"
+      ? Math.max(96, compactCardSize + 20)
+      : ESTIMATED_REGULAR_ROW_HEIGHT;
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const onResize = () => {
-      setIsXlLayout(window.innerWidth >= 1280);
-    };
-
+    if (typeof window === "undefined") return;
+    const onResize = () => setIsXlLayout(window.innerWidth >= 1280);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
   useEffect(() => {
     if (!shouldVirtualize) {
-      setVirtualRows({
-        start: 0,
-        end: Math.max(0, totalRows - 1),
-      });
+      setVirtualRows({ start: 0, end: Math.max(0, totalRows - 1) });
       return;
     }
 
@@ -177,9 +236,8 @@ function GenericItemPageInternal<T extends { id: string }>({
       if (!container) return;
 
       const rect = container.getBoundingClientRect();
-      const viewportHeight = window.innerHeight;
       const viewportTop = window.scrollY;
-      const viewportBottom = viewportTop + viewportHeight;
+      const viewportBottom = viewportTop + window.innerHeight;
       const containerTop = viewportTop + rect.top;
 
       const relativeTop = Math.max(0, viewportTop - containerTop);
@@ -187,11 +245,11 @@ function GenericItemPageInternal<T extends { id: string }>({
 
       const start = Math.max(
         0,
-        Math.floor(relativeTop / ESTIMATED_ROW_HEIGHT) - VIRTUAL_OVERSCAN_ROWS,
+        Math.floor(relativeTop / estimatedRowHeight) - VIRTUAL_OVERSCAN_ROWS,
       );
       const end = Math.min(
         Math.max(0, totalRows - 1),
-        Math.ceil(relativeBottom / ESTIMATED_ROW_HEIGHT) +
+        Math.ceil(relativeBottom / estimatedRowHeight) +
           VIRTUAL_OVERSCAN_ROWS,
       );
 
@@ -210,17 +268,33 @@ function GenericItemPageInternal<T extends { id: string }>({
     };
 
     updateVirtualRows();
-
     window.addEventListener("scroll", scheduleUpdate, { passive: true });
     window.addEventListener("resize", scheduleUpdate);
     return () => {
-      if (frameId) {
-        window.cancelAnimationFrame(frameId);
-      }
+      if (frameId) window.cancelAnimationFrame(frameId);
       window.removeEventListener("scroll", scheduleUpdate);
       window.removeEventListener("resize", scheduleUpdate);
     };
-  }, [shouldVirtualize, totalRows]);
+  }, [estimatedRowHeight, shouldVirtualize, totalRows]);
+
+  useEffect(() => {
+    if (!shouldVirtualize) return;
+    const initialVisibleRows = Math.max(
+      1,
+      Math.ceil(window.innerHeight / estimatedRowHeight) + VIRTUAL_OVERSCAN_ROWS,
+    );
+    setVirtualRows({
+      start: 0,
+      end: Math.min(Math.max(0, totalRows - 1), initialVisibleRows),
+    });
+  }, [
+    shouldVirtualize,
+    estimatedRowHeight,
+    effectiveColumnCount,
+    viewMode,
+    columnMode,
+    totalRows,
+  ]);
 
   const { startIndex, endIndex, topSpacerHeight, bottomSpacerHeight } =
     useMemo(() => {
@@ -233,28 +307,24 @@ function GenericItemPageInternal<T extends { id: string }>({
         };
       }
 
-      const startIndex = virtualRows.start * columnCount;
+      const startIndex = virtualRows.start * effectiveColumnCount;
       const endIndex = Math.min(
         processedItems.length,
-        (virtualRows.end + 1) * columnCount,
+        (virtualRows.end + 1) * effectiveColumnCount,
       );
-      const topSpacerHeight = virtualRows.start * ESTIMATED_ROW_HEIGHT;
+      const topSpacerHeight = virtualRows.start * estimatedRowHeight;
       const bottomSpacerHeight = Math.max(
         0,
-        (totalRows - virtualRows.end - 1) * ESTIMATED_ROW_HEIGHT,
+        (totalRows - virtualRows.end - 1) * estimatedRowHeight,
       );
 
-      return {
-        startIndex,
-        endIndex,
-        topSpacerHeight,
-        bottomSpacerHeight,
-      };
+      return { startIndex, endIndex, topSpacerHeight, bottomSpacerHeight };
     }, [
       shouldVirtualize,
       virtualRows.start,
       virtualRows.end,
-      columnCount,
+      effectiveColumnCount,
+      estimatedRowHeight,
       processedItems.length,
       totalRows,
     ]);
@@ -264,28 +334,51 @@ function GenericItemPageInternal<T extends { id: string }>({
     [processedItems, startIndex, endIndex],
   );
 
-  const skeletonCards = Array.from({ length: 6 }, (_, index) => (
-    <div
-      key={`skeleton-${index}`}
-      className="rounded-3xl bg-card p-6 h-90 flex flex-col gap-4"
-    >
-      <div className="flex items-center gap-3">
-        <Skeleton className="h-10 w-10 rounded-xl" />
-        <Skeleton className="h-6 w-2/5" />
-      </div>
-      <Skeleton className="h-48 w-full rounded-2xl" />
-      <Skeleton className="h-4 w-3/4" />
-      <Skeleton className="h-4 w-1/2" />
-      <div className="flex gap-2 mt-auto">
-        <Skeleton className="h-9 w-24 rounded-xl" />
-        <Skeleton className="h-9 w-24 rounded-xl" />
-      </div>
-    </div>
-  ));
+  const regularGridClass = {
+    auto: "grid-cols-1 xl:grid-cols-2",
+    "1": "grid-cols-1",
+    "2": "grid-cols-2",
+    "3": "grid-cols-3",
+  }[columnMode];
 
+  const compactGridStyle = {
+    gridTemplateColumns: `repeat(auto-fill, minmax(${compactCardSize}px, 1fr))`,
+  };
+
+  const skeletonCards =
+    viewMode === "compact"
+      ? Array.from({ length: 12 }, (_, i) => (
+          <Skeleton
+            key={`skeleton-${i}`}
+            className="aspect-square rounded-2xl"
+            style={{ minWidth: compactCardSize }}
+          />
+        ))
+      : Array.from({ length: 6 }, (_, i) => (
+          <div
+            key={`skeleton-${i}`}
+            className="rounded-3xl bg-card p-6 h-90 flex flex-col gap-4"
+          >
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-10 w-10 rounded-xl" />
+              <Skeleton className="h-6 w-2/5" />
+            </div>
+            <Skeleton className="h-48 w-full rounded-2xl" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+            <div className="flex gap-2 mt-auto">
+              <Skeleton className="h-9 w-24 rounded-xl" />
+              <Skeleton className="h-9 w-24 rounded-xl" />
+            </div>
+          </div>
+        ));
+
+  const toggleItemClass =
+    "h-9 px-3.5 text-sm font-medium gap-2 cursor-pointer rounded-none first:rounded-l-xl last:rounded-r-xl data-[state=on]:bg-primary/10 data-[state=on]:text-primary hover:bg-accent hover:text-foreground transition-colors";
+
+  // Removed unused memoizedCards
   return (
     <div className="space-y-10 max-w-7xl mx-auto pb-20">
-      {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
         <div className="space-y-2">
           <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
@@ -334,9 +427,8 @@ function GenericItemPageInternal<T extends { id: string }>({
 
       <div className="border-b border-border w-full" />
 
-      {/* Toolbar Section */}
-      <div className="flex flex-col md:flex-row gap-4">
-        <div className="relative flex-1 group">
+      <div className="flex flex-col gap-4">
+        <div className="relative w-full group">
           <MagnifyingGlass
             className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors"
             weight="bold"
@@ -345,7 +437,7 @@ function GenericItemPageInternal<T extends { id: string }>({
             placeholder={searchProps?.placeholder || "Search items..."}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-12 bg-card border-border hover:border-primary/50 focus:border-primary h-12 text-lg shadow-sm transition-all rounded-xl"
+            className="pl-12 bg-card border-border hover:border-primary/50 focus:border-primary h-12 text-lg shadow-sm transition-all rounded-xl w-full"
           />
           {searchTerm && (
             <button
@@ -356,13 +448,12 @@ function GenericItemPageInternal<T extends { id: string }>({
             </button>
           )}
         </div>
-
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
-                className="gap-3 h-12 px-4 bg-card border-border hover:bg-accent hover:border-primary/50 text-foreground font-medium shadow-sm transition-all rounded-xl min-w-45 justify-between cursor-pointer group"
+                className="gap-3 h-9 px-3 text-sm bg-card border-border hover:bg-accent hover:border-primary/50 text-foreground font-medium shadow-sm transition-all rounded-xl justify-between cursor-pointer group"
               >
                 <span className="flex items-center gap-2">
                   <ArrowsDownUp
@@ -411,14 +502,13 @@ function GenericItemPageInternal<T extends { id: string }>({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-
           {filterOptions && filterOptions.length > 0 && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant={activeFilterCount > 0 ? "secondary" : "outline"}
                   className={cn(
-                    "gap-2 h-12 px-4 bg-card border-border hover:bg-accent hover:border-primary/50 font-medium shadow-sm transition-all rounded-xl cursor-pointer group",
+                    "gap-2 h-9 px-3 text-sm bg-card border-border hover:bg-accent hover:border-primary/50 font-medium shadow-sm transition-all rounded-xl cursor-pointer group",
                     activeFilterCount > 0 &&
                       "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20",
                   )}
@@ -481,15 +571,89 @@ function GenericItemPageInternal<T extends { id: string }>({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+          {renderCompactCard && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider shrink-0">
+                View
+              </span>
+              <ToggleGroup
+                type="single"
+                value={viewMode}
+                onValueChange={(v) =>
+                  v &&
+                  startTransition(() =>
+                    setViewMode(v as "regular" | "compact"),
+                  )
+                }
+                className="rounded-xl border border-border bg-card shadow-sm overflow-hidden h-9"
+              >
+                <ToggleGroupItem value="regular" className={toggleItemClass}>
+                  <Rows className="h-4 w-4" weight="duotone" />
+                  Regular
+                </ToggleGroupItem>
+                <ToggleGroupItem value="compact" className={toggleItemClass}>
+                  <SquaresFour className="h-4 w-4" weight="duotone" />
+                  Compact
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+          )}
+          {viewMode === "regular" && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider shrink-0">
+                Columns
+              </span>
+              <ToggleGroup
+                type="single"
+                value={columnMode}
+                onValueChange={(v) =>
+                  v && startTransition(() => setColumnMode(v as ColumnMode))
+                }
+                className="rounded-xl border border-border bg-card shadow-sm overflow-hidden h-9"
+              >
+                {(["auto", "1", "2", "3"] as ColumnMode[]).map((mode) => (
+                  <ToggleGroupItem
+                    key={mode}
+                    value={mode}
+                    className={toggleItemClass}
+                  >
+                    {mode === "auto" ? "Auto" : mode}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+            </div>
+          )}
+          {viewMode === "compact" && (
+            <div className="flex items-center gap-3 h-9 px-4 rounded-xl border border-border bg-card shadow-sm min-w-56">
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider shrink-0">
+                Size
+              </span>
+              <Slider
+                value={[compactCardSize]}
+                onValueChange={([v]) => setCompactCardSize(v)}
+                min={80}
+                max={240}
+                step={8}
+                className="flex-1"
+              />
+              <span className="text-xs font-mono text-muted-foreground shrink-0 w-8 text-right">
+                {compactCardSize}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Header Extra Content (Optional) */}
       {headerContent && <div className="py-2">{headerContent}</div>}
 
-      {/* Grid Content */}
       {isShowingLoadingState ? (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div
+          className={cn(
+            "grid gap-4",
+            viewMode === "compact" ? "" : regularGridClass,
+          )}
+          style={viewMode === "compact" ? compactGridStyle : undefined}
+        >
           {skeletonCards}
         </div>
       ) : processedItems.length === 0 ? (
@@ -521,45 +685,38 @@ function GenericItemPageInternal<T extends { id: string }>({
           </Button>
         </motion.div>
       ) : (
-        <>
-          <div ref={listContainerRef}>
-            {topSpacerHeight > 0 && (
-              <div style={{ height: topSpacerHeight }} aria-hidden="true" />
-            )}
+        <div ref={listContainerRef}>
+          {topSpacerHeight > 0 && (
+            <div style={{ height: topSpacerHeight }} aria-hidden="true" />
+          )}
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              {shouldAnimateCards && !shouldVirtualize ? (
-                <AnimatePresence mode="popLayout">
-                  {renderedItems.map((item) => (
-                    <motion.div
-                      key={item.id}
-                      layout
-                      initial={{ opacity: 0, scale: 0.98 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.98 }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      {renderCard(item)}
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-              ) : (
-                renderedItems.map((item) => (
-                  <div key={item.id}>{renderCard(item)}</div>
-                ))
-              )}
-            </div>
-
-            {bottomSpacerHeight > 0 && (
-              <div style={{ height: bottomSpacerHeight }} aria-hidden="true" />
+          <div
+            className={cn(
+              "grid gap-4",
+              viewMode === "compact" ? "" : regularGridClass,
             )}
+            style={viewMode === "compact" ? compactGridStyle : undefined}
+          >
+            {renderedItems.map((item) => (
+              <div key={item.id}>
+                <CardRenderer
+                  item={item}
+                  viewMode={viewMode}
+                  renderCard={renderCard}
+                  renderCompactCard={renderCompactCard}
+                />
+              </div>
+            ))}
           </div>
-        </>
+
+          {bottomSpacerHeight > 0 && (
+            <div style={{ height: bottomSpacerHeight }} aria-hidden="true" />
+          )}
+        </div>
       )}
     </div>
   );
 }
-
 export const GenericItemPage = memo(
   GenericItemPageInternal,
 ) as typeof GenericItemPageInternal;

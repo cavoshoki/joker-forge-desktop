@@ -14,6 +14,19 @@ interface RaritySelectProps {
   className?: string;
 }
 
+const SOFT_LIGHT_SURFACE = "#f5f7fb";
+
+function isDarkHexColor(hex: string): boolean {
+  const clean = hex.replace("#", "");
+  if (clean.length !== 6) return false;
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  if ([r, g, b].some((v) => Number.isNaN(v))) return false;
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance < 0.38;
+}
+
 export function RaritySelect({
   value,
   onChange,
@@ -27,6 +40,13 @@ export function RaritySelect({
   const currentColor = currentRarity
     ? getRarityBadgeColor(currentRarity.value)
     : "#009dff";
+  const currentIsDark = isDarkHexColor(currentColor);
+  const currentSurface = currentIsDark
+    ? SOFT_LIGHT_SURFACE
+    : `${currentColor}20`;
+  const triggerShadow = currentIsDark
+    ? "inset 0 0 0 1px rgba(255,255,255,0.85), 0 1px 2px rgba(15,23,42,0.08)"
+    : undefined;
 
   return (
     <Select value={value.toString()} onValueChange={onChange}>
@@ -38,14 +58,25 @@ export function RaritySelect({
         style={{
           borderColor: currentColor,
           color: currentColor,
-          backgroundColor: `${currentColor}20`,
+          backgroundColor: currentSurface,
+          boxShadow: triggerShadow,
         }}
       >
-        <SelectValue placeholder="Select Rarity" />
+        <SelectValue
+          placeholder="Select Rarity"
+          style={{
+            color: currentColor,
+            backgroundColor: currentSurface,
+            borderRadius: 6,
+            paddingInline: 2,
+          }}
+        />
       </SelectTrigger>
       <SelectContent className="border-none bg-popover p-2 shadow-xl">
         {rarities.map((rarity) => {
           const color = getRarityBadgeColor(rarity.value);
+          const isDark = isDarkHexColor(color);
+          const surface = isDark ? SOFT_LIGHT_SURFACE : `${color}20`;
           return (
             <SelectItem
               key={rarity.key}
@@ -54,7 +85,7 @@ export function RaritySelect({
               style={{
                 borderColor: color,
                 color: color,
-                backgroundColor: `${color}20`,
+                backgroundColor: surface,
               }}
             >
               {rarity.label}

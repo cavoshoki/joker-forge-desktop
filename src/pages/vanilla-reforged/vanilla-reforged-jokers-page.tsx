@@ -6,7 +6,6 @@ import { RuleBuilder } from "@/components/rule-builder";
 import { useProjectData } from "@/lib/storage";
 import { useVanillaReforgedData } from "@/lib/vanilla-reforged";
 import { JokerData } from "@/lib/types";
-import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import { slugify } from "@/lib/balatro-utils";
 import {
   Copy,
@@ -92,7 +91,7 @@ export default function VanillaReforgedJokersPage() {
         key={joker.id}
         reforged
         name={joker.name}
-        description={formatBalatroText(joker.description)}
+        description={joker.description}
         cost={joker.cost}
         idValue={joker.orderValue}
         rarity={joker.rarity}

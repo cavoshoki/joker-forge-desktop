@@ -6,7 +6,6 @@ import { RuleBuilder } from "@/components/rule-builder";
 import { useProjectData } from "@/lib/storage";
 import { useVanillaReforgedData } from "@/lib/vanilla-reforged";
 import { SealData } from "@/lib/types";
-import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import { slugify } from "@/lib/balatro-utils";
 import { Copy, Prohibit, Sparkle } from "@phosphor-icons/react";
 
@@ -67,7 +66,7 @@ export default function VanillaReforgedSealsPage() {
         key={item.id}
         reforged
         name={item.name}
-        description={formatBalatroText(item.description)}
+        description={item.description}
         idValue={item.orderValue}
         onUpdate={() => {}}
         image={

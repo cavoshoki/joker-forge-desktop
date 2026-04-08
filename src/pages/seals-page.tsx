@@ -17,7 +17,6 @@ import {
   Prohibit,
   VideoCamera,
 } from "@phosphor-icons/react";
-import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import {
   GenericItemDialog,
   DialogTab,
@@ -270,7 +269,7 @@ export default function SealsPage() {
       <GenericItemCard
         key={item.id}
         name={item.name}
-        description={formatBalatroText(item.description)}
+        description={item.description}
         idValue={item.orderValue}
         onUpdate={(updates) => handleUpdate(item.id, updates)}
         image={

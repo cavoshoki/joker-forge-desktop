@@ -6,7 +6,6 @@ import { RuleBuilder } from "@/components/rule-builder";
 import { useProjectData } from "@/lib/storage";
 import { useVanillaReforgedData } from "@/lib/vanilla-reforged";
 import { ConsumableData } from "@/lib/types";
-import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import { slugify } from "@/lib/balatro-utils";
 import {
   Copy,
@@ -84,7 +83,7 @@ export default function VanillaReforgedConsumablesPage() {
         key={item.id}
         reforged
         name={item.name}
-        description={formatBalatroText(item.description)}
+        description={item.description}
         cost={item.cost}
         idValue={item.orderValue}
         consumableSet={item.set}

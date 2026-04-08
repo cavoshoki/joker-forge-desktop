@@ -14,6 +14,8 @@ interface ConsumableSetSelectProps {
   className?: string;
 }
 
+const SOFT_LIGHT_SURFACE = "#f5f7fb";
+
 const VANILLA_SET_COLORS: Record<string, string> = {
   Tarot: "#b26cbb",
   Planet: "#13afce",
@@ -38,6 +40,17 @@ function getSetColor(
   return VANILLA_SET_COLORS[setOption.value] || "#666666";
 }
 
+function isDarkHexColor(hex: string): boolean {
+  const clean = hex.replace("#", "");
+  if (clean.length !== 6) return false;
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  if ([r, g, b].some((v) => Number.isNaN(v))) return false;
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance < 0.38;
+}
+
 export function ConsumableSetSelect({
   value,
   onChange,
@@ -46,6 +59,13 @@ export function ConsumableSetSelect({
   const sets = getAllConsumableSets();
   const currentSet = sets.find((set) => set.value === value);
   const currentColor = getSetColor(currentSet);
+  const currentIsDark = isDarkHexColor(currentColor);
+  const currentSurface = currentIsDark
+    ? SOFT_LIGHT_SURFACE
+    : `${currentColor}20`;
+  const triggerShadow = currentIsDark
+    ? "inset 0 0 0 1px rgba(255,255,255,0.85), 0 1px 2px rgba(15,23,42,0.08)"
+    : undefined;
 
   return (
     <Select value={value} onValueChange={onChange}>
@@ -57,14 +77,25 @@ export function ConsumableSetSelect({
         style={{
           borderColor: currentColor,
           color: currentColor,
-          backgroundColor: `${currentColor}20`,
+          backgroundColor: currentSurface,
+          boxShadow: triggerShadow,
         }}
       >
-        <SelectValue placeholder="Select Set" />
+        <SelectValue
+          placeholder="Select Set"
+          style={{
+            color: currentColor,
+            backgroundColor: currentSurface,
+            borderRadius: 6,
+            paddingInline: 2,
+          }}
+        />
       </SelectTrigger>
       <SelectContent className="border-none bg-popover p-2 shadow-xl">
         {sets.map((setOption) => {
           const color = getSetColor(setOption);
+          const isDark = isDarkHexColor(color);
+          const surface = isDark ? SOFT_LIGHT_SURFACE : `${color}20`;
           return (
             <SelectItem
               key={setOption.key}
@@ -73,7 +104,7 @@ export function ConsumableSetSelect({
               style={{
                 borderColor: color,
                 color,
-                backgroundColor: `${color}20`,
+                backgroundColor: surface,
               }}
             >
               {setOption.label}

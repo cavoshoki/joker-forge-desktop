@@ -22,7 +22,6 @@ import {
   Gear,
   VideoCamera,
 } from "@phosphor-icons/react";
-import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import { BalatroCard } from "@/components/balatro/balatro-card";
 import { getRandomPlaceholder } from "@/lib/placeholder-assets.ts";
 import { PlaceholderPickerDialog } from "@/components/pages/placeholder-picker-dialog";
@@ -320,7 +319,7 @@ export default function BoostersPage() {
       <GenericItemCard
         key={item.id}
         name={item.name}
-        description={formatBalatroText(item.description)}
+        description={item.description}
         cost={item.cost}
         idValue={item.orderValue}
         onUpdate={(updates) => handleUpdate(item.id, updates)}

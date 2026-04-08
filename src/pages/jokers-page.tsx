@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { GenericItemPage } from "@/components/pages/generic-item-page";
 import { GenericItemCard } from "@/components/pages/generic-item-card";
+import { GenericItemCardCompact } from "@/components/pages/generic-item-card-compact";
 import {
   GenericItemDialog,
   DialogTab,
@@ -9,7 +10,6 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useConfirmDelete } from "@/hooks/use-confirm-delete";
 import { useProjectData, useModName } from "@/lib/storage";
 import { JokerData, Rule, UserVariable } from "@/lib/types";
-import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import {
   COMPARISON_OPERATORS,
   getRarityBadgeColor,
@@ -728,7 +728,7 @@ export default function JokersPage() {
       <GenericItemCard
         key={joker.id}
         name={joker.name}
-        description={formatBalatroText(joker.description)}
+        description={joker.description}
         cost={joker.cost}
         idValue={joker.orderValue}
         rarity={joker.rarity}
@@ -944,6 +944,85 @@ export default function JokersPage() {
     [handleExport, handleUpdate, requestDelete, data.jokers, updateJokers],
   );
 
+  const renderCompactCard = useCallback(
+    (joker: JokerData) => (
+      <GenericItemCardCompact
+        name={joker.name}
+        overlayImage={joker.overlayImage}
+        image={
+          joker.image ? (
+            <img
+              src={joker.image}
+              className="w-full h-full object-contain [image-rendering:pixelated]"
+              alt={joker.name}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-muted-foreground/30 text-xs font-bold uppercase tracking-widest border-2 border-dashed border-border/30 rounded-xl m-2">
+              No Image
+            </div>
+          )
+        }
+        actions={[
+          {
+            id: "edit",
+            label: "Edit Info",
+            icon: <PencilSimple weight="bold" />,
+            onClick: () => setEditingItem(joker),
+            variant: "secondary",
+          },
+          {
+            id: "rules",
+            label: "Edit Rules",
+            icon: <Sparkle weight="bold" />,
+            onClick: () => {
+              setEditingItem(null);
+              setRuleEditingItem(joker);
+            },
+            variant: "outline",
+          },
+          {
+            id: "showcase",
+            label: "Showcase",
+            icon: <VideoCamera weight="regular" />,
+            onClick: () => setShowcaseItem(joker),
+            variant: "ghost",
+          },
+          {
+            id: "export",
+            label: "Export Code",
+            icon: <DownloadSimple weight="regular" />,
+            onClick: () => handleExport(joker),
+            variant: "ghost",
+          },
+          {
+            id: "duplicate",
+            label: "Duplicate",
+            icon: <Copy weight="regular" />,
+            onClick: () => {
+              const duplicatedJoker: JokerData = {
+                ...joker,
+                id: crypto.randomUUID(),
+                name: `${joker.name} (Copy)`,
+                objectKey: `${joker.objectKey}_copy`,
+                orderValue: data.jokers.length + 1,
+              };
+              updateJokers([...data.jokers, duplicatedJoker]);
+            },
+            variant: "ghost",
+          },
+          {
+            id: "delete",
+            label: "Delete",
+            icon: <Trash weight="bold" />,
+            variant: "destructive",
+            onClick: () => requestDelete(joker.id, joker.name),
+          },
+        ]}
+      />
+    ),
+    [handleExport, requestDelete, data.jokers, updateJokers],
+  );
+
   return (
     <>
       <GenericItemPage<JokerData>
@@ -957,6 +1036,7 @@ export default function JokersPage() {
         sortOptions={sortOptions}
         filterOptions={filterOptions}
         renderCard={renderCard}
+        renderCompactCard={renderCompactCard}
       />
 
       <GenericItemDialog

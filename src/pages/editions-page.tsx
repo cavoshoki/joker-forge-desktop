@@ -26,7 +26,6 @@ import {
   ShoppingBag,
   VideoCamera,
 } from "@phosphor-icons/react";
-import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import { BalatroCard } from "@/components/balatro/balatro-card";
 import { CUSTOM_SHADERS, SOUNDS, VANILLA_SHADERS } from "@/lib/balatro-utils";
 import { RuleBuilder } from "@/components/rule-builder";
@@ -331,7 +330,7 @@ export default function EditionsPage() {
       <GenericItemCard
         key={item.id}
         name={item.name}
-        description={formatBalatroText(item.description)}
+        description={item.description}
         idValue={item.orderValue}
         onUpdate={(updates) => handleUpdate(item.id, updates)}
         image={<Palette className="h-20 w-20 text-muted-foreground/20" />}

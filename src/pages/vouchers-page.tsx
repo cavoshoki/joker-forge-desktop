@@ -18,7 +18,6 @@ import {
   Prohibit,
   VideoCamera,
 } from "@phosphor-icons/react";
-import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import { Button } from "@/components/ui/button";
 import {
   GenericItemDialog,
@@ -443,7 +442,7 @@ export default function VouchersPage() {
       <GenericItemCard
         key={item.id}
         name={item.name}
-        description={formatBalatroText(item.description)}
+        description={item.description}
         cost={item.cost}
         idValue={item.orderValue}
         overlayImage={item.overlayImage}

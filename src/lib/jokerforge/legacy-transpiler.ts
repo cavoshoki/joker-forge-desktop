@@ -1,5 +1,6 @@
 import type { ProjectData, ProjectStats } from "@/lib/storage";
 import type { ModMetadata } from "@/lib/types";
+import { sanitizeDescription } from "@/lib/description-sanitizer";
 
 const DEFAULT_METADATA: ModMetadata = {
   id: "my_custom_mod",
@@ -261,7 +262,10 @@ const normalizeCollectionItem = (
     name:
       (typeof obj.name === "string" && obj.name.trim()) ||
       `${objectType} ${index + 1}`,
-    description: typeof obj.description === "string" ? obj.description : "",
+    description:
+      typeof obj.description === "string"
+        ? sanitizeDescription(obj.description)
+        : "",
     image,
     imagePreview:
       typeof obj.imagePreview === "string" ? obj.imagePreview : image,

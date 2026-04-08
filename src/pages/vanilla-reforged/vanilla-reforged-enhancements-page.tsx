@@ -6,7 +6,6 @@ import { RuleBuilder } from "@/components/rule-builder";
 import { useProjectData } from "@/lib/storage";
 import { useVanillaReforgedData } from "@/lib/vanilla-reforged";
 import { EnhancementData } from "@/lib/types";
-import { formatBalatroText } from "@/lib/balatro-text-formatter";
 import { slugify } from "@/lib/balatro-utils";
 import {
   Copy,
@@ -80,7 +79,7 @@ export default function VanillaReforgedEnhancementsPage() {
         key={item.id}
         reforged
         name={item.name}
-        description={formatBalatroText(item.description)}
+        description={item.description}
         idValue={item.orderValue}
         onUpdate={() => {}}
         image={
